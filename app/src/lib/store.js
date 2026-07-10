@@ -86,8 +86,8 @@ export function useLedger(session, onError) {
     setLoading(true); setLoadError(null);
     try {
       let raw = await fetchAll();
-      if (!raw.settingsRow) { // first run for this account
-        th(await supabase.from("settings").insert({ user_id: session.user.id, data: defaultSettings() }).select().maybeSingle());
+      if (!raw.settingsRow) { // first run for this account (upsert: StrictMode double-effects race here)
+        th(await supabase.from("settings").upsert({ user_id: session.user.id, data: defaultSettings() }));
         raw = await fetchAll();
       }
       setDb(assemble(raw));

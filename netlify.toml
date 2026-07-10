@@ -1,0 +1,14 @@
+# Netlify deploy config. The app lives in app/; this builds it from the repo
+# root and publishes the Vite output. Set VITE_SUPABASE_URL and
+# VITE_SUPABASE_ANON_KEY in Site settings → Environment variables (the anon
+# key only — never a service-role key).
+
+[build]
+  command = "npm --prefix app install && npm --prefix app run build"
+  publish = "app/dist"
+
+# SPA fallback: every path serves index.html (the app has no server routes).
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

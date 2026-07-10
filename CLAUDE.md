@@ -11,11 +11,13 @@ A single-file browser app for a small industrial-controls business to run the fu
 **quote → cash** cycle plus payables and expenses. No build step, no server — one HTML file
 you open in a browser. State persists to `localStorage`.
 
-**Current status:** working v1. All core modules built and functional. No backend, no auth,
-no automated tests yet. See §8 for the built/not-built checklist and §10 for the roadmap.
+**Current status:** working v1, plus the Supabase rebuild from §11 now exists in **`app/`**
+(Vite + React + supabase-js; schema in `app/supabase/schema.sql`). The rebuild ports the calc
+core, views, and CSS verbatim; state flows through `app/src/lib/store.js` (write-through actions)
+instead of `setDb`. `ledger.html` stays as the reference/legacy version until parity is confirmed.
 
-The whole app is `ledger.html`. When editing, work directly in that file unless you're doing the
-Supabase split (§11), in which case propose a structure first.
+For new feature work, prefer `app/`. The invariants (§6) and design system (§7) apply to both
+versions. When editing `ledger.html`, work directly in that file.
 
 ---
 

@@ -48,6 +48,15 @@ In the old single-file app (`ledger.html`): **Settings → Export Backup
 file. Everything comes across — contacts, catalog, quotes, sales orders,
 invoices, payments, bills, expenses, company settings, and document counters.
 
+## Migrations
+
+If you ran `schema.sql` before a migration existed, run the files in
+[`migrations/`](migrations/) (in number order) in the SQL editor. Currently:
+
+- `002_invoice_notes.sql` — adds the per-invoice `notes` column (needed for
+  invoice editing / standalone invoices). Fresh installs of `schema.sql`
+  already include it.
+
 ## Notes
 
 - **RLS everywhere:** every table is scoped to `auth.uid()`. The anon key in

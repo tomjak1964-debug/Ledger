@@ -256,6 +256,11 @@ table.doc-items td.mono{font-family:"IBM Plex Mono"}
   .doc-bar{display:none}
   .printable{box-shadow:none;max-width:none;padding:0;margin:0}
   @page{margin:16mm}
+  /* printing app pages (reports, statements): hide the chrome */
+  .sidebar,.topbar,.toolbar.no-print,.no-print{display:none!important}
+  .app{display:block}
+  .content{padding:0;max-width:none}
+  .card{box-shadow:none;break-inside:avoid}
 }
 
 @media (max-width:900px){
@@ -267,6 +272,8 @@ table.doc-items td.mono{font-family:"IBM Plex Mono"}
   .stage:nth-child(-n+2)::after{display:none}
   .aging{grid-template-columns:1fr 1fr}
   .totals{width:100%}
+  .card{overflow-x:auto}         /* wide tables scroll inside their card on phones */
+  .grid[style*="repeat(4"]{grid-template-columns:repeat(2,1fr)!important}
 }
 .menu-btn{display:none}
 @media(max-width:900px){.menu-btn{display:inline-flex}}

@@ -42,8 +42,15 @@ export default function ReceivablesView({ db, actions, toast, openDoc }) {
             </tr>;
           })}</tbody></table>}
     </div>
-    {pay && <PaymentModal doc={pay} onClose={() => setPay(null)} onSave={async (p) => {
-      if (await actions.recordPayment("invoice", pay.id, p)) { setPay(null); toast("Payment recorded"); }
-    }} />}
+    {pay && <PaymentModal doc={pay} onClose={() => setPay(null)}
+      onSave={async (p) => {
+        if (await actions.recordPayment("invoice", pay.id, p)) { setPay(null); toast("Payment recorded"); }
+      }}
+      onDelete={async (pid) => {
+        if (await actions.deletePayment("invoice", pay.id, pid)) {
+          setPay(prev => ({ ...prev, payments: (prev.payments || []).filter(x => x.id !== pid) }));
+          toast("Payment deleted");
+        }
+      }} />}
   </div>;
 }

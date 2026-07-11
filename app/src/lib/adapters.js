@@ -54,12 +54,12 @@ export const soFromRow = (r, items) => ({
 export const invoiceToRow = i => ({
   id: i.id, number: i.number, sales_order_id: idOrNull(i.salesOrderId), quote_id: idOrNull(i.quoteId),
   customer_id: idOrNull(i.customerId), po_number: i.poNumber ?? "", date: dateOrNull(i.date),
-  due_date: dateOrNull(i.dueDate), tax_rate: num(i.taxRate),
+  due_date: dateOrNull(i.dueDate), tax_rate: num(i.taxRate), notes: i.notes ?? "",
 });
 export const invoiceFromRow = (r, items, payments) => ({
   id: r.id, number: r.number, salesOrderId: r.sales_order_id || "", quoteId: r.quote_id || "",
   customerId: r.customer_id || "", poNumber: r.po_number, date: r.date || "", dueDate: r.due_date || "",
-  taxRate: num(r.tax_rate), lineItems: items || [], payments: payments || [],
+  taxRate: num(r.tax_rate), notes: r.notes || "", lineItems: items || [], payments: payments || [],
 });
 
 /* ---- bills ---- */

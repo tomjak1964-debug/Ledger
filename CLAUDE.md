@@ -256,11 +256,17 @@ Payables (vendor bills, A/P aging, payments) · Expenses (by category) · Contac
 Item Catalog · Settings (company, defaults, numbering, JSON export, clear/seed) · print/PDF for
 quotes and invoices.
 
-**Not built (candidates for next work):** backend / multi-device sync · auth / multi-user ·
-standalone invoices or SOs (currently only via the chain) · partial-quantity fulfillment / partial
-invoicing of an SO · credit notes / refunds · recurring invoices · P&L / tax / sales-tax-liability
-reports · CSV import/export beyond JSON backup · quote line-item reordering (drag) · attachments ·
-email sending · number-collision safety if two tabs edit at once · undo · automated tests.
+**Built in `app/` only (beyond the legacy feature set):** Supabase backend + auth + multi-device ·
+atomic document numbering · JSON backup import · **Reports** (cash-basis P&L, sales tax
+invoiced/collected, sales by customer, expenses by category, printable customer statements, CSV
+export, date-range presets — `src/calc/reports.js` + `src/views/Reports.jsx`) · **standalone +
+editable invoices** with per-invoice notes (`invoices.notes`, migration 002) · payment
+delete/correction · installable PWA (manifest + icons + service worker; Supabase never cached).
+
+**Not built (candidates for next work):** credit notes / refunds · partial invoicing of an SO ·
+recurring invoices · email sending · attachments / receipt photos · quote line-item reordering ·
+multi-user roles · bank import / reconciliation · double-entry GL · undo · automated tests ·
+Capacitor store apps (PWA covers home-screen install today).
 
 ---
 

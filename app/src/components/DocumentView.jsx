@@ -53,8 +53,8 @@ export default function DocumentView({ kind, doc, contact, settings, onClose }) 
         {!isQuote && paid(doc) > 0 && <div className="l"><span>Paid</span><span className="v">-{money(paid(doc))}</span></div>}
         <div className="l g"><span>{!isQuote && paid(doc) > 0 ? "Balance Due" : "Total"}</span><span className="v">{money(!isQuote && paid(doc) > 0 ? balance(doc) : t.total)}</span></div>
       </div></div>
-      {(isQuote ? settings.quoteNotes : settings.invoiceNotes) &&
-        <div className="doc-notes">{isQuote ? settings.quoteNotes : settings.invoiceNotes}</div>}
+      {(doc.notes || (isQuote ? settings.quoteNotes : settings.invoiceNotes)) &&
+        <div className="doc-notes">{doc.notes || (isQuote ? settings.quoteNotes : settings.invoiceNotes)}</div>}
       <div className="doc-foot">{settings.company} · {settings.companyEmail}</div>
     </div>
   </div>;

@@ -134,6 +134,7 @@ create table if not exists invoices (
   date           date,
   due_date       date,
   tax_rate       numeric(7,3) not null default 0,
+  notes          text not null default '',
   created_at     timestamptz not null default now()
 );
 create index if not exists invoices_user_idx on invoices(user_id);

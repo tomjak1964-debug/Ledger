@@ -204,6 +204,23 @@ export function useLedger(session, onError) {
     },
 
     /* ---- invoices & payments ---- */
+    // Standalone create or edit. Invoices born from an SO keep their chain
+    // refs; standalone ones simply have none — same as legacy dangling-ref
+    // semantics, every lookup tolerates it.
+    async saveInvoice(i) {
+      try {
+        const isNew = !!i._new;
+        const inv = { ...i }; delete inv._new;
+        if (isNew) {
+          inv.number = dbRef.current.settings.invPrefix + "-" + pad4(await claimNumber("invoice"));
+          inv.payments = inv.payments || [];
+        }
+        th(await supabase.from("invoices").upsert(A.invoiceToRow(inv)));
+        await replaceLineItems("invoice_line_items", "invoice_id", inv.id, inv.lineItems);
+        setDb(d => ({ ...d, invoices: upsertList(d.invoices, inv) }));
+        return inv;
+      } catch (e) { return fail(e); }
+    },
     async deleteInvoice(id) {
       try {
         th(await supabase.from("payments").delete().eq("parent_id", id));
@@ -218,6 +235,17 @@ export function useLedger(session, onError) {
         setDb(d => parentType === "invoice"
           ? { ...d, invoices: d.invoices.map(i => i.id === parentId ? { ...i, payments: [...(i.payments || []), p] } : i) }
           : { ...d, bills: d.bills.map(b => b.id === parentId ? { ...b, payments: [...(b.payments || []), p] } : b) });
+        return true;
+      } catch (e) { return fail(e); }
+    },
+
+    async deletePayment(parentType, parentId, paymentId) {
+      try {
+        th(await supabase.from("payments").delete().eq("id", paymentId));
+        const strip = doc => doc.id === parentId ? { ...doc, payments: (doc.payments || []).filter(p => p.id !== paymentId) } : doc;
+        setDb(d => parentType === "invoice"
+          ? { ...d, invoices: d.invoices.map(strip) }
+          : { ...d, bills: d.bills.map(strip) });
         return true;
       } catch (e) { return fail(e); }
     },

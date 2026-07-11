@@ -6,6 +6,7 @@ import { invoiceStatus, paid } from "./calc/ledger.js";
 import { Ico, ICONS } from "./components/ui.jsx";
 import DocumentView from "./components/DocumentView.jsx";
 import Dashboard from "./views/Dashboard.jsx";
+import ReportsView from "./views/Reports.jsx";
 import QuotesView from "./views/Quotes.jsx";
 import SalesOrdersView from "./views/SalesOrders.jsx";
 import InvoicesView from "./views/Invoices.jsx";
@@ -17,7 +18,12 @@ import CatalogView from "./views/Catalog.jsx";
 import SettingsView from "./views/Settings.jsx";
 
 const NAV = [
-  { group: "Overview", items: [{ k: "dashboard", label: "Dashboard", icon: ICONS.dash }] },
+  {
+    group: "Overview", items: [
+      { k: "dashboard", label: "Dashboard", icon: ICONS.dash },
+      { k: "reports", label: "Reports", icon: ICONS.reports },
+    ]
+  },
   {
     group: "Sell", items: [
       { k: "quotes", label: "Quotes", icon: ICONS.quote },
@@ -45,7 +51,8 @@ const TITLES = {
   salesOrders: ["Sales Orders", "Confirmed orders awaiting invoicing"], invoices: ["Invoices", "Issued invoices and payments"],
   receivables: ["Receivables", "What customers owe you, by age"], payables: ["Payables", "Vendor bills you owe"],
   expenses: ["Expenses", "Business spend by category"], contacts: ["Contacts", "Customers and vendors"],
-  catalog: ["Item Catalog", "Reusable quote line items"], settings: ["Settings", "Company info and defaults"]
+  catalog: ["Item Catalog", "Reusable quote line items"], settings: ["Settings", "Company info and defaults"],
+  reports: ["Reports", "P&L, sales tax, customers, and statements"]
 };
 
 export default function App({ session }) {
@@ -108,6 +115,7 @@ export default function App({ session }) {
       </div>
       <div className="content">
         {view === "dashboard" && <Dashboard {...props} />}
+        {view === "reports" && <ReportsView {...props} />}
         {view === "quotes" && <QuotesView {...props} />}
         {view === "salesOrders" && <SalesOrdersView {...props} />}
         {view === "invoices" && <InvoicesView {...props} />}

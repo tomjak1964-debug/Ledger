@@ -67,8 +67,15 @@ export default function PayablesView({ db, actions, toast }) {
       </div>
       <Field label="Notes"><textarea className="input" value={edit.notes} onChange={e => setEdit({ ...edit, notes: e.target.value })} /></Field>
     </Modal>}
-    {pay && <PaymentModal doc={pay} isBill onClose={() => setPay(null)} onSave={async (p) => {
-      if (await actions.recordPayment("bill", pay.id, p)) { setPay(null); toast("Payment recorded"); }
-    }} />}
+    {pay && <PaymentModal doc={pay} isBill onClose={() => setPay(null)}
+      onSave={async (p) => {
+        if (await actions.recordPayment("bill", pay.id, p)) { setPay(null); toast("Payment recorded"); }
+      }}
+      onDelete={async (pid) => {
+        if (await actions.deletePayment("bill", pay.id, pid)) {
+          setPay(prev => ({ ...prev, payments: (prev.payments || []).filter(x => x.id !== pid) }));
+          toast("Payment deleted");
+        }
+      }} />}
   </div>;
 }

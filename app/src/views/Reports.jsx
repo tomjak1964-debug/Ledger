@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { money, fmtDate, todayISO, daysBetween, nameOf } from "../lib/helpers.js";
 import { balance, invoiceStatus } from "../calc/ledger.js";
-import { plCashBasis, salesTaxReport, salesByCustomer, expensesByCategory, customerStatement } from "../calc/reports.js";
+import { plCashBasis, salesTaxReport, salesByCustomer, expensesByCategory, customerStatement, agedReceivables, agedPayables, incomeExpenseByMonth } from "../calc/reports.js";
 import { Ico, ICONS, Badge, Empty, Field } from "../components/ui.jsx";
 
 /* ---------- date ranges ---------- */
@@ -34,22 +34,28 @@ function downloadCSV(name, header, rows) {
   a.click();
 }
 
-const TABS = [["pl", "Profit & Loss"], ["tax", "Sales Tax"], ["customers", "Sales by Customer"], ["expenses", "Expenses"], ["statement", "Statements"]];
+const TABS = [
+  ["pl", "Profit & Loss"], ["ie", "Income / Expense"], ["tax", "Sales Tax"],
+  ["customers", "Sales by Customer"], ["expenses", "Expenses"],
+  ["ar", "Aged Receivables"], ["ap", "Aged Payables"], ["statement", "Statements"],
+];
+const RANGE_TABS = ["pl", "ie", "tax", "customers", "expenses"];
 
 export default function ReportsView({ db }) {
   const [tab, setTab] = useState("pl");
   const [preset, setPreset] = useState("thisYear");
   const [custom, setCustom] = useState({ from: firstOf(new Date().getFullYear(), 0), to: todayISO() });
+  const [asOf, setAsOf] = useState(todayISO());
   const [from, to] = preset === "custom" ? [custom.from, custom.to] : rangeFor(preset);
   const rangeLabel = (!from && !to) ? "All time" : `${fmtDate(from)} – ${fmtDate(to)}`;
 
   return <div>
     <div className="toolbar no-print">
-      <div className="pill-tabs">
+      <div className="pill-tabs" style={{ flexWrap: "wrap" }}>
         {TABS.map(([k, l]) => <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}
       </div>
     </div>
-    {tab !== "statement" && <div className="toolbar no-print">
+    {RANGE_TABS.includes(tab) && <div className="toolbar no-print">
       <select className="select" style={{ maxWidth: 170 }} value={preset} onChange={e => setPreset(e.target.value)}>
         {PRESETS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
       </select>
@@ -60,13 +66,91 @@ export default function ReportsView({ db }) {
       </>}
       <button className="btn" style={{ marginLeft: "auto" }} onClick={() => window.print()}><Ico d={ICONS.print} size={15} />Print</button>
     </div>}
+    {(tab === "ar" || tab === "ap") && <div className="toolbar no-print">
+      <span className="subtle" style={{ fontWeight: 600 }}>As of</span>
+      <input className="input" style={{ maxWidth: 160 }} type="date" value={asOf} onChange={e => setAsOf(e.target.value || todayISO())} />
+      <button className="btn" style={{ marginLeft: "auto" }} onClick={() => window.print()}><Ico d={ICONS.print} size={15} />Print</button>
+    </div>}
 
     {tab === "pl" && <ProfitLoss db={db} from={from} to={to} rangeLabel={rangeLabel} />}
+    {tab === "ie" && <IncomeExpense db={db} from={from} to={to} rangeLabel={rangeLabel} />}
     {tab === "tax" && <SalesTax db={db} from={from} to={to} rangeLabel={rangeLabel} />}
     {tab === "customers" && <SalesByCustomer db={db} from={from} to={to} rangeLabel={rangeLabel} />}
     {tab === "expenses" && <ExpenseReport db={db} from={from} to={to} rangeLabel={rangeLabel} />}
+    {tab === "ar" && <AgedReport db={db} asOf={asOf} kind="ar" />}
+    {tab === "ap" && <AgedReport db={db} asOf={asOf} kind="ap" />}
     {tab === "statement" && <Statements db={db} />}
   </div>;
+}
+
+/* ---------- Aged Receivables / Payables ---------- */
+function AgedReport({ db, asOf, kind }) {
+  const isAR = kind === "ar";
+  const r = isAR ? agedReceivables(db, asOf) : agedPayables(db, asOf);
+  const title = isAR ? "Aged Receivables" : "Aged Payables";
+  const who = isAR ? "Customer" : "Vendor";
+  const cols = [["cur", "Current"], ["d30", "1–30"], ["d60", "31–60"], ["d90", "61–90"], ["d90p", "90+"]];
+  const exportCSV = () => downloadCSV(isAR ? "aged-receivables" : "aged-payables",
+    [who, ...cols.map(([, l]) => l), "Total"],
+    [...r.rows.map(x => [nameOf(db, x.key), ...cols.map(([k]) => x[k].toFixed(2)), x.total.toFixed(2)]),
+    ["TOTAL", ...cols.map(([k]) => r.totals[k].toFixed(2)), r.totals.total.toFixed(2)]]);
+  return <ReportCard title={title} rangeLabel={"As of " + fmtDate(asOf)}
+    right={<button className="btn sm no-print" onClick={exportCSV}>Export CSV</button>}>
+    {r.rows.length === 0
+      ? <Empty icon={isAR ? ICONS.ar : ICONS.ap} title={"Nothing outstanding"} msg={isAR ? "No customer owed you money on this date." : "You owed no vendor bills on this date."} />
+      : <table><thead><tr><th>{who}</th>{cols.map(([k, l]) => <th key={k} className="num">{l}</th>)}<th className="num">Total</th></tr></thead>
+        <tbody>
+          {r.rows.map(x => <tr key={x.key}>
+            <td style={{ fontWeight: 600 }}>{nameOf(db, x.key)}</td>
+            {cols.map(([k]) => <td key={k} className="num" style={k !== "cur" && x[k] > 0 ? { color: "var(--neg)" } : {}}>{x[k] > 0 ? money(x[k]) : "—"}</td>)}
+            <td className="num" style={{ fontWeight: 600 }}>{money(x.total)}</td>
+          </tr>)}
+          <tr>
+            <td style={{ fontWeight: 700 }}>Total</td>
+            {cols.map(([k]) => <td key={k} className="num" style={{ fontWeight: 700 }}>{money(r.totals[k])}</td>)}
+            <td className="num" style={{ fontWeight: 700 }}>{money(r.totals.total)}</td>
+          </tr>
+        </tbody></table>}
+  </ReportCard>;
+}
+
+/* ---------- Income / Expense by month ---------- */
+function IncomeExpense({ db, from, to, rangeLabel }) {
+  const r = incomeExpenseByMonth(db, from, to);
+  const label = ym => { const [y, m] = ym.split("-"); return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("en-US", { month: "short", year: "numeric" }); };
+  const exportCSV = () => downloadCSV("income-expense",
+    ["Month", "Income", "Expenses", "Bill Payments", "Net"],
+    [...r.rows.map(x => [label(x.month), x.income.toFixed(2), x.expenses.toFixed(2), x.billsPaid.toFixed(2), x.net.toFixed(2)]),
+    ["TOTAL", r.totals.income.toFixed(2), r.totals.expenses.toFixed(2), r.totals.billsPaid.toFixed(2), r.totals.net.toFixed(2)]]);
+  return <>
+    <div className="grid" style={{ gridTemplateColumns: "repeat(3,1fr)", marginBottom: 16 }}>
+      <div className="stat"><div className="lbl">Income</div><div className="val mono pos">{money(r.totals.income)}</div><div className="meta">payments received</div></div>
+      <div className="stat"><div className="lbl">Money Out</div><div className="val mono neg">{money(r.totals.expenses + r.totals.billsPaid)}</div><div className="meta">expenses + bill payments</div></div>
+      <div className="stat"><div className="lbl">Net</div><div className={"val mono " + (r.totals.net >= 0 ? "pos" : "neg")}>{money(r.totals.net)}</div><div className="meta">cash basis</div></div>
+    </div>
+    <ReportCard title="Income / Expense by Month" rangeLabel={rangeLabel}
+      right={<button className="btn sm no-print" onClick={exportCSV}>Export CSV</button>}>
+      {r.rows.length === 0
+        ? <Empty icon={ICONS.reports} title="Nothing in this range" msg="No payments or expenses fall in the selected dates." />
+        : <table><thead><tr><th>Month</th><th className="num">Income</th><th className="num">Expenses</th><th className="num">Bill Payments</th><th className="num">Net</th></tr></thead>
+          <tbody>
+            {r.rows.map(x => <tr key={x.month}>
+              <td style={{ fontWeight: 600 }}>{label(x.month)}</td>
+              <td className="num" style={{ color: "var(--pos)" }}>{money(x.income)}</td>
+              <td className="num">{money(x.expenses)}</td>
+              <td className="num">{money(x.billsPaid)}</td>
+              <td className="num" style={{ fontWeight: 600, color: x.net >= 0 ? "var(--pos)" : "var(--neg)" }}>{money(x.net)}</td>
+            </tr>)}
+            <tr>
+              <td style={{ fontWeight: 700 }}>Total</td>
+              <td className="num" style={{ fontWeight: 700 }}>{money(r.totals.income)}</td>
+              <td className="num" style={{ fontWeight: 700 }}>{money(r.totals.expenses)}</td>
+              <td className="num" style={{ fontWeight: 700 }}>{money(r.totals.billsPaid)}</td>
+              <td className="num" style={{ fontWeight: 700 }}>{money(r.totals.net)}</td>
+            </tr>
+          </tbody></table>}
+    </ReportCard>
+  </>;
 }
 
 function ReportCard({ title, rangeLabel, right, children }) {

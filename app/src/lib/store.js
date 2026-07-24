@@ -468,10 +468,19 @@ export function useLedger(session, onError) {
           contactPersonId: p.contactPersonId || "", proposalId: p.id, poNumber: p.poNumber,
           date: todayISO(), dueDate: addDays(todayISO(), d0.settings.terms),
           taxRate: 0, notes: "", payments: [],
-          lineItems: sel.map(ph => ({
-            id: uid(), desc: `${ph.label} (${ph.pct}%) — ${p.number} ${p.description}`,
-            qty: 1, unit: "", unitPrice: phaseAmount(total, ph.pct),
-          })),
+          // Billed phases carry qty 1 + amount; remaining unbilled phases print
+          // as qty-0 reference lines (Sage-style, per the Invoice Example PDF)
+          // so the customer sees the whole schedule. qty 0 = no charge.
+          lineItems: [
+            ...sel.map(ph => ({
+              id: uid(), desc: `${p.jobNumber || p.number} — ${ph.label}`,
+              qty: 1, unit: "", unitPrice: phaseAmount(total, ph.pct),
+            })),
+            ...(p.phases || []).filter(ph => !ph.invoiceId && !phaseKeys.includes(ph.key)).map(ph => ({
+              id: uid(), desc: `${p.jobNumber || p.number} — ${ph.label}`,
+              qty: 0, unit: "", unitPrice: phaseAmount(total, ph.pct),
+            })),
+          ],
         };
         th(await supabase.from("invoices").insert(A.invoiceToRow(inv)));
         await replaceLineItems("invoice_line_items", "invoice_id", inv.id, inv.lineItems);

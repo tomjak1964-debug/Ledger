@@ -55,11 +55,47 @@ export const invoiceToRow = i => ({
   id: i.id, number: i.number, sales_order_id: idOrNull(i.salesOrderId), quote_id: idOrNull(i.quoteId),
   customer_id: idOrNull(i.customerId), po_number: i.poNumber ?? "", date: dateOrNull(i.date),
   due_date: dateOrNull(i.dueDate), tax_rate: num(i.taxRate), notes: i.notes ?? "",
+  proposal_id: idOrNull(i.proposalId), contact_person_id: idOrNull(i.contactPersonId),
 });
 export const invoiceFromRow = (r, items, payments) => ({
   id: r.id, number: r.number, salesOrderId: r.sales_order_id || "", quoteId: r.quote_id || "",
   customerId: r.customer_id || "", poNumber: r.po_number, date: r.date || "", dueDate: r.due_date || "",
-  taxRate: num(r.tax_rate), notes: r.notes || "", lineItems: items || [], payments: payments || [],
+  taxRate: num(r.tax_rate), notes: r.notes || "", proposalId: r.proposal_id || "",
+  contactPersonId: r.contact_person_id || "", lineItems: items || [], payments: payments || [],
+});
+
+/* ---- contact people ---- */
+export const personToRow = p => ({ id: p.id, contact_id: p.contactId, name: p.name ?? "", title: p.title ?? "", email: p.email ?? "", phone: p.phone ?? "" });
+export const personFromRow = r => ({ id: r.id, contactId: r.contact_id, name: r.name, title: r.title, email: r.email, phone: r.phone });
+
+/* ---- machine types (costing rates) ---- */
+export const machineTypeToRow = m => ({
+  id: m.id, name: m.name ?? "", eng_base: num(m.engBase), camera_rate: num(m.cameraRate),
+  panel_budget: num(m.panelBudget), io_first: num(m.ioFirst), io_addl: num(m.ioAddl),
+  dn_checkout: num(m.dnCheckout), dn_material: num(m.dnMaterial), field_wiring: num(m.fieldWiring),
+  runoff: num(m.runoff), remote_hmi: num(m.remoteHmi), sort: num(m.sort),
+});
+export const machineTypeFromRow = r => ({
+  id: r.id, name: r.name, engBase: num(r.eng_base), cameraRate: num(r.camera_rate),
+  panelBudget: num(r.panel_budget), ioFirst: num(r.io_first), ioAddl: num(r.io_addl),
+  dnCheckout: num(r.dn_checkout), dnMaterial: num(r.dn_material), fieldWiring: num(r.field_wiring),
+  runoff: num(r.runoff), remoteHmi: num(r.remote_hmi), sort: num(r.sort),
+});
+
+/* ---- proposals ---- */
+export const proposalToRow = p => ({
+  id: p.id, number: p.number, customer_id: idOrNull(p.customerId), contact_person_id: idOrNull(p.contactPersonId),
+  date: dateOrNull(p.date), status: p.status, job_number: p.jobNumber ?? "", description: p.description ?? "",
+  location: p.location ?? "", machine_type_id: idOrNull(p.machineTypeId), specs: p.specs || {},
+  pricing: p.pricing || {}, phases: p.phases || [], notes: p.notes ?? "", po_number: p.poNumber ?? "",
+  sales_order_id: idOrNull(p.salesOrderId),
+});
+export const proposalFromRow = r => ({
+  id: r.id, number: r.number, customerId: r.customer_id || "", contactPersonId: r.contact_person_id || "",
+  date: r.date || "", status: r.status, jobNumber: r.job_number, description: r.description,
+  location: r.location, machineTypeId: r.machine_type_id || "", specs: r.specs || {},
+  pricing: r.pricing || {}, phases: r.phases || [], notes: r.notes, poNumber: r.po_number,
+  salesOrderId: r.sales_order_id || "",
 });
 
 /* ---- bills ---- */

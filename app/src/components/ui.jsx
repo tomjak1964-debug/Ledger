@@ -22,6 +22,7 @@ export const ICONS = {
   refresh: "M23 4v6h-6M1 20v-6h6M3.5 9a9 9 0 0114.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0020.5 15",
   reports: "M3 3v18h18M8 17v-6M13 17V7M18 17v-9",
   logout: "M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9",
+  mail: "M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2zM22 6l-10 7L2 6",
 };
 
 export function Badge({ status }) {
@@ -29,6 +30,7 @@ export function Badge({ status }) {
     draft: ["gray", "Draft"], sent: ["blue", "Sent"], accepted: ["green", "Accepted"], declined: ["red", "Declined"],
     open: ["blue", "Open"], invoiced: ["green", "Invoiced"], fulfilled: ["green", "Fulfilled"],
     unpaid: ["amber", "Unpaid"], partial: ["blue", "Partial"], paid: ["green", "Paid"], overdue: ["red", "Overdue"],
+    submitted: ["blue", "Submitted"], won: ["green", "Won"], lost: ["red", "Lost"],
   };
   const [c, l] = map[status] || ["gray", status];
   return <span className={"badge " + c}><span className="dot"></span>{l}</span>;

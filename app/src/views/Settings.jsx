@@ -5,6 +5,7 @@ import { Ico, ICONS, Field } from "../components/ui.jsx";
 export default function SettingsView({ db, actions, toast, session }) {
   const [s, setS] = useState(db.settings);
   const [busy, setBusy] = useState(false);
+  const [invite, setInvite] = useState("");
   const fileRef = useRef();
   const set = (k, v) => setS(p => ({ ...p, [k]: v }));
   const saveAll = async () => { if (await actions.saveSettings(s)) toast("Settings saved"); };
@@ -78,6 +79,25 @@ export default function SettingsView({ db, actions, toast, session }) {
           Import accepts backups exported from the original single-file app (ledger.html) or from this one —
           same format. Your data lives in Supabase and syncs to every device you sign in from.
         </p>
+      </div>
+    </div>
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-head"><h3>Team</h3></div>
+      <div className="card-body">
+        <p className="subtle" style={{ marginTop: 0 }}>Everyone below shares these books — proposals your engineer enters land here instantly. Invite by email; they create their own password at sign-up.</p>
+        {(db.members || []).map(m => <div key={m.email} className="cat-row">
+          <span style={{ fontWeight: 600 }}>{m.email}</span>
+          <span className="subtle">{m.role}{!m.userId ? " · invited, not signed up yet" : ""}</span>
+          {m.role !== "owner" && <button className="btn ghost icon" style={{ marginLeft: "auto" }} title="Remove"
+            onClick={async () => { if (confirm("Remove " + m.email + "?") && await actions.removeMember(m.email)) toast("Removed"); }}>
+            <Ico d={ICONS.trash} size={14} /></button>}
+        </div>)}
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <input className="input" style={{ maxWidth: 300 }} placeholder="engineer@example.com" value={invite} onChange={e => setInvite(e.target.value)} />
+          <button className="btn primary" disabled={!invite.includes("@")} onClick={async () => {
+            if (await actions.inviteMember(invite)) { setInvite(""); toast("Invited — have them sign up with that email"); }
+          }}>Invite</button>
+        </div>
       </div>
     </div>
     <div className="card">

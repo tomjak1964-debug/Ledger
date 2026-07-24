@@ -38,3 +38,6 @@ pnpm-debug.log*
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Never commit credentials
+Keys and Passwords/

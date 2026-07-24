@@ -4,10 +4,13 @@ import { lineTotals, balance, invoiceStatus } from "../calc/ledger.js";
 import { Ico, ICONS, Badge, Empty, Field } from "../components/ui.jsx";
 import PaymentModal from "../components/PaymentModal.jsx";
 import LineItemsEditor from "../components/LineItemsEditor.jsx";
+import EmailModal from "../components/EmailModal.jsx";
+import { invoicePdf } from "../lib/invoicePdf.js";
 
 export default function InvoicesView({ db, actions, toast, openDoc }) {
   const [pay, setPay] = useState(null);
   const [edit, setEdit] = useState(null);
+  const [email, setEmail] = useState(null);
   const customers = db.contacts.filter(c => c.type === "customer");
   const del = async (id) => { if (!confirm("Delete this invoice?")) return; if (await actions.deleteInvoice(id)) toast("Deleted"); };
 
@@ -49,6 +52,7 @@ export default function InvoicesView({ db, actions, toast, openDoc }) {
               <td className="num" style={{ fontWeight: 600 }}>{money(balance(inv))}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                 {st !== "paid" && <button className="btn sm" onClick={() => setPay(inv)}><Ico d={ICONS.money} size={14} />Payment</button>}
+                <button className="btn ghost icon" title="Email invoice" onClick={() => setEmail(inv)}><Ico d={ICONS.mail} size={16} /></button>
                 <button className="btn ghost icon" title="Print" onClick={() => openDoc("invoice", inv)}><Ico d={ICONS.print} size={16} /></button>
                 <button className="btn ghost icon" title="Edit" onClick={() => setEdit({ ...inv })}><Ico d={ICONS.edit} size={16} /></button>
                 <button className="btn ghost icon" onClick={() => del(inv.id)} title="Delete"><Ico d={ICONS.trash} size={15} /></button>
@@ -56,6 +60,13 @@ export default function InvoicesView({ db, actions, toast, openDoc }) {
             </tr>;
           })}</tbody></table>}
     </div>
+    {email && <EmailModal
+      title={"Email · " + email.number}
+      defaultTo={db.contactPeople.find(p => p.id === email.contactPersonId)?.email || db.contacts.find(c => c.id === email.customerId)?.email || ""}
+      defaultSubject={`Invoice ${email.number} — ${db.settings.company}`}
+      defaultBody={`Please find attached invoice ${email.number}.\n\nThank you for your business.\n\n${db.settings.company}\n${db.settings.companyPhone || ""}`}
+      buildAttachment={() => invoicePdf(email, db)}
+      onClose={() => setEmail(null)} toast={toast} />}
     {pay && <PaymentModal doc={pay} onClose={() => setPay(null)}
       onSave={async (p) => {
         if (await actions.recordPayment("invoice", pay.id, p)) { setPay(null); toast("Payment recorded"); }

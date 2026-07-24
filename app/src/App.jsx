@@ -7,6 +7,8 @@ import { Ico, ICONS } from "./components/ui.jsx";
 import DocumentView from "./components/DocumentView.jsx";
 import Dashboard from "./views/Dashboard.jsx";
 import ReportsView from "./views/Reports.jsx";
+import ProposalsView from "./views/Proposals.jsx";
+import MachineRatesView from "./views/MachineRates.jsx";
 import QuotesView from "./views/Quotes.jsx";
 import SalesOrdersView from "./views/SalesOrders.jsx";
 import InvoicesView from "./views/Invoices.jsx";
@@ -26,6 +28,7 @@ const NAV = [
   },
   {
     group: "Sell", items: [
+      { k: "proposals", label: "Proposals", icon: ICONS.so },
       { k: "quotes", label: "Quotes", icon: ICONS.quote },
       { k: "salesOrders", label: "Sales Orders", icon: ICONS.so },
       { k: "invoices", label: "Invoices", icon: ICONS.inv },
@@ -41,6 +44,7 @@ const NAV = [
   {
     group: "Records", items: [
       { k: "contacts", label: "Contacts", icon: ICONS.contacts },
+      { k: "machineRates", label: "Machine Rates", icon: ICONS.settings },
       { k: "catalog", label: "Item Catalog", icon: ICONS.catalog },
       { k: "settings", label: "Settings", icon: ICONS.settings },
     ]
@@ -52,7 +56,9 @@ const TITLES = {
   receivables: ["Receivables", "What customers owe you, by age"], payables: ["Payables", "Vendor bills you owe"],
   expenses: ["Expenses", "Business spend by category"], contacts: ["Contacts", "Customers and vendors"],
   catalog: ["Item Catalog", "Reusable quote line items"], settings: ["Settings", "Company info and defaults"],
-  reports: ["Reports", "P&L, sales tax, customers, and statements"]
+  reports: ["Reports", "P&L, sales tax, customers, and statements"],
+  proposals: ["Proposals", "Machine proposals — priced, tracked, and documented"],
+  machineRates: ["Machine Rates", "The costing table behind proposal pricing"],
 };
 
 export default function App({ session }) {
@@ -116,6 +122,8 @@ export default function App({ session }) {
       <div className="content">
         {view === "dashboard" && <Dashboard {...props} />}
         {view === "reports" && <ReportsView {...props} />}
+        {view === "proposals" && <ProposalsView {...props} />}
+        {view === "machineRates" && <MachineRatesView {...props} />}
         {view === "quotes" && <QuotesView {...props} />}
         {view === "salesOrders" && <SalesOrdersView {...props} />}
         {view === "invoices" && <InvoicesView {...props} />}

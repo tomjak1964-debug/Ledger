@@ -13,6 +13,8 @@ import { supabase } from "./supabaseClient.js";
 import * as A from "./adapters.js";
 import { uid, todayISO, addDays, pad4 } from "./helpers.js";
 import { defaultSettings, sampleData } from "./seed.js";
+import { proposalConfig, phaseAmount } from "../calc/proposals.js";
+import { round2 } from "../calc/ledger.js";
 
 const SEQ_TYPES = ["quote", "so", "invoice", "bill"];
 
@@ -24,9 +26,10 @@ const groupBy = (rows, key) => {
 const th = (res) => { if (res.error) throw res.error; return res.data; };
 
 async function fetchAll() {
-  const [settings, sequences, contacts, catalog, quotes, qli, sos, soli, invoices, invli, payments, bills, expenses] = await Promise.all([
+  const [settings, sequences, contacts, catalog, quotes, qli, sos, soli, invoices, invli, payments, bills, expenses,
+    people, machineTypes, proposals, orgs, members] = await Promise.all([
     supabase.from("settings").select("*").maybeSingle(),
-    supabase.from("sequences").select("*"),
+    supabase.from("org_sequences").select("*"),
     supabase.from("contacts").select("*").order("created_at"),
     supabase.from("catalog_items").select("*").order("created_at"),
     supabase.from("quotes").select("*").order("created_at"),
@@ -38,6 +41,11 @@ async function fetchAll() {
     supabase.from("payments").select("*").order("created_at"),
     supabase.from("bills").select("*").order("created_at"),
     supabase.from("expenses").select("*").order("created_at"),
+    supabase.from("contact_people").select("*").order("created_at"),
+    supabase.from("machine_types").select("*").order("sort").order("created_at"),
+    supabase.from("proposals").select("*").order("created_at"),
+    supabase.from("orgs").select("*"),
+    supabase.from("org_members").select("*").order("created_at"),
   ]);
   return {
     settingsRow: th(settings), sequences: th(sequences),
@@ -45,6 +53,8 @@ async function fetchAll() {
     quotes: th(quotes), qli: th(qli), sos: th(sos), soli: th(soli),
     invoices: th(invoices), invli: th(invli), payments: th(payments),
     bills: th(bills), expenses: th(expenses),
+    people: th(people), machineTypes: th(machineTypes), proposals: th(proposals),
+    orgs: th(orgs), members: th(members),
   };
 }
 
@@ -66,6 +76,11 @@ function assemble(raw) {
     invoices: raw.invoices.map(r => A.invoiceFromRow(r, li(invItems[r.id]), pm(pays[r.id]))),
     bills: raw.bills.map(r => A.billFromRow(r, pm(pays[r.id]))),
     expenses: raw.expenses.map(A.expenseFromRow),
+    contactPeople: raw.people.map(A.personFromRow),
+    machineTypes: raw.machineTypes.map(A.machineTypeFromRow),
+    proposals: raw.proposals.map(A.proposalFromRow),
+    org: raw.orgs[0] ? { id: raw.orgs[0].id, name: raw.orgs[0].name, ownerId: raw.orgs[0].owner_id } : null,
+    members: raw.members.map(m => ({ orgId: m.org_id, userId: m.user_id, email: m.email, role: m.role })),
   };
 }
 
@@ -85,8 +100,11 @@ export function useLedger(session, onError) {
   const reload = useCallback(async () => {
     setLoading(true); setLoadError(null);
     try {
+      // link email invites to this auth user, then ensure an org exists
+      await supabase.rpc("claim_membership");
+      th(await supabase.rpc("bootstrap_org"));
       let raw = await fetchAll();
-      if (!raw.settingsRow) { // first run for this account (upsert: StrictMode double-effects race here)
+      if (!raw.settingsRow) { // first run for this org (upsert: StrictMode double-effects race here)
         th(await supabase.from("settings").upsert({ user_id: session.user.id, data: defaultSettings() }));
         raw = await fetchAll();
       }
@@ -107,7 +125,8 @@ export function useLedger(session, onError) {
   async function claimNumber(docType) {
     const { data, error } = await supabase.rpc("next_doc_number", { p_doc_type: docType });
     if (error) throw error;
-    setDb(d => ({ ...d, settings: { ...d.settings, counters: { ...d.settings.counters, [docType]: data + 1 } } }));
+    if (SEQ_TYPES.includes(docType))
+      setDb(d => ({ ...d, settings: { ...d.settings, counters: { ...d.settings.counters, [docType]: data + 1 } } }));
     return data;
   }
 
@@ -321,17 +340,162 @@ export function useLedger(session, onError) {
     /* ---- settings & data management ---- */
     async saveSettings(s) {
       try {
-        const { counters, ...data } = s; // counters live in sequences, not jsonb
-        th(await supabase.from("settings").upsert({ user_id: session.user.id, data }));
+        const { counters, ...data } = s; // counters live in org_sequences, not jsonb
+        th(await supabase.from("settings").upsert({ org_id: dbRef.current.org.id, data }, { onConflict: "org_id" }));
         setDb(d => ({ ...d, settings: { ...data, counters: d.settings.counters } }));
         return true;
       } catch (e) { return fail(e); }
     },
 
-    // Wipe all business data. Keeps company settings; resets counters to 1.
+    /* ---- team ---- */
+    async inviteMember(email) {
+      try {
+        th(await supabase.from("org_members").insert({ org_id: dbRef.current.org.id, email: email.trim().toLowerCase() }));
+        await reload();
+        return true;
+      } catch (e) { return fail(e); }
+    },
+    async removeMember(email) {
+      try {
+        th(await supabase.from("org_members").delete().eq("org_id", dbRef.current.org.id).eq("email", email));
+        setDb(d => ({ ...d, members: d.members.filter(m => m.email !== email) }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
+
+    /* ---- machine rates & contact people ---- */
+    async saveMachineType(m) {
+      try {
+        const mt = { ...m }; delete mt._new;
+        th(await supabase.from("machine_types").upsert(A.machineTypeToRow(mt)));
+        setDb(d => ({ ...d, machineTypes: upsertList(d.machineTypes, mt) }));
+        return mt;
+      } catch (e) { return fail(e); }
+    },
+    async deleteMachineType(id) {
+      try {
+        th(await supabase.from("machine_types").delete().eq("id", id));
+        setDb(d => ({ ...d, machineTypes: d.machineTypes.filter(m => m.id !== id) }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
+    async seedMachineRates(rates) {
+      try {
+        const rows = rates.map((r, i) => ({ ...r, id: uid(), sort: i }));
+        th(await supabase.from("machine_types").insert(rows.map(A.machineTypeToRow)));
+        setDb(d => ({ ...d, machineTypes: [...d.machineTypes, ...rows] }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
+    async saveContactPerson(p) {
+      try {
+        th(await supabase.from("contact_people").upsert(A.personToRow(p)));
+        setDb(d => ({ ...d, contactPeople: upsertList(d.contactPeople, p) }));
+        return p;
+      } catch (e) { return fail(e); }
+    },
+    async deleteContactPerson(id) {
+      try {
+        th(await supabase.from("contact_people").delete().eq("id", id));
+        setDb(d => ({ ...d, contactPeople: d.contactPeople.filter(p => p.id !== id) }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
+
+    /* ---- proposals ---- */
+    async saveProposal(p) {
+      try {
+        const isNew = !!p._new;
+        const prop = { ...p }; delete prop._new;
+        if (isNew) {
+          const cfg = proposalConfig(dbRef.current.settings);
+          const ymd = (prop.date || todayISO()).slice(2).replace(/-/g, "");
+          const n = await claimNumber("prop:" + ymd);
+          prop.number = `${cfg.propPrefix}${ymd}-${String(n).padStart(2, "0")}`;
+        }
+        th(await supabase.from("proposals").upsert(A.proposalToRow(prop)));
+        setDb(d => ({ ...d, proposals: upsertList(d.proposals, prop) }));
+        return prop;
+      } catch (e) { return fail(e); }
+    },
+    async setProposalStatus(id, status) {
+      try {
+        th(await supabase.from("proposals").update({ status }).eq("id", id));
+        setDb(d => ({ ...d, proposals: d.proposals.map(p => p.id === id ? { ...p, status } : p) }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
+    async deleteProposal(id) {
+      try {
+        th(await supabase.from("proposals").delete().eq("id", id));
+        setDb(d => ({ ...d, proposals: d.proposals.filter(p => p.id !== id) }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
+    // Customer sent a PO — proposal becomes a sales order (the existing chain).
+    async winProposal(p, po) {
+      try {
+        const d0 = dbRef.current;
+        const so = {
+          id: uid(), number: d0.settings.soPrefix + "-" + pad4(await claimNumber("so")),
+          quoteId: "", customerId: p.customerId, poNumber: po, date: todayISO(), status: "open",
+          taxRate: 0, lineItems: [{
+            id: uid(), desc: `Turnkey Controls — ${p.description} (${p.number})`,
+            qty: 1, unit: "lot", unitPrice: Number(p.pricing?.total) || 0,
+          }],
+        };
+        th(await supabase.from("sales_orders").insert(A.soToRow(so)));
+        await replaceLineItems("sales_order_line_items", "sales_order_id", so.id, so.lineItems);
+        th(await supabase.from("proposals").update({ status: "won", po_number: po, sales_order_id: so.id }).eq("id", p.id));
+        setDb(d => ({
+          ...d,
+          salesOrders: [...d.salesOrders, so],
+          proposals: d.proposals.map(x => x.id === p.id ? { ...x, status: "won", poNumber: po, salesOrderId: so.id } : x),
+        }));
+        return so;
+      } catch (e) { return fail(e); }
+    },
+    // Bill one or more phases of a won proposal on a single invoice.
+    async invoiceProposalPhases(p, phaseKeys) {
+      try {
+        const d0 = dbRef.current;
+        const total = Number(p.pricing?.total) || 0;
+        const sel = (p.phases || []).filter(ph => phaseKeys.includes(ph.key) && !ph.invoiceId);
+        if (!sel.length) throw new Error("No un-billed phases selected");
+        const inv = {
+          id: uid(), number: d0.settings.invPrefix + "-" + pad4(await claimNumber("invoice")),
+          salesOrderId: p.salesOrderId || "", quoteId: "", customerId: p.customerId,
+          contactPersonId: p.contactPersonId || "", proposalId: p.id, poNumber: p.poNumber,
+          date: todayISO(), dueDate: addDays(todayISO(), d0.settings.terms),
+          taxRate: 0, notes: "", payments: [],
+          lineItems: sel.map(ph => ({
+            id: uid(), desc: `${ph.label} (${ph.pct}%) — ${p.number} ${p.description}`,
+            qty: 1, unit: "", unitPrice: phaseAmount(total, ph.pct),
+          })),
+        };
+        th(await supabase.from("invoices").insert(A.invoiceToRow(inv)));
+        await replaceLineItems("invoice_line_items", "invoice_id", inv.id, inv.lineItems);
+        const phases = (p.phases || []).map(ph => sel.some(s => s.key === ph.key) ? { ...ph, invoiceId: inv.id } : ph);
+        th(await supabase.from("proposals").update({ phases }).eq("id", p.id));
+        const allBilled = phases.every(ph => ph.invoiceId);
+        if (allBilled && p.salesOrderId)
+          th(await supabase.from("sales_orders").update({ status: "invoiced", invoice_id: inv.id }).eq("id", p.salesOrderId));
+        setDb(d => ({
+          ...d,
+          invoices: [...d.invoices, inv],
+          proposals: d.proposals.map(x => x.id === p.id ? { ...x, phases } : x),
+          salesOrders: allBilled && p.salesOrderId
+            ? d.salesOrders.map(s => s.id === p.salesOrderId ? { ...s, status: "invoiced", invoiceId: inv.id } : s)
+            : d.salesOrders,
+        }));
+        return inv;
+      } catch (e) { return fail(e); }
+    },
+
+    // Wipe all business data. Keeps settings, team, and machine rates; resets counters.
     async clearAllData() {
       try {
-        await wipe(session.user.id);
+        await wipe(dbRef.current.org.id);
         await reload();
         return true;
       } catch (e) { return fail(e); }
@@ -340,9 +504,10 @@ export function useLedger(session, onError) {
     // Replace everything with the legacy sample dataset.
     async loadSampleData() {
       try {
-        await wipe(session.user.id);
+        const orgId = dbRef.current.org.id;
+        await wipe(orgId);
         const sample = sampleData();
-        th(await supabase.from("settings").upsert({ user_id: session.user.id, data: sample.settings }));
+        th(await supabase.from("settings").upsert({ org_id: orgId, data: sample.settings }, { onConflict: "org_id" }));
         th(await supabase.from("contacts").insert(sample.contacts.map(A.contactToRow)));
         th(await supabase.from("catalog_items").insert(sample.catalog.map(A.catalogToRow)));
         await reload();
@@ -371,7 +536,8 @@ export function useLedger(session, onError) {
         const bills = arr("bills").map(b => ({ ...b, id: nid(b.id), vendorId: nid(b.vendorId), payments: (b.payments || []).map(p => ({ ...p, id: uid() })) }));
         const expenses = arr("expenses").map(e => ({ ...e, id: uid() }));
 
-        await wipe(session.user.id);
+        const orgId = dbRef.current.org.id;
+        await wipe(orgId);
 
         const ins = async (table, rows) => { if (rows.length) th(await supabase.from(table).insert(rows)); };
         await ins("contacts", contacts.map(A.contactToRow));
@@ -390,9 +556,9 @@ export function useLedger(session, onError) {
         await ins("expenses", expenses.map(A.expenseToRow));
 
         const { counters, ...settingsData } = { ...defaultSettings(), ...data.settings };
-        th(await supabase.from("settings").upsert({ user_id: session.user.id, data: settingsData }));
-        th(await supabase.from("sequences").upsert(SEQ_TYPES.map(t => ({
-          user_id: session.user.id, doc_type: t, next_value: Math.max(1, Number(counters?.[t]) || 1),
+        th(await supabase.from("settings").upsert({ org_id: orgId, data: settingsData }, { onConflict: "org_id" }));
+        th(await supabase.from("org_sequences").upsert(SEQ_TYPES.map(t => ({
+          org_id: orgId, doc_type: t, next_value: Math.max(1, Number(counters?.[t]) || 1),
         }))));
 
         await reload();
@@ -404,13 +570,14 @@ export function useLedger(session, onError) {
   return { db, loading, loadError, actions };
 }
 
-// Delete every business row for this user. Settings row is left in place;
-// sequences reset by deletion (next claim starts back at 1).
-async function wipe(userId) {
+// Delete every business row for this org. Settings, team, and machine rates
+// are left in place; counters reset by deletion (next claim starts back at 1).
+async function wipe(orgId) {
   // Children first (payments have no FK; line items cascade from parents).
   for (const table of ["payments", "quote_line_items", "sales_order_line_items", "invoice_line_items",
-    "quotes", "sales_orders", "invoices", "bills", "expenses", "contacts", "catalog_items", "sequences"]) {
-    const { error } = await supabase.from(table).delete().eq("user_id", userId);
+    "quotes", "sales_orders", "invoices", "proposals", "contact_people", "bills", "expenses",
+    "contacts", "catalog_items", "org_sequences"]) {
+    const { error } = await supabase.from(table).delete().eq("org_id", orgId);
     if (error) throw error;
   }
 }

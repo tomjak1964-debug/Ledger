@@ -56,6 +56,28 @@ If you ran `schema.sql` before a migration existed, run the files in
 - `002_invoice_notes.sql` — adds the per-invoice `notes` column (needed for
   invoice editing / standalone invoices). Fresh installs of `schema.sql`
   already include it.
+- `003_shared_org_and_proposals.sql` — **required** for app versions with the
+  Proposals module: shared company books (invite teammates by email in
+  Settings → Team), org-wide security policies, machine-rate costing tables,
+  proposals, contact people, and phased invoicing. Run it before (or right
+  when) deploying that app version — the app can't load without it.
+
+## Email sending (invoices & proposals)
+
+The Email buttons use the Edge Function in
+[`functions/send-document/`](functions/send-document/) with
+[Resend](https://resend.com) (free tier is plenty):
+
+1. Create a Resend account → **API Keys** → create a key.
+2. In Resend → **Domains**, add `tmjengineering.com` and create the two DNS
+   records it shows (at your domain registrar). Until verified you can only
+   send to your own email from `onboarding@resend.dev`.
+3. Supabase Dashboard → **Edge Functions → Deploy a new function** → name it
+   `send-document`, paste `functions/send-document/index.ts`, deploy.
+4. In the function's **Secrets**, add:
+   - `RESEND_API_KEY` = your key
+   - `EMAIL_FROM` = `TMJ Engineering <invoices@tmjengineering.com>`
+     (or leave unset to use `onboarding@resend.dev` while testing)
 
 ## Notes
 

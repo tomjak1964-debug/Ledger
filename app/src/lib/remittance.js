@@ -4,9 +4,22 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { money, fmtDate } from "./helpers.js";
 
-export function remittancePdf({ payment, vendor, lines, settings }) {
-  const s = settings;
+export function remittancePdf(args) {
   const doc = new jsPDF({ unit: "pt", format: "letter" });
+  drawRemit(doc, args);
+  const filename = `Remittance ${args.vendor?.name || ""} ${args.payment.date}.pdf`.replace(/[\\/:*?"<>|]/g, "-");
+  return { blob: doc.output("blob"), filename };
+}
+
+// One PDF, one page per vendor — for Pay Bills runs.
+export function remittancesPdf(list) {
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  list.forEach((args, i) => { if (i) doc.addPage(); drawRemit(doc, args); });
+  return doc.output("blob");
+}
+
+function drawRemit(doc, { payment, vendor, lines, settings }) {
+  const s = settings;
   const W = doc.internal.pageSize.getWidth(), M = 54;
   doc.setFont("helvetica", "bold").setFontSize(14).text(s.company || "", M, 56);
   doc.setFont("helvetica", "normal").setFontSize(9);
@@ -36,8 +49,6 @@ export function remittancePdf({ payment, vendor, lines, settings }) {
   doc.setFontSize(9).setTextColor(90).text(
     `Payment sent electronically on ${fmtDate(payment.date)}. Please apply to the invoice(s) above. Questions: ${s.companyPhone || s.companyEmail || ""}`,
     M, y, { maxWidth: W - 2 * M });
-  const filename = `Remittance ${vendor?.name || ""} ${payment.date}.pdf`.replace(/[\\/:*?"<>|]/g, "-");
-  return { blob: doc.output("blob"), filename };
 }
 
 export function openRemittancePdf(args) {

@@ -72,6 +72,14 @@ export function printCheck({ payment, vendor, memo, stubLines, settings, test })
     return doc;
   }
 
+  drawCheck(doc, L, { payment, vendor, memo, stubLines });
+  return doc;
+}
+
+function drawCheck(doc, L, { payment, vendor, memo, stubLines }) {
+  const F = L.fields;
+  const put = (k, text, size) => { doc.setFontSize(size || L.fontSize); doc.text(String(text), F[k].x, F[k].y); };
+  doc.setFont("helvetica", "normal").setTextColor(0);
   const amt = Number(payment.amount) || 0;
   const words = amountInWords(amt);
   put("date", fmtDate(payment.date));
@@ -101,7 +109,14 @@ export function printCheck({ payment, vendor, memo, stubLines, settings, test })
     doc.setFont("helvetica", "normal");
   };
   stub("stub1"); stub("stub2");
-  return doc;
+}
+
+// One PDF, one page per check — for Pay Bills runs.
+export function checksPdf(list, settings) {
+  const L = checkLayout(settings);
+  const doc = new jsPDF({ unit: "in", format: "letter" });
+  list.forEach((args, i) => { if (i) doc.addPage(); drawCheck(doc, L, args); });
+  return doc.output("blob");
 }
 
 export function openCheckPdf(args) {

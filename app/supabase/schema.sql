@@ -164,6 +164,7 @@ create table if not exists payments (
   amount      numeric(12,2) not null default 0,
   date        date,
   method      text not null default '',
+  ref         text not null default '',   -- check # / confirmation #
   created_at  timestamptz not null default now()
 );
 create index if not exists payments_parent_idx on payments(parent_id);

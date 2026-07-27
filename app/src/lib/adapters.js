@@ -22,8 +22,8 @@ export const lineItemsToRows = (items, parentKey, parentId) =>
 export const lineItemFromRow = r => ({ id: r.id, desc: r.description, qty: num(r.qty), unit: r.unit, unitPrice: num(r.unit_price) });
 
 /* ---- payments ---- */
-export const paymentToRow = (p, parentType, parentId) => ({ id: p.id, parent_type: parentType, parent_id: parentId, amount: num(p.amount), date: dateOrNull(p.date), method: p.method ?? "" });
-export const paymentFromRow = r => ({ id: r.id, amount: num(r.amount), date: r.date || "", method: r.method });
+export const paymentToRow = (p, parentType, parentId) => ({ id: p.id, parent_type: parentType, parent_id: parentId, amount: num(p.amount), date: dateOrNull(p.date), method: p.method ?? "", ref: p.ref ?? "" });
+export const paymentFromRow = r => ({ id: r.id, amount: num(r.amount), date: r.date || "", method: r.method, ref: r.ref || "" });
 
 /* ---- quotes ---- */
 export const quoteToRow = q => ({

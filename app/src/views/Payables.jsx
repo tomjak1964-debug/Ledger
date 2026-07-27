@@ -3,8 +3,16 @@ import { uid, money, fmtDate, todayISO, addDays, nameOf } from "../lib/helpers.j
 import { paid, billStatus, agingBuckets } from "../calc/ledger.js";
 import { Ico, ICONS, Badge, Empty, Modal, Field } from "../components/ui.jsx";
 import PaymentModal from "../components/PaymentModal.jsx";
+import { openCheckPdf } from "../lib/checkPrint.js";
 
 export default function PayablesView({ db, actions, toast }) {
+  const printCheckFor = (bill, p) => openCheckPdf({
+    payment: p,
+    vendor: db.contacts.find(c => c.id === bill.vendorId),
+    memo: bill.ref ? "Inv " + bill.ref : bill.number,
+    stubLines: [{ ref: bill.ref || bill.number, date: bill.date, desc: bill.notes, amount: p.amount }],
+    settings: db.settings,
+  });
   const [edit, setEdit] = useState(null);
   const [pay, setPay] = useState(null);
   const vendors = db.contacts.filter(c => c.type === "vendor");
@@ -69,8 +77,12 @@ export default function PayablesView({ db, actions, toast }) {
     </Modal>}
     {pay && <PaymentModal doc={pay} isBill onClose={() => setPay(null)}
       onSave={async (p) => {
-        if (await actions.recordPayment("bill", pay.id, p)) { setPay(null); toast("Payment recorded"); }
+        if (await actions.recordPayment("bill", pay.id, p)) {
+          setPay(null); toast("Payment recorded");
+          if (p.method === "Check") printCheckFor(pay, p);
+        }
       }}
+      onPrintCheck={(p) => printCheckFor(pay, p)}
       onDelete={async (pid) => {
         if (await actions.deletePayment("bill", pay.id, pid)) {
           setPay(prev => ({ ...prev, payments: (prev.payments || []).filter(x => x.id !== pid) }));

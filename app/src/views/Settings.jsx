@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { todayISO } from "../lib/helpers.js";
 import { Ico, ICONS, Field } from "../components/ui.jsx";
+import { checkLayout, openCheckPdf } from "../lib/checkPrint.js";
 
 export default function SettingsView({ db, actions, toast, session }) {
   const [s, setS] = useState(db.settings);
@@ -79,6 +80,34 @@ export default function SettingsView({ db, actions, toast, session }) {
           Import accepts backups exported from the original single-file app (ledger.html) or from this one —
           same format. Your data lives in Supabase and syncs to every device you sign in from.
         </p>
+      </div>
+    </div>
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-head"><h3>Check Printing</h3></div>
+      <div className="card-body">
+        <p className="subtle" style={{ marginTop: 0 }}>Positions are inches from the top-left of the page, for pre-printed voucher stock (check on top).
+          Print the test pattern on plain paper, hold it over a check, and nudge the numbers. Always print at 100% scale.</p>
+        <div className="row">
+          {Object.entries(checkLayout(s).fields).map(([k, f]) => <Field key={k} label={f.label}>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input className="input mono" type="number" step="0.05" value={f.x} title="X (in)"
+                onChange={e => set("check", { ...s.check, fields: { ...(s.check?.fields || {}), [k]: { ...(s.check?.fields?.[k] || {}), x: Number(e.target.value) } } })} />
+              <input className="input mono" type="number" step="0.05" value={f.y} title="Y (in)"
+                onChange={e => set("check", { ...s.check, fields: { ...(s.check?.fields || {}), [k]: { ...(s.check?.fields?.[k] || {}), y: Number(e.target.value) } } })} />
+            </div>
+          </Field>)}
+          <Field label="Font Size"><input className="input mono" type="number" value={checkLayout(s).fontSize}
+            onChange={e => set("check", { ...s.check, fontSize: Number(e.target.value) })} /></Field>
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button className="btn" onClick={() => openCheckPdf({ test: true, settings: s })}>Print Test Pattern</button>
+          <button className="btn" onClick={() => openCheckPdf({
+            payment: { amount: 12345.67, date: todayISO(), ref: "1001" },
+            vendor: { name: "Sample Vendor, Inc.", address: "123 Main St\nAnytown, MI 48000" },
+            memo: "Inv 9999", stubLines: [{ ref: "9999", desc: "Sample bill", amount: 12345.67 }], settings: s,
+          })}>Print Sample Check</button>
+          <button className="btn primary" onClick={saveAll}><Ico d={ICONS.check} size={15} />Save Positions</button>
+        </div>
       </div>
     </div>
     <div className="card" style={{ marginBottom: 16 }}>

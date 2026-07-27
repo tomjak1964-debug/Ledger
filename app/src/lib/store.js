@@ -538,6 +538,7 @@ export function useLedger(session, onError) {
         const remapItems = items => (items || []).map(it => ({ ...it, id: uid() }));
 
         const contacts = arr("contacts").map(c => ({ ...c, id: nid(c.id) }));
+        const contactPeople = arr("contactPeople").map(p => ({ ...p, id: uid(), contactId: nid(p.contactId) }));
         const catalog = arr("catalog").map(c => ({ ...c, id: nid(c.id) }));
         const quotes = arr("quotes").map(q => ({ ...q, id: nid(q.id), customerId: nid(q.customerId), salesOrderId: q.salesOrderId ? nid(q.salesOrderId) : undefined, lineItems: remapItems(q.lineItems) }));
         const sos = arr("salesOrders").map(s => ({ ...s, id: nid(s.id), quoteId: nid(s.quoteId), customerId: nid(s.customerId), invoiceId: s.invoiceId ? nid(s.invoiceId) : undefined, lineItems: remapItems(s.lineItems) }));
@@ -550,6 +551,7 @@ export function useLedger(session, onError) {
 
         const ins = async (table, rows) => { if (rows.length) th(await supabase.from(table).insert(rows)); };
         await ins("contacts", contacts.map(A.contactToRow));
+        await ins("contact_people", contactPeople.map(A.personToRow));
         await ins("catalog_items", catalog.map(A.catalogToRow));
         await ins("quotes", quotes.map(A.quoteToRow));
         await ins("sales_orders", sos.map(A.soToRow));

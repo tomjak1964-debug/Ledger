@@ -102,7 +102,7 @@ export function useLedger(session, onError) {
     try {
       // link email invites to this auth user, then ensure an org exists
       await supabase.rpc("claim_membership");
-      th(await supabase.rpc("bootstrap_org"));
+      th(await supabase.rpc("bootstrap_org", { p_name: "My Company" }));
       let raw = await fetchAll();
       if (!raw.settingsRow) { // first run for this org (upsert: StrictMode double-effects race here)
         th(await supabase.from("settings").upsert({ user_id: session.user.id, data: defaultSettings() }));

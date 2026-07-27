@@ -9,8 +9,8 @@ const dateOrNull = v => (v ? v : null);
 const num = v => Number(v) || 0;
 
 /* ---- contacts ---- */
-export const contactToRow = c => ({ id: c.id, type: c.type, name: c.name ?? "", contact: c.contact ?? "", email: c.email ?? "", phone: c.phone ?? "", address: c.address ?? "" });
-export const contactFromRow = r => ({ id: r.id, type: r.type, name: r.name, contact: r.contact, email: r.email, phone: r.phone, address: r.address });
+export const contactToRow = c => ({ id: c.id, type: c.type, name: c.name ?? "", contact: c.contact ?? "", email: c.email ?? "", phone: c.phone ?? "", address: c.address ?? "", code: c.code ?? "" });
+export const contactFromRow = r => ({ id: r.id, type: r.type, name: r.name, contact: r.contact, email: r.email, phone: r.phone, address: r.address, code: r.code || "" });
 
 /* ---- catalog ---- */
 export const catalogToRow = c => ({ id: c.id, description: c.desc ?? "", unit: c.unit ?? "", unit_price: num(c.unitPrice) });

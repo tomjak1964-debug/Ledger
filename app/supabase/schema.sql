@@ -44,6 +44,7 @@ create table if not exists contacts (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null default auth.uid(),
   type        text not null check (type in ('customer','vendor')),
+  code        text not null default '',   -- customer short code for invoice numbers (VG260728-01)
   name        text not null default '',
   contact     text not null default '',
   email       text not null default '',

@@ -8,7 +8,7 @@ export default function ContactsView({ db, actions, toast }) {
   const list = db.contacts.filter(c => c.type === tab);
   const save = async (c) => { if (await actions.saveContact(c)) { setEdit(null); toast("Saved"); } };
   const del = async (id) => { if (!confirm("Delete this contact?")) return; if (await actions.deleteContact(id)) toast("Deleted"); };
-  const startNew = () => setEdit({ id: uid(), type: tab, name: "", contact: "", email: "", phone: "", address: "" });
+  const startNew = () => setEdit({ id: uid(), type: tab, name: "", contact: "", email: "", phone: "", address: "", code: "" });
   return <div>
     <div className="toolbar">
       <div className="pill-tabs">
@@ -38,6 +38,8 @@ export default function ContactsView({ db, actions, toast }) {
       <div className="row">
         <Field label="Company / Name"><input className="input" value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} /></Field>
         <Field label="Contact Person"><input className="input" value={edit.contact} onChange={e => setEdit({ ...edit, contact: e.target.value })} /></Field>
+        {edit.type === "customer" && <Field label="Invoice Code" hint="Numbers this customer's invoices, e.g. VG → VG260728-01">
+          <input className="input mono" style={{ maxWidth: 110 }} value={edit.code || ""} onChange={e => setEdit({ ...edit, code: e.target.value.toUpperCase() })} /></Field>}
       </div>
       <div className="row">
         <Field label="Email"><input className="input" value={edit.email} onChange={e => setEdit({ ...edit, email: e.target.value })} /></Field>

@@ -130,6 +130,18 @@ export function useLedger(session, onError) {
     return data;
   }
 
+  // Invoice numbers: customer code + yymmdd + per-day 2-digit index
+  // (VG260728-01), claimed atomically per customer+day. Falls back to the
+  // Settings invoice prefix when the customer has no code.
+  async function claimInvoiceNumber(customerId, date) {
+    const d0 = dbRef.current;
+    const c = d0.contacts.find(x => x.id === customerId);
+    const prefix = String(c?.code || d0.settings.invPrefix || "INV").toUpperCase().replace(/\s+/g, "");
+    const ymd = (date || todayISO()).slice(2).replace(/-/g, "");
+    const n = await claimNumber(`inv:${prefix}:${ymd}`);
+    return `${prefix}${ymd}-${String(n).padStart(2, "0")}`;
+  }
+
   async function replaceLineItems(table, parentKey, parentId, items) {
     th(await supabase.from(table).delete().eq(parentKey, parentId));
     const rows = A.lineItemsToRows(items, parentKey, parentId);
@@ -198,7 +210,7 @@ export function useLedger(session, onError) {
       try {
         const d0 = dbRef.current;
         const inv = {
-          id: uid(), number: d0.settings.invPrefix + "-" + pad4(await claimNumber("invoice")),
+          id: uid(), number: await claimInvoiceNumber(so.customerId, todayISO()),
           salesOrderId: so.id, quoteId: so.quoteId, customerId: so.customerId, poNumber: so.poNumber,
           date: todayISO(), dueDate: addDays(todayISO(), d0.settings.terms),
           lineItems: so.lineItems.map(li => ({ ...li, id: uid() })), taxRate: so.taxRate, payments: [],
@@ -231,7 +243,7 @@ export function useLedger(session, onError) {
         const isNew = !!i._new;
         const inv = { ...i }; delete inv._new;
         if (isNew) {
-          inv.number = dbRef.current.settings.invPrefix + "-" + pad4(await claimNumber("invoice"));
+          inv.number = await claimInvoiceNumber(inv.customerId, inv.date);
           inv.payments = inv.payments || [];
         }
         th(await supabase.from("invoices").upsert(A.invoiceToRow(inv)));
@@ -463,7 +475,7 @@ export function useLedger(session, onError) {
         const sel = (p.phases || []).filter(ph => phaseKeys.includes(ph.key) && !ph.invoiceId);
         if (!sel.length) throw new Error("No un-billed phases selected");
         const inv = {
-          id: uid(), number: d0.settings.invPrefix + "-" + pad4(await claimNumber("invoice")),
+          id: uid(), number: await claimInvoiceNumber(p.customerId, todayISO()),
           salesOrderId: p.salesOrderId || "", quoteId: "", customerId: p.customerId,
           contactPersonId: p.contactPersonId || "", proposalId: p.id, poNumber: p.poNumber,
           date: todayISO(), dueDate: addDays(todayISO(), d0.settings.terms),

@@ -16,10 +16,9 @@ export default function InvoicesView({ db, actions, toast, openDoc }) {
 
   const startNew = () => {
     // Standalone invoice — no quote or SO behind it (time & materials, service
-    // calls). Provisional number; the real one is claimed at save.
-    const n = db.settings.invPrefix + "-" + String(db.settings.counters.invoice).padStart(4, "0");
+    // calls). The number (customer code + date + index) is claimed at save.
     setEdit({
-      id: uid(), number: n, _new: true, salesOrderId: "", quoteId: "", customerId: customers[0]?.id || "",
+      id: uid(), number: "(assigned at save)", _new: true, salesOrderId: "", quoteId: "", customerId: customers[0]?.id || "",
       poNumber: "", date: todayISO(), dueDate: addDays(todayISO(), db.settings.terms),
       lineItems: [{ id: uid(), desc: "", qty: 1, unit: "", unitPrice: 0 }], taxRate: db.settings.taxRate, notes: "", payments: []
     });

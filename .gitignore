@@ -41,3 +41,7 @@ Desktop.ini
 
 # Never commit credentials
 Keys and Passwords/
+
+# Business data exports for migration - never commit
+Sage Export/
+Examples/

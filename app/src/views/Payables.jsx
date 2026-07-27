@@ -4,8 +4,18 @@ import { paid, billStatus, agingBuckets } from "../calc/ledger.js";
 import { Ico, ICONS, Badge, Empty, Modal, Field } from "../components/ui.jsx";
 import PaymentModal from "../components/PaymentModal.jsx";
 import { openCheckPdf } from "../lib/checkPrint.js";
+import { remittancePdf, openRemittancePdf } from "../lib/remittance.js";
+import EmailModal from "../components/EmailModal.jsx";
 
 export default function PayablesView({ db, actions, toast }) {
+  const [emailRemit, setEmailRemit] = useState(null); // {bill, payment}
+  const remitArgs = (bill, p) => ({
+    payment: p, vendor: db.contacts.find(c => c.id === bill.vendorId),
+    lines: [{ ref: bill.ref || bill.number, date: bill.date, desc: bill.notes, amount: p.amount }],
+    settings: db.settings,
+  });
+  // Check payments print a check; electronic payments get a remittance advice
+  const printDocFor = (bill, p) => p.method === "Check" ? printCheckFor(bill, p) : openRemittancePdf(remitArgs(bill, p));
   const printCheckFor = (bill, p) => openCheckPdf({
     payment: p,
     vendor: db.contacts.find(c => c.id === bill.vendorId),
@@ -80,14 +90,22 @@ export default function PayablesView({ db, actions, toast }) {
         if (await actions.recordPayment("bill", pay.id, p)) {
           setPay(null); toast("Payment recorded");
           if (p.method === "Check") printCheckFor(pay, p);
+          else { openRemittancePdf(remitArgs(pay, p)); setEmailRemit({ bill: pay, payment: p }); }
         }
       }}
-      onPrintCheck={(p) => printCheckFor(pay, p)}
+      onPrintCheck={(p) => printDocFor(pay, p)}
       onDelete={async (pid) => {
         if (await actions.deletePayment("bill", pay.id, pid)) {
           setPay(prev => ({ ...prev, payments: (prev.payments || []).filter(x => x.id !== pid) }));
           toast("Payment deleted");
         }
       }} />}
+    {emailRemit && <EmailModal
+      title={"Email Remittance · " + (nameOf(db, emailRemit.bill.vendorId))}
+      defaultTo={db.contacts.find(c => c.id === emailRemit.bill.vendorId)?.email || ""}
+      defaultSubject={`Payment remittance — ${db.settings.company}`}
+      defaultBody={`Please find attached remittance advice for our electronic payment of ${money(emailRemit.payment.amount)} dated ${emailRemit.payment.date}.\n\n${db.settings.company}`}
+      buildAttachment={() => Promise.resolve(remittancePdf(remitArgs(emailRemit.bill, emailRemit.payment)))}
+      onClose={() => setEmailRemit(null)} toast={toast} />}
   </div>;
 }

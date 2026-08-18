@@ -2,7 +2,7 @@ import { useState } from "react";
 import { uid, cls } from "../lib/helpers.js";
 import { Ico, ICONS, Empty, Modal, Field } from "../components/ui.jsx";
 
-export default function ContactsView({ db, actions, toast }) {
+export default function ContactsView({ db, actions, toast, readOnly }) {
   const [tab, setTab] = useState("customer");
   const [edit, setEdit] = useState(null);
   const list = db.contacts.filter(c => c.type === tab);
@@ -15,20 +15,20 @@ export default function ContactsView({ db, actions, toast }) {
         <button className={tab === "customer" ? "on" : ""} onClick={() => setTab("customer")}>Customers</button>
         <button className={tab === "vendor" ? "on" : ""} onClick={() => setTab("vendor")}>Vendors</button>
       </div>
-      <button className="btn primary" style={{ marginLeft: "auto" }} onClick={startNew}><Ico d={ICONS.plus} size={15} />New {tab === "customer" ? "Customer" : "Vendor"}</button>
+      {!readOnly && <button className="btn primary" style={{ marginLeft: "auto" }} onClick={startNew}><Ico d={ICONS.plus} size={15} />New {tab === "customer" ? "Customer" : "Vendor"}</button>}
     </div>
     <div className="card">
       {list.length === 0
         ? <Empty icon={ICONS.contacts} title={"No " + tab + "s yet"} msg={"Add " + (tab === "customer" ? "the companies you quote and invoice." : "vendors and subs you buy from.")}
-          action={<button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New {tab === "customer" ? "Customer" : "Vendor"}</button>} />
+          action={!readOnly && <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New {tab === "customer" ? "Customer" : "Vendor"}</button>} />
         : <table><thead><tr><th>Name</th><th>Contact</th><th>Email</th><th>Phone</th><th></th></tr></thead>
           <tbody>{list.map(c => (
             <tr key={c.id}>
               <td style={{ fontWeight: 600 }}>{c.name}</td><td className="subtle">{c.contact || "—"}</td>
               <td className="subtle">{c.email || "—"}</td><td className="mono subtle">{c.phone || "—"}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                <button className="btn ghost icon" onClick={() => setEdit({ ...c })} title="Edit"><Ico d={ICONS.edit} size={15} /></button>
-                <button className="btn ghost icon" onClick={() => del(c.id)} title="Delete"><Ico d={ICONS.trash} size={15} /></button>
+                <button className="btn ghost icon" onClick={() => setEdit({ ...c })} title={readOnly ? "View" : "Edit"}><Ico d={ICONS.edit} size={15} /></button>
+                {!readOnly && <button className="btn ghost icon" onClick={() => del(c.id)} title="Delete"><Ico d={ICONS.trash} size={15} /></button>}
               </td>
             </tr>
           ))}</tbody></table>}

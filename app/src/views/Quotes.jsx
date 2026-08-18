@@ -4,7 +4,7 @@ import { lineTotals } from "../calc/ledger.js";
 import { Ico, ICONS, Badge, Empty, Field, MenuItem } from "../components/ui.jsx";
 import LineItemsEditor from "../components/LineItemsEditor.jsx";
 
-export default function QuotesView({ db, actions, toast, openDoc }) {
+export default function QuotesView({ db, actions, toast, openDoc, readOnly }) {
   const [edit, setEdit] = useState(null); // quote object being edited/created
   const [search, setSearch] = useState("");
   const customers = db.contacts.filter(c => c.type === "customer");
@@ -41,12 +41,12 @@ export default function QuotesView({ db, actions, toast, openDoc }) {
   return <div>
     <div className="toolbar">
       <div className="search"><Ico d={ICONS.search} size={15} /><input className="input" placeholder="Search quotes…" value={search} onChange={e => setSearch(e.target.value)} /></div>
-      <button className="btn primary" style={{ marginLeft: "auto" }} onClick={startNew}><Ico d={ICONS.plus} size={15} />New Quote</button>
+      {!readOnly && <button className="btn primary" style={{ marginLeft: "auto" }} onClick={startNew}><Ico d={ICONS.plus} size={15} />New Quote</button>}
     </div>
     <div className="card">
       {db.quotes.length === 0
         ? <Empty icon={ICONS.quote} title="No quotes yet" msg="Build a quote with the dynamic line-item form. Accepted quotes convert straight into sales orders."
-          action={<button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Quote</button>} />
+          action={!readOnly && <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Quote</button>} />
         : <table><thead><tr><th>Quote</th><th>Customer</th><th>Date</th><th>Valid Until</th><th>Status</th><th className="num">Total</th><th></th></tr></thead>
           <tbody>{filtered.slice().reverse().map(q => {
             const t = lineTotals(q.lineItems, q.taxRate).total;
@@ -59,8 +59,8 @@ export default function QuotesView({ db, actions, toast, openDoc }) {
               <td className="num">{money(t)}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                 <button className="btn ghost icon" title="Print" onClick={() => openDoc("quote", q)}><Ico d={ICONS.print} size={16} /></button>
-                <button className="btn ghost icon" title="Edit" onClick={() => setEdit({ ...q })}><Ico d={ICONS.edit} size={16} /></button>
-                <QuoteMenu q={q} setStatus={setStatus} convert={convertToSO} del={del} />
+                {!readOnly && <button className="btn ghost icon" title="Edit" onClick={() => setEdit({ ...q })}><Ico d={ICONS.edit} size={16} /></button>}
+                {!readOnly && <QuoteMenu q={q} setStatus={setStatus} convert={convertToSO} del={del} />}
               </td>
             </tr>;
           })}</tbody></table>}

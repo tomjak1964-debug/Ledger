@@ -1,24 +1,35 @@
 import { useState } from "react";
 import { uid, money, fmtDate, todayISO, addDays, nameOf } from "../lib/helpers.js";
 import { lineTotals, balance, invoiceStatus } from "../calc/ledger.js";
-import { Ico, ICONS, Badge, Empty, Field } from "../components/ui.jsx";
+import { AUTO_NUMBER } from "../lib/store.js";
+import { Ico, ICONS, Badge, Empty, Field, Modal } from "../components/ui.jsx";
 import PaymentModal from "../components/PaymentModal.jsx";
 import LineItemsEditor from "../components/LineItemsEditor.jsx";
 import EmailModal from "../components/EmailModal.jsx";
+import InvoiceFromSOModal from "../components/InvoiceFromSOModal.jsx";
 import { invoicePdf } from "../lib/invoicePdf.js";
 
-export default function InvoicesView({ db, actions, toast, openDoc }) {
+export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) {
   const [pay, setPay] = useState(null);
   const [edit, setEdit] = useState(null);
   const [email, setEmail] = useState(null);
+  const [pickSO, setPickSO] = useState(false);   // choose an SO to invoice from
+  const [invoiceSO, setInvoiceSO] = useState(null);
   const customers = db.contacts.filter(c => c.type === "customer");
+  const openSOs = db.salesOrders.filter(s => s.status === "open");
   const del = async (id) => { if (!confirm("Delete this invoice?")) return; if (await actions.deleteInvoice(id)) toast("Deleted"); };
+  const generateFromSO = async (so, ids, opts) => {
+    const inv = await actions.generateInvoice(so, ids, opts);
+    if (inv) { toast("Invoice " + inv.number + " generated"); openDoc("invoice", inv); }
+    return inv;
+  };
 
   const startNew = () => {
     // Standalone invoice — no quote or SO behind it (time & materials, service
-    // calls). The number (customer code + date + index) is claimed at save.
+    // calls). The number defaults to auto (customer code + date + index) but can
+    // be overridden per-invoice in the editor.
     setEdit({
-      id: uid(), number: "(assigned at save)", _new: true, salesOrderId: "", quoteId: "", customerId: customers[0]?.id || "",
+      id: uid(), number: AUTO_NUMBER, _new: true, salesOrderId: "", quoteId: "", customerId: customers[0]?.id || "",
       poNumber: "", date: todayISO(), dueDate: addDays(todayISO(), db.settings.terms),
       lineItems: [{ id: uid(), desc: "", qty: 1, unit: "", unitPrice: 0 }], taxRate: db.settings.taxRate, notes: "", payments: []
     });
@@ -31,9 +42,12 @@ export default function InvoicesView({ db, actions, toast, openDoc }) {
   if (edit) return <InvoiceEditor invoice={edit} customers={customers} catalog={db.catalog} onCancel={() => setEdit(null)} onSave={save} />;
 
   return <div>
-    <div className="toolbar">
-      <button className="btn primary" style={{ marginLeft: "auto" }} onClick={startNew}><Ico d={ICONS.plus} size={15} />New Invoice</button>
-    </div>
+    {!readOnly && <div className="toolbar">
+      <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setPickSO(true)} disabled={openSOs.length === 0}
+        title={openSOs.length === 0 ? "No open sales orders" : "Bill selected lines from a sales order"}>
+        <Ico d={ICONS.so} size={15} />Invoice from Sales Order</button>
+      <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Invoice</button>
+    </div>}
     <div className="card">
       {db.invoices.length === 0
         ? <Empty icon={ICONS.inv} title="No invoices" msg="Generate an invoice from a sales order, or create a standalone one for service and T&M work. Record payments to update its status."
@@ -50,15 +64,33 @@ export default function InvoicesView({ db, actions, toast, openDoc }) {
               <td className="num">{money(lineTotals(inv.lineItems, inv.taxRate).total)}</td>
               <td className="num" style={{ fontWeight: 600 }}>{money(balance(inv))}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                {st !== "paid" && <button className="btn sm" onClick={() => setPay(inv)}><Ico d={ICONS.money} size={14} />Payment</button>}
+                {!readOnly && st !== "paid" && <button className="btn sm" onClick={() => setPay(inv)}><Ico d={ICONS.money} size={14} />Payment</button>}
                 <button className="btn ghost icon" title="Email invoice" onClick={() => setEmail(inv)}><Ico d={ICONS.mail} size={16} /></button>
                 <button className="btn ghost icon" title="Print" onClick={() => openDoc("invoice", inv)}><Ico d={ICONS.print} size={16} /></button>
-                <button className="btn ghost icon" title="Edit" onClick={() => setEdit({ ...inv })}><Ico d={ICONS.edit} size={16} /></button>
-                <button className="btn ghost icon" onClick={() => del(inv.id)} title="Delete"><Ico d={ICONS.trash} size={15} /></button>
+                {!readOnly && <button className="btn ghost icon" title="Edit" onClick={() => setEdit({ ...inv })}><Ico d={ICONS.edit} size={16} /></button>}
+                {!readOnly && <button className="btn ghost icon" onClick={() => del(inv.id)} title="Delete"><Ico d={ICONS.trash} size={15} /></button>}
               </td>
             </tr>;
           })}</tbody></table>}
     </div>
+    {pickSO && <Modal title="Invoice from Sales Order" onClose={() => setPickSO(false)}
+      foot={<button className="btn" onClick={() => setPickSO(false)}>Cancel</button>}>
+      <p className="subtle" style={{ marginTop: 0 }}>Pick an open sales order, then choose which line items to bill. The PO carries over automatically.</p>
+      {openSOs.length === 0
+        ? <p className="subtle">No open sales orders.</p>
+        : openSOs.slice().reverse().map(so => {
+          const openLines = (so.lineItems || []).filter(li => !li.invoiced);
+          return <div key={so.id} className="cat-row">
+            <span className="doc-id">{so.number}</span>
+            <span>{nameOf(db, so.customerId)}</span>
+            <span className="mono subtle">PO {so.poNumber || "—"}</span>
+            <span className="mono subtle" style={{ marginLeft: "auto" }}>{money(lineTotals(openLines, so.taxRate).total)} open</span>
+            <button className="btn sm primary" onClick={() => { setInvoiceSO(so); setPickSO(false); }}>Select</button>
+          </div>;
+        })}
+    </Modal>}
+    {invoiceSO && <InvoiceFromSOModal so={invoiceSO} db={db} onClose={() => setInvoiceSO(null)}
+      onGenerate={(ids, opts) => generateFromSO(invoiceSO, ids, opts)} />}
     {email && <EmailModal
       title={"Email · " + email.number}
       defaultTo={db.contactPeople.find(p => p.id === email.contactPersonId)?.email || db.contacts.find(c => c.id === email.customerId)?.email || ""}
@@ -98,6 +130,9 @@ function InvoiceEditor({ invoice, customers, catalog, onCancel, onSave }) {
         <Field label="Customer"><select className="select" value={inv.customerId} onChange={e => set("customerId", e.target.value)}>
           <option value="">Select customer…</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select></Field>
+        {inv._new
+          ? <Field label="Invoice #" hint="Leave as (auto) to use the generated number"><input className="input mono" value={inv.number} onChange={e => set("number", e.target.value)} /></Field>
+          : <Field label="Invoice #"><input className="input mono" value={inv.number} disabled /></Field>}
         <Field label="Invoice Date"><input className="input" type="date" value={inv.date} onChange={e => set("date", e.target.value)} /></Field>
         <Field label="Due Date"><input className="input" type="date" value={inv.dueDate} onChange={e => set("dueDate", e.target.value)} /></Field>
         <Field label="Customer PO #"><input className="input mono" value={inv.poNumber || ""} onChange={e => set("poNumber", e.target.value)} /></Field>

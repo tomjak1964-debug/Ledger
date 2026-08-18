@@ -17,6 +17,10 @@ import { proposalConfig, phaseAmount } from "../calc/proposals.js";
 import { round2 } from "../calc/ledger.js";
 
 const SEQ_TYPES = ["quote", "so", "invoice", "bill"];
+// Placeholder shown in the invoice-number field; means "use the auto sequence".
+// Any user-typed override that isn't blank and doesn't start with "(" is manual.
+export const AUTO_NUMBER = "(auto)";
+const isAutoNumber = (n) => { const s = (n || "").trim(); return !s || s.startsWith("("); };
 
 const groupBy = (rows, key) => {
   const m = {};
@@ -27,7 +31,7 @@ const th = (res) => { if (res.error) throw res.error; return res.data; };
 
 async function fetchAll() {
   const [settings, sequences, contacts, catalog, quotes, qli, sos, soli, invoices, invli, payments, bills, expenses,
-    people, machineTypes, proposals, orgs, members] = await Promise.all([
+    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries] = await Promise.all([
     supabase.from("settings").select("*").maybeSingle(),
     supabase.from("org_sequences").select("*"),
     supabase.from("contacts").select("*").order("created_at"),
@@ -46,6 +50,10 @@ async function fetchAll() {
     supabase.from("proposals").select("*").order("created_at"),
     supabase.from("orgs").select("*"),
     supabase.from("org_members").select("*").order("created_at"),
+    supabase.from("audit_log").select("*").order("created_at", { ascending: false }).limit(200),
+    supabase.from("tasks").select("*").order("created_at", { ascending: false }),
+    supabase.from("time_categories").select("*").order("sort").order("created_at"),
+    supabase.from("time_entries").select("*").order("date", { ascending: false }),
   ]);
   return {
     settingsRow: th(settings), sequences: th(sequences),
@@ -55,6 +63,12 @@ async function fetchAll() {
     bills: th(bills), expenses: th(expenses),
     people: th(people), machineTypes: th(machineTypes), proposals: th(proposals),
     orgs: th(orgs), members: th(members),
+    // Tolerant: if a later migration (006 audit_log / 008 jobs+time) hasn't been
+    // applied yet, don't block the whole app from loading — show empty sets.
+    audit: audit && !audit.error ? (audit.data || []) : [],
+    tasks: tasks && !tasks.error ? (tasks.data || []) : [],
+    timeCats: timeCats && !timeCats.error ? (timeCats.data || []) : [],
+    timeEntries: timeEntries && !timeEntries.error ? (timeEntries.data || []) : [],
   };
 }
 
@@ -66,13 +80,14 @@ function assemble(raw) {
   const invItems = groupBy(raw.invli, "invoice_id");
   const pays = groupBy(raw.payments, "parent_id");
   const li = rows => (rows || []).map(A.lineItemFromRow);
+  const soLi = rows => (rows || []).map(A.soLineItemFromRow);
   const pm = rows => (rows || []).map(A.paymentFromRow);
   return {
     settings: { ...defaultSettings(), ...(raw.settingsRow?.data || {}), counters },
     contacts: raw.contacts.map(A.contactFromRow),
     catalog: raw.catalog.map(A.catalogFromRow),
     quotes: raw.quotes.map(r => A.quoteFromRow(r, li(qItems[r.id]))),
-    salesOrders: raw.sos.map(r => A.soFromRow(r, li(soItems[r.id]))),
+    salesOrders: raw.sos.map(r => A.soFromRow(r, soLi(soItems[r.id]))),
     invoices: raw.invoices.map(r => A.invoiceFromRow(r, li(invItems[r.id]), pm(pays[r.id]))),
     bills: raw.bills.map(r => A.billFromRow(r, pm(pays[r.id]))),
     expenses: raw.expenses.map(A.expenseFromRow),
@@ -80,7 +95,11 @@ function assemble(raw) {
     machineTypes: raw.machineTypes.map(A.machineTypeFromRow),
     proposals: raw.proposals.map(A.proposalFromRow),
     org: raw.orgs[0] ? { id: raw.orgs[0].id, name: raw.orgs[0].name, ownerId: raw.orgs[0].owner_id } : null,
-    members: raw.members.map(m => ({ orgId: m.org_id, userId: m.user_id, email: m.email, role: m.role })),
+    members: raw.members.map(m => ({ orgId: m.org_id, userId: m.user_id, email: m.email, role: m.role, permissions: m.permissions || {} })),
+    auditLog: (raw.audit || []).map(A.auditFromRow),
+    tasks: (raw.tasks || []).map(A.taskFromRow),
+    timeCategories: (raw.timeCats || []).map(A.timeCategoryFromRow),
+    timeEntries: (raw.timeEntries || []).map(A.timeEntryFromRow),
   };
 }
 
@@ -142,10 +161,39 @@ export function useLedger(session, onError) {
     return `${prefix}${ymd}-${String(n).padStart(2, "0")}`;
   }
 
-  async function replaceLineItems(table, parentKey, parentId, items) {
+  async function replaceLineItems(table, parentKey, parentId, items, toRows) {
     th(await supabase.from(table).delete().eq(parentKey, parentId));
-    const rows = A.lineItemsToRows(items, parentKey, parentId);
+    const rows = toRows ? toRows(items, parentId) : A.lineItemsToRows(items, parentKey, parentId);
     if (rows.length) th(await supabase.from(table).insert(rows));
+  }
+
+  // Record a deletion in the audit log (best-effort — never blocks the delete).
+  // Stamped with the signed-in user's email so "who deleted this" is answerable.
+  async function logDeletion(entityType, number, detail = "") {
+    try {
+      const row = { user_email: session.user.email || "", action: "delete", entity_type: entityType, entity_number: number || "", detail };
+      const { data } = await supabase.from("audit_log").insert(row).select().maybeSingle();
+      if (data) setDb(d => ({ ...d, auditLog: [A.auditFromRow(data), ...(d.auditLog || [])] }));
+    } catch { /* auditing must not break the primary action */ }
+  }
+
+  // Keep a job's "create invoice" task in sync with its line readiness: open a
+  // task when the SO has un-invoiced ready lines, close it when none remain.
+  async function reconcileJobTask(soId) {
+    const d0 = dbRef.current;
+    const so = d0.salesOrders.find(s => s.id === soId);
+    if (!so) return;
+    const hasReady = (so.lineItems || []).some(li => li.ready && !li.invoiced);
+    const openTask = (d0.tasks || []).find(t => t.salesOrderId === soId && t.type === "create_invoice" && t.status === "open");
+    if (hasReady && !openTask) {
+      const cust = d0.contacts.find(c => c.id === so.customerId)?.name || "";
+      const task = { id: uid(), type: "create_invoice", status: "open", salesOrderId: soId, title: `Invoice ready items — ${so.number}`, detail: cust, createdBy: session.user.email };
+      const { data } = await supabase.from("tasks").insert(A.taskToRow(task)).select().maybeSingle();
+      setDb(d => ({ ...d, tasks: [data ? A.taskFromRow(data) : { ...task, createdAt: "" }, ...(d.tasks || [])] }));
+    } else if (!hasReady && openTask) {
+      th(await supabase.from("tasks").update({ status: "done", done_by: session.user.email }).eq("id", openTask.id));
+      setDb(d => ({ ...d, tasks: d.tasks.map(t => t.id === openTask.id ? { ...t, status: "done", doneBy: session.user.email } : t) }));
+    }
   }
 
   const upsertList = (list, item) =>
@@ -177,8 +225,10 @@ export function useLedger(session, onError) {
     },
     async deleteQuote(id) {
       try {
+        const q = dbRef.current.quotes.find(x => x.id === id);
         th(await supabase.from("quotes").delete().eq("id", id)); // line items cascade
         setDb(d => ({ ...d, quotes: d.quotes.filter(q => q.id !== id) }));
+        await logDeletion("quote", q?.number || "");
         return true;
       } catch (e) { return fail(e); }
     },
@@ -193,7 +243,7 @@ export function useLedger(session, onError) {
           status: "open", lineItems: q.lineItems.map(li => ({ ...li, id: uid() })), taxRate: q.taxRate,
         };
         th(await supabase.from("sales_orders").insert(A.soToRow(so)));
-        await replaceLineItems("sales_order_line_items", "sales_order_id", so.id, so.lineItems);
+        await replaceLineItems("sales_order_line_items", "sales_order_id", so.id, so.lineItems, A.soLineItemsToRows);
         th(await supabase.from("quotes").update({ status: "accepted", sales_order_id: so.id, po_number: po }).eq("id", q.id));
         setDb(d => ({
           ...d,
@@ -205,31 +255,142 @@ export function useLedger(session, onError) {
     },
 
     /* ---- sales orders ---- */
-    // SO → Invoice: due date from terms, line items copy forward.
-    async generateInvoice(so) {
+    // SO → Invoice. Bills the selected lines (or every un-invoiced line when no
+    // selection is given). The SO only flips to 'invoiced' once every line has
+    // been billed; otherwise it stays 'open' with the remaining lines. Supports
+    // a per-invoice number override (opts.number) and invoice date (opts.date).
+    async generateInvoice(so, selectedLineIds = null, opts = {}) {
       try {
         const d0 = dbRef.current;
+        const toBill = (so.lineItems || []).filter(li => selectedLineIds ? selectedLineIds.includes(li.id) : !li.invoiced);
+        // Optional: bill logged time as T&M lines (unbilled entries for this job).
+        const timeIds = opts.timeEntryIds || [];
+        const timeToBill = (d0.timeEntries || []).filter(te => timeIds.includes(te.id) && !te.invoiceId);
+        if (!toBill.length && !timeToBill.length) throw new Error("Select at least one line item or time entry to invoice.");
+        const date = opts.date || todayISO();
+        let number;
+        const manual = (opts.number || "").trim();
+        if (!isAutoNumber(manual)) {
+          if (d0.invoices.some(i => (i.number || "").toLowerCase() === manual.toLowerCase()))
+            throw new Error(`Invoice number "${manual}" is already used.`);
+          number = manual;
+        } else {
+          number = await claimInvoiceNumber(so.customerId, date);
+        }
+        const catName = id => (d0.timeCategories || []).find(c => c.id === id)?.name || "Labor";
+        const timeLines = timeToBill.map(te => ({
+          id: uid(), desc: `${catName(te.categoryId)}${te.description ? " — " + te.description : ""}${te.date ? " (" + te.date + ")" : ""}`,
+          qty: te.hours, unit: "hr", unitPrice: te.rate,
+        }));
         const inv = {
-          id: uid(), number: await claimInvoiceNumber(so.customerId, todayISO()),
+          id: uid(), number,
           salesOrderId: so.id, quoteId: so.quoteId, customerId: so.customerId, poNumber: so.poNumber,
-          date: todayISO(), dueDate: addDays(todayISO(), d0.settings.terms),
-          lineItems: so.lineItems.map(li => ({ ...li, id: uid() })), taxRate: so.taxRate, payments: [],
+          date, dueDate: addDays(date, d0.settings.terms),
+          lineItems: [
+            ...toBill.map(li => ({ id: uid(), desc: li.desc, qty: li.qty, unit: li.unit, unitPrice: li.unitPrice })),
+            ...timeLines,
+          ],
+          taxRate: so.taxRate, payments: [],
         };
         th(await supabase.from("invoices").insert(A.invoiceToRow(inv)));
         await replaceLineItems("invoice_line_items", "invoice_id", inv.id, inv.lineItems);
-        th(await supabase.from("sales_orders").update({ status: "invoiced", invoice_id: inv.id }).eq("id", so.id));
+        const billedIds = toBill.map(li => li.id);
+        if (billedIds.length)
+          th(await supabase.from("sales_order_line_items").update({ invoiced: true, invoice_id: inv.id }).in("id", billedIds));
+        const timeBilledIds = timeToBill.map(te => te.id);
+        if (timeBilledIds.length)
+          th(await supabase.from("time_entries").update({ invoice_id: inv.id }).in("id", timeBilledIds));
+        const fullyBilled = (so.lineItems || []).length > 0 && (so.lineItems || []).every(li => li.invoiced || billedIds.includes(li.id));
+        if (fullyBilled)
+          th(await supabase.from("sales_orders").update({ status: "invoiced", invoice_id: inv.id }).eq("id", so.id));
         setDb(d => ({
           ...d,
           invoices: [...d.invoices, inv],
-          salesOrders: d.salesOrders.map(x => x.id === so.id ? { ...x, status: "invoiced", invoiceId: inv.id } : x),
+          timeEntries: d.timeEntries.map(te => timeBilledIds.includes(te.id) ? { ...te, invoiceId: inv.id } : te),
+          salesOrders: d.salesOrders.map(x => x.id === so.id ? {
+            ...x,
+            status: fullyBilled ? "invoiced" : "open",
+            ...(fullyBilled ? { invoiceId: inv.id } : {}),
+            lineItems: (x.lineItems || []).map(li => billedIds.includes(li.id) ? { ...li, invoiced: true, invoiceId: inv.id } : li),
+          } : x),
         }));
+        await reconcileJobTask(so.id);
         return inv;
+      } catch (e) { return fail(e); }
+    },
+    // Undo the closing of an SO whose invoice was deleted — reopen it and clear
+    // every line's invoiced flag so it can be billed again. Fixes SOs left
+    // 'invoiced' by a delete that predated the cascade (e.g. TMJ892).
+    async reopenSO(id) {
+      try {
+        th(await supabase.from("sales_orders").update({ status: "open", invoice_id: null }).eq("id", id));
+        th(await supabase.from("sales_order_line_items").update({ invoiced: false, invoice_id: null }).eq("sales_order_id", id));
+        setDb(d => ({ ...d, salesOrders: d.salesOrders.map(s => s.id === id
+          ? { ...s, status: "open", invoiceId: "", lineItems: (s.lineItems || []).map(li => ({ ...li, invoiced: false, invoiceId: "" })) }
+          : s) }));
+        return true;
       } catch (e) { return fail(e); }
     },
     async deleteSO(id) {
       try {
+        const so = dbRef.current.salesOrders.find(s => s.id === id);
         th(await supabase.from("sales_orders").delete().eq("id", id));
         setDb(d => ({ ...d, salesOrders: d.salesOrders.filter(s => s.id !== id) }));
+        await logDeletion("sales_order", so?.number || "");
+        return true;
+      } catch (e) { return fail(e); }
+    },
+
+    /* ---- job progress + tasks ---- */
+    // Mark an SO line item complete/ready (or not), then reconcile the job's
+    // invoice task.
+    async setLineReady(soId, lineId, ready) {
+      try {
+        th(await supabase.from("sales_order_line_items").update({ ready }).eq("id", lineId));
+        setDb(d => ({ ...d, salesOrders: d.salesOrders.map(s => s.id === soId
+          ? { ...s, lineItems: (s.lineItems || []).map(li => li.id === lineId ? { ...li, ready } : li) } : s) }));
+        await reconcileJobTask(soId);
+        return true;
+      } catch (e) { return fail(e); }
+    },
+    async setTaskStatus(taskId, status) {
+      try {
+        th(await supabase.from("tasks").update({ status, done_by: session.user.email }).eq("id", taskId));
+        setDb(d => ({ ...d, tasks: d.tasks.map(t => t.id === taskId ? { ...t, status, doneBy: session.user.email } : t) }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
+
+    /* ---- time tracking ---- */
+    async saveTimeCategory(c) {
+      try {
+        const cat = { ...c, rate: Number(c.rate) || 0 }; delete cat._new;
+        th(await supabase.from("time_categories").upsert(A.timeCategoryToRow(cat)));
+        setDb(d => ({ ...d, timeCategories: upsertList(d.timeCategories, cat) }));
+        return cat;
+      } catch (e) { return fail(e); }
+    },
+    async deleteTimeCategory(id) {
+      try {
+        th(await supabase.from("time_categories").delete().eq("id", id));
+        setDb(d => ({ ...d, timeCategories: d.timeCategories.filter(c => c.id !== id) }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
+    // Save one instance of time — one or more line items at once.
+    async saveTimeEntries(entries) {
+      try {
+        const rows = entries.map(e => ({ ...e, id: e.id || uid(), userEmail: e.userEmail || session.user.email, invoiceId: "" }));
+        if (!rows.length) throw new Error("Add at least one time line.");
+        th(await supabase.from("time_entries").insert(rows.map(A.timeEntryToRow)));
+        setDb(d => ({ ...d, timeEntries: [...rows, ...d.timeEntries] }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
+    async deleteTimeEntry(id) {
+      try {
+        th(await supabase.from("time_entries").delete().eq("id", id));
+        setDb(d => ({ ...d, timeEntries: d.timeEntries.filter(e => e.id !== id) }));
         return true;
       } catch (e) { return fail(e); }
     },
@@ -243,7 +404,14 @@ export function useLedger(session, onError) {
         const isNew = !!i._new;
         const inv = { ...i }; delete inv._new;
         if (isNew) {
-          inv.number = await claimInvoiceNumber(inv.customerId, inv.date);
+          const manual = (inv.number || "").trim();
+          if (!isAutoNumber(manual)) {
+            if (dbRef.current.invoices.some(x => (x.number || "").toLowerCase() === manual.toLowerCase()))
+              throw new Error(`Invoice number "${manual}" is already used.`);
+            inv.number = manual;
+          } else {
+            inv.number = await claimInvoiceNumber(inv.customerId, inv.date);
+          }
           inv.payments = inv.payments || [];
         }
         th(await supabase.from("invoices").upsert(A.invoiceToRow(inv)));
@@ -252,11 +420,39 @@ export function useLedger(session, onError) {
         return inv;
       } catch (e) { return fail(e); }
     },
+    // Delete an invoice and undo its side effects: reopen any SO it closed,
+    // clear the invoiced flag on the SO lines it billed, drop any proposal
+    // phase that pointed at it, and log the deletion.
     async deleteInvoice(id) {
       try {
+        const d0 = dbRef.current;
+        const inv = d0.invoices.find(i => i.id === id);
+        const cust = d0.contacts.find(c => c.id === inv?.customerId)?.name || "";
+        th(await supabase.from("sales_order_line_items").update({ invoiced: false, invoice_id: null }).eq("invoice_id", id));
+        th(await supabase.from("time_entries").update({ invoice_id: null }).eq("invoice_id", id));
+        const touchedSO = s => s.invoiceId === id || (s.lineItems || []).some(li => li.invoiceId === id);
+        for (const s of d0.salesOrders.filter(touchedSO))
+          th(await supabase.from("sales_orders").update({ status: "open", invoice_id: null }).eq("id", s.id));
+        const touchedProp = p => (p.phases || []).some(ph => ph.invoiceId === id);
+        for (const p of d0.proposals.filter(touchedProp)) {
+          const phases = p.phases.map(ph => ph.invoiceId === id ? { ...ph, invoiceId: undefined } : ph);
+          th(await supabase.from("proposals").update({ phases }).eq("id", p.id));
+        }
         th(await supabase.from("payments").delete().eq("parent_id", id));
         th(await supabase.from("invoices").delete().eq("id", id));
-        setDb(d => ({ ...d, invoices: d.invoices.filter(i => i.id !== id) }));
+        setDb(d => ({
+          ...d,
+          invoices: d.invoices.filter(i => i.id !== id),
+          timeEntries: d.timeEntries.map(te => te.invoiceId === id ? { ...te, invoiceId: "" } : te),
+          salesOrders: d.salesOrders.map(s => touchedSO(s)
+            ? { ...s, status: "open", invoiceId: "", lineItems: (s.lineItems || []).map(li => li.invoiceId === id ? { ...li, invoiced: false, invoiceId: "" } : li) }
+            : s),
+          proposals: d.proposals.map(p => touchedProp(p)
+            ? { ...p, phases: p.phases.map(ph => ph.invoiceId === id ? { ...ph, invoiceId: undefined } : ph) }
+            : p),
+        }));
+        for (const s of d0.salesOrders.filter(touchedSO)) await reconcileJobTask(s.id);
+        await logDeletion("invoice", inv?.number || "", cust ? `Customer: ${cust}` : "");
         return true;
       } catch (e) { return fail(e); }
     },
@@ -266,6 +462,28 @@ export function useLedger(session, onError) {
         setDb(d => parentType === "invoice"
           ? { ...d, invoices: d.invoices.map(i => i.id === parentId ? { ...i, payments: [...(i.payments || []), p] } : i) }
           : { ...d, bills: d.bills.map(b => b.id === parentId ? { ...b, payments: [...(b.payments || []), p] } : b) });
+        return true;
+      } catch (e) { return fail(e); }
+    },
+
+    // Customer receipt across many invoices on one check/transfer. Each
+    // allocation becomes its own payment row (sharing the receipt's date /
+    // method / ref) so one check reconciles several invoices at once. Credit
+    // invoices carry a negative allocation, netting against the others.
+    async recordReceipt(allocations, meta) {
+      try {
+        const rows = allocations
+          .map(a => ({ invoiceId: a.invoiceId, payment: { id: uid(), amount: round2(Number(a.amount) || 0), date: meta.date, method: meta.method, ref: meta.ref || "" } }))
+          .filter(r => Math.abs(r.payment.amount) > 0.005);
+        if (!rows.length) throw new Error("Nothing to apply — select at least one item with an amount.");
+        th(await supabase.from("payments").insert(rows.map(r => A.paymentToRow(r.payment, "invoice", r.invoiceId))));
+        setDb(d => ({
+          ...d,
+          invoices: d.invoices.map(i => {
+            const mine = rows.filter(r => r.invoiceId === i.id).map(r => r.payment);
+            return mine.length ? { ...i, payments: [...(i.payments || []), ...mine] } : i;
+          }),
+        }));
         return true;
       } catch (e) { return fail(e); }
     },
@@ -286,6 +504,12 @@ export function useLedger(session, onError) {
       try {
         const isNew = !!b._new;
         const bill = { ...b, amount: Number(b.amount) || 0 }; delete bill._new;
+        const ref = (bill.ref || "").trim();
+        if (!ref) throw new Error("Vendor invoice # (Ref) is required — it can't be blank.");
+        const dup = dbRef.current.bills.find(x => x.id !== bill.id && x.vendorId === bill.vendorId
+          && (x.ref || "").trim().toLowerCase() === ref.toLowerCase());
+        if (dup) throw new Error(`A bill with Ref "${ref}" already exists for this vendor (${dup.number}).`);
+        bill.ref = ref;
         if (isNew) bill.number = dbRef.current.settings.billPrefix + "-" + pad4(await claimNumber("bill"));
         th(await supabase.from("bills").upsert(A.billToRow(bill)));
         setDb(d => ({ ...d, bills: upsertList(d.bills, bill) }));
@@ -294,9 +518,11 @@ export function useLedger(session, onError) {
     },
     async deleteBill(id) {
       try {
+        const bill = dbRef.current.bills.find(b => b.id === id);
         th(await supabase.from("payments").delete().eq("parent_id", id));
         th(await supabase.from("bills").delete().eq("id", id));
         setDb(d => ({ ...d, bills: d.bills.filter(b => b.id !== id) }));
+        await logDeletion("bill", bill?.number || "", bill?.ref ? `Ref: ${bill.ref}` : "");
         return true;
       } catch (e) { return fail(e); }
     },
@@ -312,8 +538,10 @@ export function useLedger(session, onError) {
     },
     async deleteExpense(id) {
       try {
+        const x = dbRef.current.expenses.find(e => e.id === id);
         th(await supabase.from("expenses").delete().eq("id", id));
         setDb(d => ({ ...d, expenses: d.expenses.filter(e => e.id !== id) }));
+        await logDeletion("expense", x?.category || "", x ? `${x.vendor || ""} ${x.amount || ""}`.trim() : "");
         return true;
       } catch (e) { return fail(e); }
     },
@@ -328,8 +556,10 @@ export function useLedger(session, onError) {
     },
     async deleteContact(id) {
       try {
+        const c = dbRef.current.contacts.find(x => x.id === id);
         th(await supabase.from("contacts").delete().eq("id", id));
         setDb(d => ({ ...d, contacts: d.contacts.filter(c => c.id !== id) }));
+        await logDeletion("contact", c?.name || "", c?.type || "");
         return true;
       } catch (e) { return fail(e); }
     },
@@ -359,11 +589,49 @@ export function useLedger(session, onError) {
       } catch (e) { return fail(e); }
     },
 
-    /* ---- team ---- */
-    async inviteMember(email) {
+    /* ---- team / users (admin only; enforced by RLS + the edge function) ---- */
+    // Create a login for a teammate with an initial password (feature 6). The
+    // service-role edge function makes the auth user and the membership row.
+    async createUser({ email, password, role, permissions }) {
       try {
-        th(await supabase.from("org_members").insert({ org_id: dbRef.current.org.id, email: email.trim().toLowerCase() }));
+        const { data, error } = await supabase.functions.invoke("admin-create-user", {
+          body: { orgId: dbRef.current.org.id, email, password, role, permissions },
+        });
+        if (error) {
+          // supabase-js reports a generic "non-2xx" message; the real reason is
+          // in the function's JSON body (error.context is the Response).
+          let msg = error.message;
+          try { const body = await error.context.json(); if (body?.error) msg = body.error; } catch { /* keep generic */ }
+          throw new Error(msg);
+        }
+        if (data && data.ok === false) throw new Error(data.error);
         await reload();
+        return true;
+      } catch (e) { return fail(e); }
+    },
+    // Admin resets another user's password via the same edge function.
+    async resetUserPassword(email, password) {
+      try {
+        const { data, error } = await supabase.functions.invoke("admin-create-user", {
+          body: { orgId: dbRef.current.org.id, email, password, action: "reset-password" },
+        });
+        if (error) {
+          let msg = error.message;
+          try { const body = await error.context.json(); if (body?.error) msg = body.error; } catch { /* keep generic */ }
+          throw new Error(msg);
+        }
+        if (data && data.ok === false) throw new Error(data.error);
+        return true;
+      } catch (e) { return fail(e); }
+    },
+    // Change a member's role and/or per-area permissions (feature 7).
+    async updateMember(email, patch) {
+      try {
+        const upd = {};
+        if (patch.role !== undefined) upd.role = patch.role;
+        if (patch.permissions !== undefined) upd.permissions = patch.permissions;
+        th(await supabase.from("org_members").update(upd).eq("org_id", dbRef.current.org.id).eq("email", email));
+        setDb(d => ({ ...d, members: d.members.map(m => m.email === email ? { ...m, ...patch } : m) }));
         return true;
       } catch (e) { return fail(e); }
     },
@@ -439,8 +707,10 @@ export function useLedger(session, onError) {
     },
     async deleteProposal(id) {
       try {
+        const p = dbRef.current.proposals.find(x => x.id === id);
         th(await supabase.from("proposals").delete().eq("id", id));
         setDb(d => ({ ...d, proposals: d.proposals.filter(p => p.id !== id) }));
+        await logDeletion("proposal", p?.number || "");
         return true;
       } catch (e) { return fail(e); }
     },
@@ -457,7 +727,7 @@ export function useLedger(session, onError) {
           }],
         };
         th(await supabase.from("sales_orders").insert(A.soToRow(so)));
-        await replaceLineItems("sales_order_line_items", "sales_order_id", so.id, so.lineItems);
+        await replaceLineItems("sales_order_line_items", "sales_order_id", so.id, so.lineItems, A.soLineItemsToRows);
         th(await supabase.from("proposals").update({ status: "won", po_number: po, sales_order_id: so.id }).eq("id", p.id));
         setDb(d => ({
           ...d,

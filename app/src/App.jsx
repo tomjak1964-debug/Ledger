@@ -3,6 +3,7 @@ import { supabase } from "./lib/supabaseClient.js";
 import { useLedger } from "./lib/store.js";
 import { cls } from "./lib/helpers.js";
 import { invoiceStatus, paid } from "./calc/ledger.js";
+import { NAV_AREA, currentMember, canRead, canWrite, isAdminRole } from "./lib/permissions.js";
 import { Ico, ICONS } from "./components/ui.jsx";
 import DocumentView from "./components/DocumentView.jsx";
 import Dashboard from "./views/Dashboard.jsx";
@@ -11,6 +12,9 @@ import ProposalsView from "./views/Proposals.jsx";
 import MachineRatesView from "./views/MachineRates.jsx";
 import QuotesView from "./views/Quotes.jsx";
 import SalesOrdersView from "./views/SalesOrders.jsx";
+import JobsView from "./views/Jobs.jsx";
+import TasksView from "./views/Tasks.jsx";
+import TimeTrackingView from "./views/TimeTracking.jsx";
 import InvoicesView from "./views/Invoices.jsx";
 import ReceivablesView from "./views/Receivables.jsx";
 import PayablesView from "./views/Payables.jsx";
@@ -31,8 +35,15 @@ const NAV = [
       { k: "proposals", label: "Proposals", icon: ICONS.so },
       { k: "quotes", label: "Quotes", icon: ICONS.quote },
       { k: "salesOrders", label: "Sales Orders", icon: ICONS.so },
+      { k: "jobs", label: "Jobs", icon: ICONS.job },
       { k: "invoices", label: "Invoices", icon: ICONS.inv },
+      { k: "tasks", label: "Tasks", icon: ICONS.task },
       { k: "receivables", label: "Receivables", icon: ICONS.ar },
+    ]
+  },
+  {
+    group: "Work", items: [
+      { k: "timeTracking", label: "Time Tracking", icon: ICONS.clock },
     ]
   },
   {
@@ -53,6 +64,8 @@ const NAV = [
 const TITLES = {
   dashboard: ["Dashboard", "Your quote-to-cash pipeline at a glance"], quotes: ["Quotes", "Build, send, and track quotes"],
   salesOrders: ["Sales Orders", "Confirmed orders awaiting invoicing"], invoices: ["Invoices", "Issued invoices and payments"],
+  jobs: ["Jobs", "Track progress and mark items ready to invoice"], tasks: ["Tasks", "Work waiting on you"],
+  timeTracking: ["Time Tracking", "Log hours against a job"],
   receivables: ["Receivables", "What customers owe you, by age"], payables: ["Payables", "Vendor bills you owe"],
   expenses: ["Expenses", "Business spend by category"], contacts: ["Contacts", "Customers and vendors"],
   catalog: ["Item Catalog", "Reusable quote line items"], settings: ["Settings", "Company info and defaults"],
@@ -82,10 +95,19 @@ export default function App({ session }) {
     salesOrders: db.salesOrders.filter(s => s.status === "open").length,
     invoices: db.invoices.filter(i => ["unpaid", "partial", "overdue"].includes(invoiceStatus(i))).length,
     payables: db.bills.filter(b => ((Number(b.amount) || 0) - paid(b)) > 0.005).length,
+    tasks: (db.tasks || []).filter(t => t.status === "open").length,
   };
 
-  const [t, sub] = TITLES[view];
-  const props = { db, actions, toast, openDoc, go, session };
+  // Role-based access: which nav areas this user may see, and whether the
+  // active view is writable. Admins/owners see and write everything.
+  const member = currentMember(db, session);
+  const admin = isAdminRole(member?.role);
+  const canSee = (k) => { const a = NAV_AREA[k]; return a === null || canRead(member, a) || (k === "settings" && admin); };
+  const activeView = canSee(view) ? view : "dashboard";
+  const readOnly = !canWrite(member, NAV_AREA[activeView]);
+
+  const [t, sub] = TITLES[activeView];
+  const props = { db, actions, toast, openDoc, go, session, readOnly, isAdmin: admin, member };
 
   return <div className="app">
     <div className={cls("sidebar", navOpen && "open")}>
@@ -94,13 +116,17 @@ export default function App({ session }) {
         <div><div className="brand-name">Ledger</div><div className="brand-sub">Quote → Cash</div></div>
       </div>
       <nav className="nav">
-        {NAV.map(g => <div key={g.group}>
-          <div className="nav-group">{g.group}</div>
-          {g.items.map(it => <button key={it.k} className={cls("nav-item", view === it.k && "active")} onClick={() => go(it.k)}>
-            <Ico d={it.icon} size={17} />{it.label}
-            {counts[it.k] > 0 && <span className="count">{counts[it.k]}</span>}
-          </button>)}
-        </div>)}
+        {NAV.map(g => {
+          const items = g.items.filter(it => canSee(it.k));
+          if (!items.length) return null;
+          return <div key={g.group}>
+            <div className="nav-group">{g.group}</div>
+            {items.map(it => <button key={it.k} className={cls("nav-item", activeView === it.k && "active")} onClick={() => go(it.k)}>
+              <Ico d={it.icon} size={17} />{it.label}
+              {counts[it.k] > 0 && <span className="count">{counts[it.k]}</span>}
+            </button>)}
+          </div>;
+        })}
       </nav>
       <div className="sidebar-foot">
         <div>{db.settings.company || "Your Company"}</div>
@@ -120,19 +146,22 @@ export default function App({ session }) {
         </div>
       </div>
       <div className="content">
-        {view === "dashboard" && <Dashboard {...props} />}
-        {view === "reports" && <ReportsView {...props} />}
-        {view === "proposals" && <ProposalsView {...props} />}
-        {view === "machineRates" && <MachineRatesView {...props} />}
-        {view === "quotes" && <QuotesView {...props} />}
-        {view === "salesOrders" && <SalesOrdersView {...props} />}
-        {view === "invoices" && <InvoicesView {...props} />}
-        {view === "receivables" && <ReceivablesView {...props} />}
-        {view === "payables" && <PayablesView {...props} />}
-        {view === "expenses" && <ExpensesView {...props} />}
-        {view === "contacts" && <ContactsView {...props} />}
-        {view === "catalog" && <CatalogView {...props} />}
-        {view === "settings" && <SettingsView {...props} />}
+        {activeView === "dashboard" && <Dashboard {...props} />}
+        {activeView === "reports" && <ReportsView {...props} />}
+        {activeView === "proposals" && <ProposalsView {...props} />}
+        {activeView === "machineRates" && <MachineRatesView {...props} />}
+        {activeView === "quotes" && <QuotesView {...props} />}
+        {activeView === "salesOrders" && <SalesOrdersView {...props} />}
+        {activeView === "jobs" && <JobsView {...props} />}
+        {activeView === "tasks" && <TasksView {...props} />}
+        {activeView === "timeTracking" && <TimeTrackingView {...props} />}
+        {activeView === "invoices" && <InvoicesView {...props} />}
+        {activeView === "receivables" && <ReceivablesView {...props} />}
+        {activeView === "payables" && <PayablesView {...props} />}
+        {activeView === "expenses" && <ExpensesView {...props} />}
+        {activeView === "contacts" && <ContactsView {...props} />}
+        {activeView === "catalog" && <CatalogView {...props} />}
+        {activeView === "settings" && <SettingsView {...props} />}
       </div>
     </div>
 

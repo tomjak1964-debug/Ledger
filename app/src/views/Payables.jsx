@@ -9,7 +9,7 @@ import { openCheckPdf } from "../lib/checkPrint.js";
 import { remittancePdf, openRemittancePdf } from "../lib/remittance.js";
 import EmailModal from "../components/EmailModal.jsx";
 
-export default function PayablesView({ db, actions, toast }) {
+export default function PayablesView({ db, actions, toast, readOnly }) {
   const [emailRemit, setEmailRemit] = useState(null); // {bill, payment}
   const [payRun, setPayRun] = useState(false);
   const remitArgs = (bill, p) => ({
@@ -43,8 +43,8 @@ export default function PayablesView({ db, actions, toast }) {
   return <div>
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-head"><h3>A/P Aging</h3><span className="mono" style={{ marginLeft: "auto", fontWeight: 600, fontSize: 16, color: "var(--neg)" }}>{money(totalOpen)}</span>
-        <button className="btn sm" onClick={() => setPayRun(true)} disabled={open.length === 0}><Ico d={ICONS.money} size={14} />Pay Bills…</button>
-        <button className="btn primary sm" onClick={startNew}><Ico d={ICONS.plus} size={14} />New Bill</button></div>
+        {!readOnly && <button className="btn sm" onClick={() => setPayRun(true)} disabled={open.length === 0}><Ico d={ICONS.money} size={14} />Pay Bills…</button>}
+        {!readOnly && <button className="btn primary sm" onClick={startNew}><Ico d={ICONS.plus} size={14} />New Bill</button>}</div>
       <div className="card-body"><div className="aging">
         <div className="bucket"><div className="b-lbl">Current</div><div className="b-val">{money(bk.cur)}</div></div>
         <div className="bucket"><div className="b-lbl">1–30 days</div><div className="b-val">{money(bk.d30)}</div></div>
@@ -68,27 +68,37 @@ export default function PayablesView({ db, actions, toast }) {
               <td className="num">{money(Number(b.amount) || 0)}</td>
               <td className="num" style={{ fontWeight: 600 }}>{money(bal)}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                {bal > 0.005 && <button className="btn sm" onClick={() => setPay(b)}><Ico d={ICONS.money} size={14} />Pay</button>}
-                <button className="btn ghost icon" onClick={() => setEdit({ ...b })} title="Edit"><Ico d={ICONS.edit} size={15} /></button>
-                <button className="btn ghost icon" onClick={() => del(b.id)} title="Delete"><Ico d={ICONS.trash} size={15} /></button>
+                {!readOnly && bal > 0.005 && <button className="btn sm" onClick={() => setPay(b)}><Ico d={ICONS.money} size={14} />Pay</button>}
+                {!readOnly && <button className="btn ghost icon" onClick={() => setEdit({ ...b })} title="Edit"><Ico d={ICONS.edit} size={15} /></button>}
+                {!readOnly && <button className="btn ghost icon" onClick={() => del(b.id)} title="Delete"><Ico d={ICONS.trash} size={15} /></button>}
               </td>
             </tr>;
           })}</tbody></table>}
     </div>
-    {edit && <Modal title={edit._new ? "New Vendor Bill" : "Edit " + edit.number} onClose={() => setEdit(null)}
-      foot={<><button className="btn" onClick={() => setEdit(null)}>Cancel</button><button className="btn primary" onClick={() => save(edit)}>Save Bill</button></>}>
+    {edit && (() => {
+      const refTrim = (edit.ref || "").trim();
+      const dup = db.bills.find(x => x.id !== edit.id && x.vendorId === edit.vendorId
+        && (x.ref || "").trim().toLowerCase() === refTrim.toLowerCase());
+      const err = !edit.vendorId ? "Select a vendor." : !refTrim ? "Vendor invoice # (Ref) is required." : dup ? `Already entered as ${dup.number} for this vendor.` : "";
+      return <Modal title={edit._new ? "New Vendor Bill" : "Edit " + edit.number} onClose={() => setEdit(null)}
+      foot={<><button className="btn" onClick={() => setEdit(null)}>Cancel</button>
+        <button className="btn primary" disabled={!!err} onClick={() => save(edit)}>Save Bill</button></>}>
       <div className="row">
         <Field label="Vendor"><select className="select" value={edit.vendorId} onChange={e => setEdit({ ...edit, vendorId: e.target.value })}>
           <option value="">Select vendor…</option>{vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></Field>
-        <Field label="Vendor Ref / Inv #"><input className="input" value={edit.ref} onChange={e => setEdit({ ...edit, ref: e.target.value })} /></Field>
+        <Field label="Vendor Ref / Inv #" hint="Required — the vendor's invoice number">
+          <input className="input" value={edit.ref} onChange={e => setEdit({ ...edit, ref: e.target.value })}
+            style={(!refTrim || dup) ? { borderColor: "var(--neg)" } : undefined} /></Field>
       </div>
+      {err && <p className="subtle" style={{ margin: "0 0 8px", color: "var(--neg)" }}>{err}</p>}
       <div className="row">
         <Field label="Bill Date"><input className="input" type="date" value={edit.date} onChange={e => setEdit({ ...edit, date: e.target.value })} /></Field>
         <Field label="Due Date"><input className="input" type="date" value={edit.dueDate} onChange={e => setEdit({ ...edit, dueDate: e.target.value })} /></Field>
         <Field label="Amount"><input className="input mono" type="number" step="any" value={edit.amount} onChange={e => setEdit({ ...edit, amount: e.target.value })} /></Field>
       </div>
       <Field label="Notes"><textarea className="input" value={edit.notes} onChange={e => setEdit({ ...edit, notes: e.target.value })} /></Field>
-    </Modal>}
+    </Modal>;
+    })()}
     {pay && <PaymentModal doc={pay} isBill onClose={() => setPay(null)}
       onSave={async (p) => {
         if (await actions.recordPayment("bill", pay.id, p)) {

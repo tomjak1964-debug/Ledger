@@ -2,14 +2,14 @@ import { useState } from "react";
 import { uid, money } from "../lib/helpers.js";
 import { Ico, ICONS, Empty, Modal, Field } from "../components/ui.jsx";
 
-export default function CatalogView({ db, actions, toast }) {
+export default function CatalogView({ db, actions, toast, readOnly }) {
   const [edit, setEdit] = useState(null);
   const save = async (c) => { if (await actions.saveCatalogItem(c)) { setEdit(null); toast("Saved"); } };
   const del = async (id) => { if (await actions.deleteCatalogItem(id)) toast("Removed"); };
   return <div>
     <div className="toolbar">
       <p className="subtle" style={{ margin: 0 }}>Reusable line items you can drop into any quote.</p>
-      <button className="btn primary" style={{ marginLeft: "auto" }} onClick={() => setEdit({ id: uid(), desc: "", unit: "each", unitPrice: 0 })}><Ico d={ICONS.plus} size={15} />New Item</button>
+      {!readOnly && <button className="btn primary" style={{ marginLeft: "auto" }} onClick={() => setEdit({ id: uid(), desc: "", unit: "each", unitPrice: 0 })}><Ico d={ICONS.plus} size={15} />New Item</button>}
     </div>
     <div className="card">
       {db.catalog.length === 0
@@ -19,8 +19,8 @@ export default function CatalogView({ db, actions, toast }) {
             <tr key={c.id}>
               <td>{c.desc}</td><td className="subtle">{c.unit}</td><td className="num">{money(c.unitPrice)}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                <button className="btn ghost icon" onClick={() => setEdit({ ...c })}><Ico d={ICONS.edit} size={15} /></button>
-                <button className="btn ghost icon" onClick={() => del(c.id)}><Ico d={ICONS.trash} size={15} /></button>
+                {!readOnly && <button className="btn ghost icon" onClick={() => setEdit({ ...c })}><Ico d={ICONS.edit} size={15} /></button>}
+                {!readOnly && <button className="btn ghost icon" onClick={() => del(c.id)}><Ico d={ICONS.trash} size={15} /></button>}
               </td>
             </tr>
           ))}</tbody></table>}

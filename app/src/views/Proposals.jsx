@@ -56,7 +56,7 @@ export function buildProposalContent(p, db) {
 
 const emptySpecs = () => Object.fromEntries(SPEC_FIELDS.map(([k]) => [k, 0]));
 
-export default function ProposalsView({ db, actions, toast }) {
+export default function ProposalsView({ db, actions, toast, readOnly }) {
   const [edit, setEdit] = useState(null);
   const [doc, setDoc] = useState(null);
   const [phasesFor, setPhasesFor] = useState(null);
@@ -94,7 +94,7 @@ export default function ProposalsView({ db, actions, toast }) {
 
   if (db.machineTypes.length === 0) return <div className="card">
     <Empty icon={ICONS.so} title="Set up machine rates first" msg="Proposals price themselves from your machine-type rates. Load the TMJ defaults (from TMJ Costing.xlsx) or add types under Machine Rates." action={
-      <button className="btn primary" onClick={async () => {
+      !readOnly && <button className="btn primary" onClick={async () => {
         const { TMJ_DEFAULT_RATES } = await import("../calc/proposals.js");
         if (await actions.seedMachineRates(TMJ_DEFAULT_RATES)) toast("Machine rates loaded");
       }}>Load TMJ Default Rates</button>} />
@@ -105,12 +105,12 @@ export default function ProposalsView({ db, actions, toast }) {
   return <div>
     <div className="toolbar">
       <div className="search"><Ico d={ICONS.search} size={15} /><input className="input" placeholder="Search proposals…" value={search} onChange={e => setSearch(e.target.value)} /></div>
-      <button className="btn primary" style={{ marginLeft: "auto" }} onClick={startNew}><Ico d={ICONS.plus} size={15} />New Proposal</button>
+      {!readOnly && <button className="btn primary" style={{ marginLeft: "auto" }} onClick={startNew}><Ico d={ICONS.plus} size={15} />New Proposal</button>}
     </div>
     <div className="card">
       {db.proposals.length === 0
         ? <Empty icon={ICONS.quote} title="No proposals yet" msg="Enter the machine details — type, welds, clamps, cameras — and the app prices it, generates the proposal document, and tracks it to PO."
-          action={<button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Proposal</button>} />
+          action={!readOnly && <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Proposal</button>} />
         : <table><thead><tr><th>Proposal</th><th>Job #</th><th>Customer</th><th>Description</th><th>Type</th><th>Date</th><th>Status</th><th className="num">Total</th><th></th></tr></thead>
           <tbody>{filtered.slice().reverse().map(p => {
             const mt = db.machineTypes.find(m => m.id === p.machineTypeId);
@@ -126,8 +126,8 @@ export default function ProposalsView({ db, actions, toast }) {
               <td className="num" style={{ fontWeight: 600 }}>{money(Number(p.pricing?.total) || 0)}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                 <button className="btn ghost icon" title="View / Print" onClick={() => setDoc(p)}><Ico d={ICONS.print} size={16} /></button>
-                <button className="btn ghost icon" title="Edit" onClick={() => setEdit({ ...p, specs: { ...p.specs } })}><Ico d={ICONS.edit} size={16} /></button>
-                <PropMenu p={p} setStatus={setStatus} win={win} del={del} onPhases={() => setPhasesFor(p)} />
+                {!readOnly && <button className="btn ghost icon" title="Edit" onClick={() => setEdit({ ...p, specs: { ...p.specs } })}><Ico d={ICONS.edit} size={16} /></button>}
+                {!readOnly && <PropMenu p={p} setStatus={setStatus} win={win} del={del} onPhases={() => setPhasesFor(p)} />}
               </td>
             </tr>;
           })}</tbody></table>}

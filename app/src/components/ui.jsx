@@ -1,7 +1,21 @@
 // UI primitives, ported verbatim from ledger.html.
+import { useState } from "react";
 import { cls } from "../lib/helpers.js";
 
 export const Ico = ({ d, size = 17 }) => <svg className="ico" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>;
+
+// Password input with a Show/Hide toggle. Used on sign-in and password-change
+// forms so a value can be checked while typing.
+export function PasswordInput({ value, onChange, autoComplete, placeholder, minLength, required, className }) {
+  const [show, setShow] = useState(false);
+  return <div style={{ position: "relative" }}>
+    <input className={className || "input"} type={show ? "text" : "password"} value={value} onChange={onChange}
+      autoComplete={autoComplete} placeholder={placeholder} minLength={minLength} required={required} style={{ paddingRight: 58 }} />
+    <button type="button" className="link-btn" onClick={() => setShow(s => !s)}
+      style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "var(--accent)" }}>
+      {show ? "Hide" : "Show"}</button>
+  </div>;
+}
 
 export const ICONS = {
   dash: "M3 12l9-9 9 9M5 10v10h5v-6h4v6h5V10",
@@ -23,6 +37,9 @@ export const ICONS = {
   reports: "M3 3v18h18M8 17v-6M13 17V7M18 17v-9",
   logout: "M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9",
   mail: "M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2zM22 6l-10 7L2 6",
+  clock: "M12 7v5l3 2M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
+  task: "M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11",
+  job: "M14.7 6.3a4 4 0 00-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 005.4-5.4l-2.6 2.6-2.8-.4-.4-2.8 2.6-2.6z",
 };
 
 export function Badge({ status }) {
@@ -31,6 +48,7 @@ export function Badge({ status }) {
     open: ["blue", "Open"], invoiced: ["green", "Invoiced"], fulfilled: ["green", "Fulfilled"],
     unpaid: ["amber", "Unpaid"], partial: ["blue", "Partial"], paid: ["green", "Paid"], overdue: ["red", "Overdue"],
     submitted: ["blue", "Submitted"], won: ["green", "Won"], lost: ["red", "Lost"],
+    credit: ["blue", "Credit"],
   };
   const [c, l] = map[status] || ["gray", status];
   return <span className={"badge " + c}><span className="dot"></span>{l}</span>;

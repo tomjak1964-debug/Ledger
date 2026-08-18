@@ -21,6 +21,26 @@ export const lineItemsToRows = (items, parentKey, parentId) =>
   (items || []).map((it, i) => ({ id: it.id, [parentKey]: parentId, description: it.desc ?? "", qty: num(it.qty), unit: it.unit ?? "", unit_price: num(it.unitPrice), sort: i }));
 export const lineItemFromRow = r => ({ id: r.id, desc: r.description, qty: num(r.qty), unit: r.unit, unitPrice: num(r.unit_price) });
 
+// SO line items carry per-line invoiced tracking (migration 006) on top of the
+// shared line-item shape. quote/invoice line tables have no such columns, so
+// these mappers stay SO-only.
+export const soLineItemsToRows = (items, parentId) =>
+  (items || []).map((it, i) => ({ id: it.id, sales_order_id: parentId, description: it.desc ?? "", qty: num(it.qty), unit: it.unit ?? "", unit_price: num(it.unitPrice), sort: i, invoiced: !!it.invoiced, invoice_id: idOrNull(it.invoiceId), ready: !!it.ready }));
+export const soLineItemFromRow = r => ({ ...lineItemFromRow(r), invoiced: !!r.invoiced, invoiceId: r.invoice_id || "", ready: !!r.ready });
+
+/* ---- audit log (deletion tracking) ---- */
+export const auditFromRow = r => ({ id: r.id, userEmail: r.user_email || "", action: r.action, entityType: r.entity_type, entityNumber: r.entity_number || "", detail: r.detail || "", createdAt: r.created_at });
+
+/* ---- tasks ---- */
+export const taskFromRow = r => ({ id: r.id, type: r.type, status: r.status, salesOrderId: r.sales_order_id || "", title: r.title || "", detail: r.detail || "", createdBy: r.created_by || "", doneBy: r.done_by || "", createdAt: r.created_at, doneAt: r.done_at || "" });
+export const taskToRow = t => ({ id: t.id, type: t.type || "create_invoice", status: t.status || "open", sales_order_id: idOrNull(t.salesOrderId), title: t.title ?? "", detail: t.detail ?? "", created_by: t.createdBy ?? "" });
+
+/* ---- time tracking ---- */
+export const timeCategoryFromRow = r => ({ id: r.id, name: r.name, rate: num(r.rate), active: r.active !== false, sort: num(r.sort) });
+export const timeCategoryToRow = c => ({ id: c.id, name: c.name ?? "", rate: num(c.rate), active: c.active !== false, sort: num(c.sort) });
+export const timeEntryFromRow = r => ({ id: r.id, userEmail: r.user_email || "", salesOrderId: r.sales_order_id || "", categoryId: r.category_id || "", date: r.date || "", hours: num(r.hours), rate: num(r.rate), description: r.description || "", invoiceId: r.invoice_id || "" });
+export const timeEntryToRow = e => ({ id: e.id, user_email: e.userEmail ?? "", sales_order_id: idOrNull(e.salesOrderId), category_id: idOrNull(e.categoryId), date: dateOrNull(e.date), hours: num(e.hours), rate: num(e.rate), description: e.description ?? "", invoice_id: idOrNull(e.invoiceId) });
+
 /* ---- payments ---- */
 export const paymentToRow = (p, parentType, parentId) => ({ id: p.id, parent_type: parentType, parent_id: parentId, amount: num(p.amount), date: dateOrNull(p.date), method: p.method ?? "", ref: p.ref ?? "" });
 export const paymentFromRow = r => ({ id: r.id, amount: num(r.amount), date: r.date || "", method: r.method, ref: r.ref || "" });

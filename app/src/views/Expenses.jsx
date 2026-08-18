@@ -2,7 +2,7 @@ import { useState } from "react";
 import { uid, money, fmtDate, todayISO, sum, EXPENSE_CATS } from "../lib/helpers.js";
 import { Ico, ICONS, Empty, Modal, Field } from "../components/ui.jsx";
 
-export default function ExpensesView({ db, actions, toast }) {
+export default function ExpensesView({ db, actions, toast, readOnly }) {
   const [edit, setEdit] = useState(null);
   const vendors = db.contacts.filter(c => c.type === "vendor");
   const save = async (x) => { if (await actions.saveExpense(x)) { setEdit(null); toast("Expense saved"); } };
@@ -21,11 +21,11 @@ export default function ExpensesView({ db, actions, toast }) {
           <div className="mono" style={{ fontWeight: 600, fontSize: 16, marginTop: 3 }}>{money(v)}</div></div>)}
       </div></div>
     </div>}
-    <div className="toolbar"><button className="btn primary" style={{ marginLeft: "auto" }} onClick={startNew}><Ico d={ICONS.plus} size={15} />New Expense</button></div>
+    {!readOnly && <div className="toolbar"><button className="btn primary" style={{ marginLeft: "auto" }} onClick={startNew}><Ico d={ICONS.plus} size={15} />New Expense</button></div>}
     <div className="card">
       {db.expenses.length === 0
         ? <Empty icon={ICONS.exp} title="No expenses" msg="Log business spend by category — materials, subs, tools, travel. Totals roll up above and into the dashboard."
-          action={<button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Expense</button>} />
+          action={!readOnly && <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Expense</button>} />
         : <table><thead><tr><th>Date</th><th>Category</th><th>Vendor / Payee</th><th>Method</th><th>Notes</th><th className="num">Amount</th><th></th></tr></thead>
           <tbody>{db.expenses.slice().sort((a, b) => b.date.localeCompare(a.date)).map(e => (
             <tr key={e.id}>
@@ -33,8 +33,8 @@ export default function ExpensesView({ db, actions, toast }) {
               <td className="subtle">{e.method}</td><td className="subtle" style={{ maxWidth: 220 }}>{e.notes || "—"}</td>
               <td className="num" style={{ fontWeight: 600 }}>{money(Number(e.amount) || 0)}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                <button className="btn ghost icon" onClick={() => setEdit({ ...e })} title="Edit"><Ico d={ICONS.edit} size={15} /></button>
-                <button className="btn ghost icon" onClick={() => del(e.id)} title="Delete"><Ico d={ICONS.trash} size={15} /></button>
+                {!readOnly && <button className="btn ghost icon" onClick={() => setEdit({ ...e })} title="Edit"><Ico d={ICONS.edit} size={15} /></button>}
+                {!readOnly && <button className="btn ghost icon" onClick={() => del(e.id)} title="Delete"><Ico d={ICONS.trash} size={15} /></button>}
               </td>
             </tr>
           ))}</tbody></table>}

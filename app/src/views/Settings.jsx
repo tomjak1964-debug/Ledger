@@ -1,13 +1,23 @@
 import { useState, useRef } from "react";
-import { todayISO } from "../lib/helpers.js";
-import { Ico, ICONS, Field } from "../components/ui.jsx";
+import { uid, money, todayISO, fmtDate } from "../lib/helpers.js";
+import { Ico, ICONS, Field, PasswordInput } from "../components/ui.jsx";
+import { AREAS, isAdminRole } from "../lib/permissions.js";
+import { supabase } from "../lib/supabaseClient.js";
 import { checkLayout, openCheckPdf } from "../lib/checkPrint.js";
 
-export default function SettingsView({ db, actions, toast, session }) {
+export default function SettingsView({ db, actions, toast, session, readOnly, isAdmin }) {
   const [s, setS] = useState(db.settings);
   const [busy, setBusy] = useState(false);
-  const [invite, setInvite] = useState("");
+  const [tab, setTab] = useState("company");
   const fileRef = useRef();
+  const TABS = [
+    ["company", "Company"],
+    ["data", "Data"],
+    ["checks", "Check Printing"],
+    ...(isAdmin ? [["users", "Users & Access"], ["time", "Time Categories"]] : []),
+    ["activity", "Activity"],
+    ["account", "Account"],
+  ];
   const set = (k, v) => setS(p => ({ ...p, [k]: v }));
   const saveAll = async () => { if (await actions.saveSettings(s)) toast("Settings saved"); };
   const clearAll = async () => {
@@ -37,7 +47,12 @@ export default function SettingsView({ db, actions, toast, session }) {
     setBusy(false);
   };
 
-  return <div style={{ maxWidth: 720 }}>
+  return <div style={{ maxWidth: 820 }}>
+    <div className="pill-tabs" style={{ marginBottom: 16, flexWrap: "wrap" }}>
+      {TABS.map(([k, label]) => <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{label}</button>)}
+    </div>
+
+    {tab === "company" && <>
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-head"><h3>Company</h3></div>
       <div className="card-body">
@@ -64,25 +79,28 @@ export default function SettingsView({ db, actions, toast, session }) {
         </div>
         <Field label="Default Quote Notes"><textarea className="input" value={s.quoteNotes} onChange={e => set("quoteNotes", e.target.value)} /></Field>
         <Field label="Default Invoice Notes"><textarea className="input" value={s.invoiceNotes} onChange={e => set("invoiceNotes", e.target.value)} /></Field>
-        <button className="btn primary" onClick={saveAll}><Ico d={ICONS.check} size={15} />Save Settings</button>
+        <button className="btn primary" disabled={readOnly} onClick={saveAll}><Ico d={ICONS.check} size={15} />Save Settings</button>
       </div>
     </div>
-    <div className="card" style={{ marginBottom: 16 }}>
+    </>}
+
+    {tab === "data" && <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-head"><h3>Data</h3></div>
       <div className="card-body" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <button className="btn" disabled={busy} onClick={exportData}>Export Backup (JSON)</button>
-        <button className="btn" disabled={busy} onClick={() => fileRef.current?.click()}>{busy ? "Working…" : "Import Backup (JSON)"}</button>
+        <button className="btn" disabled={busy || readOnly} onClick={() => fileRef.current?.click()}>{busy ? "Working…" : "Import Backup (JSON)"}</button>
         <input ref={fileRef} type="file" accept=".json,application/json" style={{ display: "none" }}
           onChange={e => { importData(e.target.files?.[0]); e.target.value = ""; }} />
-        <button className="btn" disabled={busy} onClick={loadSample}>Load Sample Data</button>
-        <button className="btn danger" disabled={busy} onClick={clearAll}><Ico d={ICONS.trash} size={15} />Clear All Data</button>
+        <button className="btn" disabled={busy || readOnly} onClick={loadSample}>Load Sample Data</button>
+        <button className="btn danger" disabled={busy || readOnly} onClick={clearAll}><Ico d={ICONS.trash} size={15} />Clear All Data</button>
         <p className="subtle" style={{ margin: "4px 0 0", width: "100%" }}>
           Import accepts backups exported from the original single-file app (ledger.html) or from this one —
           same format. Your data lives in Supabase and syncs to every device you sign in from.
         </p>
       </div>
-    </div>
-    <div className="card" style={{ marginBottom: 16 }}>
+    </div>}
+
+    {tab === "checks" && <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-head"><h3>Check Printing</h3></div>
       <div className="card-body">
         <p className="subtle" style={{ marginTop: 0 }}>Positions are inches from the top-left of the page, for pre-printed voucher stock (check on top).
@@ -106,34 +124,240 @@ export default function SettingsView({ db, actions, toast, session }) {
             vendor: { name: "Sample Vendor, Inc.", address: "123 Main St\nAnytown, MI 48000" },
             memo: "Inv 9999", stubLines: [{ ref: "9999", desc: "Sample bill", amount: 12345.67 }], settings: s,
           })}>Print Sample Check</button>
-          <button className="btn primary" onClick={saveAll}><Ico d={ICONS.check} size={15} />Save Positions</button>
+          <button className="btn primary" disabled={readOnly} onClick={saveAll}><Ico d={ICONS.check} size={15} />Save Positions</button>
         </div>
       </div>
-    </div>
-    <div className="card" style={{ marginBottom: 16 }}>
-      <div className="card-head"><h3>Team</h3></div>
+    </div>}
+
+    {tab === "users" && isAdmin && <UsersCard db={db} actions={actions} toast={toast} session={session} />}
+    {tab === "time" && isAdmin && <TimeCategoriesCard db={db} actions={actions} toast={toast} />}
+
+    {tab === "activity" && <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-head"><h3>Activity — Deletions</h3></div>
       <div className="card-body">
-        <p className="subtle" style={{ marginTop: 0 }}>Everyone below shares these books — proposals your engineer enters land here instantly. Invite by email; they create their own password at sign-up.</p>
-        {(db.members || []).map(m => <div key={m.email} className="cat-row">
-          <span style={{ fontWeight: 600 }}>{m.email}</span>
-          <span className="subtle">{m.role}{!m.userId ? " · invited, not signed up yet" : ""}</span>
-          {m.role !== "owner" && <button className="btn ghost icon" style={{ marginLeft: "auto" }} title="Remove"
-            onClick={async () => { if (confirm("Remove " + m.email + "?") && await actions.removeMember(m.email)) toast("Removed"); }}>
-            <Ico d={ICONS.trash} size={14} /></button>}
-        </div>)}
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-          <input className="input" style={{ maxWidth: 300 }} placeholder="engineer@example.com" value={invite} onChange={e => setInvite(e.target.value)} />
-          <button className="btn primary" disabled={!invite.includes("@")} onClick={async () => {
-            if (await actions.inviteMember(invite)) { setInvite(""); toast("Invited — have them sign up with that email"); }
-          }}>Invite</button>
-        </div>
+        <p className="subtle" style={{ marginTop: 0 }}>An audit trail of deleted records — who removed what, and when. Deleting an invoice also reopens its sales order for re-invoicing.</p>
+        {(db.auditLog || []).length === 0
+          ? <p className="subtle" style={{ margin: 0 }}>No deletions recorded yet.</p>
+          : (db.auditLog || []).slice(0, 50).map(a => <div key={a.id} className="cat-row">
+            <span className="badge red" style={{ textTransform: "capitalize" }}><span className="dot"></span>{a.entityType.replace("_", " ")}</span>
+            <span className="mono">{a.entityNumber || "—"}</span>
+            {a.detail && <span className="subtle">{a.detail}</span>}
+            <span className="subtle" style={{ marginLeft: "auto" }}>{a.userEmail}</span>
+            <span className="subtle">{fmtDate((a.createdAt || "").slice(0, 10))} {(a.createdAt || "").slice(11, 16)}</span>
+          </div>)}
       </div>
-    </div>
-    <div className="card">
+    </div>}
+
+    {tab === "account" && <div className="card">
       <div className="card-head"><h3>Account</h3></div>
       <div className="card-body">
         <div className="kv"><dt>Signed in as</dt><dd>{session.user.email}</dd></div>
+        <div className="divider"></div>
+        <ChangePassword toast={toast} />
+      </div>
+    </div>}
+  </div>;
+}
+
+// Self-service password change for the signed-in user.
+function ChangePassword({ toast }) {
+  const [pw, setPw] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const err = pw.length > 0 && pw.length < 8 ? "At least 8 characters" : (confirm && pw !== confirm ? "Passwords don't match" : "");
+  const save = async () => {
+    setBusy(true);
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    setBusy(false);
+    if (error) { toast("⚠ " + error.message); return; }
+    setPw(""); setConfirm(""); toast("Password updated");
+  };
+  return <div>
+    <div className="subtle" style={{ fontWeight: 600, marginBottom: 8 }}>Change Password</div>
+    <div className="row">
+      <Field label="New Password" hint="At least 8 characters"><PasswordInput autoComplete="new-password" value={pw} onChange={e => setPw(e.target.value)} /></Field>
+      <Field label="Confirm New Password"><PasswordInput autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} /></Field>
+    </div>
+    {err && <p className="subtle" style={{ margin: "0 0 8px", color: "var(--neg)" }}>{err}</p>}
+    <button className="btn primary" disabled={busy || !pw || !!err || pw !== confirm} onClick={save}>{busy ? "Saving…" : "Update Password"}</button>
+  </div>;
+}
+
+// Admin-managed time categories with flat hourly rates.
+function TimeCategoriesCard({ db, actions, toast }) {
+  const [edit, setEdit] = useState(null);
+  const cats = db.timeCategories || [];
+  const save = async () => { if (await actions.saveTimeCategory({ ...edit, rate: Number(edit.rate) || 0 })) { setEdit(null); toast("Category saved"); } };
+  const del = async (id) => { if (confirm("Delete this category? Existing time entries keep their snapshot rate.") && await actions.deleteTimeCategory(id)) toast("Removed"); };
+  return <div className="card" style={{ marginBottom: 16 }}>
+    <div className="card-head"><h3>Time Categories</h3>
+      <button className="btn primary sm" style={{ marginLeft: "auto" }} onClick={() => setEdit({ id: uid(), _new: true, name: "", rate: 0, active: true, sort: cats.length })}><Ico d={ICONS.plus} size={14} />New Category</button>
+    </div>
+    <div className="card-body">
+      <p className="subtle" style={{ marginTop: 0 }}>Categories and flat hourly rates users pick when logging time. The rate is snapshotted onto each time entry.</p>
+      {cats.length === 0
+        ? <p className="subtle" style={{ margin: 0 }}>No categories yet — add Engineering, Field Service, etc.</p>
+        : cats.map(c => <div key={c.id} className="cat-row">
+          <span style={{ fontWeight: 600 }}>{c.name}</span>
+          <span className="mono subtle">{money(c.rate)}/hr</span>
+          {!c.active && <span className="subtle">· inactive</span>}
+          <span style={{ marginLeft: "auto", whiteSpace: "nowrap" }}>
+            <button className="btn ghost icon" onClick={() => setEdit({ ...c })} title="Edit"><Ico d={ICONS.edit} size={14} /></button>
+            <button className="btn ghost icon" onClick={() => del(c.id)} title="Delete"><Ico d={ICONS.trash} size={14} /></button>
+          </span>
+        </div>)}
+      {edit && <div style={{ background: "var(--canvas)", borderRadius: 9, padding: 12, marginTop: 10 }}>
+        <div className="row">
+          <Field label="Name"><input className="input" value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} placeholder="Engineering" /></Field>
+          <Field label="Rate ($/hr)"><input className="input mono" type="number" step="any" value={edit.rate} onChange={e => setEdit({ ...edit, rate: e.target.value })} /></Field>
+          <Field label="Active"><select className="select" value={edit.active ? "1" : "0"} onChange={e => setEdit({ ...edit, active: e.target.value === "1" })}><option value="1">Active</option><option value="0">Inactive</option></select></Field>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn primary" disabled={!edit.name.trim()} onClick={save}>Save Category</button>
+          <button className="btn" onClick={() => setEdit(null)}>Cancel</button>
+        </div>
+      </div>}
+    </div>
+  </div>;
+}
+
+// Generate a readable, mixed temp password (≥ 8 chars) for a new user.
+function genPassword() {
+  const bytes = new Uint8Array(9);
+  crypto.getRandomValues(bytes);
+  const b64 = btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, "");
+  return "Tmj-" + b64.slice(0, 10);
+}
+
+const PERM_OPTS = [["", "No access"], ["read", "Read only"], ["write", "Read & write"]];
+
+// Per-area access grid. `value` is a { area: 'read'|'write' } map; empty means no access.
+function PermMatrix({ value, onChange }) {
+  const set = (area, lvl) => { const n = { ...value }; if (lvl) n[area] = lvl; else delete n[area]; onChange(n); };
+  return <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "6px 12px", marginTop: 8, maxWidth: 440 }}>
+    {AREAS.map(a => <div key={a.key} style={{ display: "contents" }}>
+      <span className="subtle" style={{ alignSelf: "center" }}>{a.label}</span>
+      <select className="select" style={{ minWidth: 150 }} value={value[a.key] || ""} onChange={e => set(a.key, e.target.value)}>
+        {PERM_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+      </select>
+    </div>)}
+  </div>;
+}
+
+// Admin-only: create logins, set roles, and set per-area access.
+function UsersCard({ db, actions, toast, session }) {
+  return <div className="card" style={{ marginBottom: 16 }}>
+    <div className="card-head"><h3>Users & Access</h3></div>
+    <div className="card-body">
+      <p className="subtle" style={{ marginTop: 0 }}>Create a login for each teammate and set what they can see. <b>Read</b> = view only; <b>Read &amp; write</b> = view and edit; <b>No access</b> hides that area entirely. Owners and admins have full access.</p>
+      {(db.members || []).map(m => <MemberRow key={m.email} m={m} self={m.email === session.user.email} actions={actions} toast={toast} />)}
+      <div className="divider"></div>
+      <CreateUserForm actions={actions} toast={toast} />
+    </div>
+  </div>;
+}
+
+function MemberRow({ m, self, actions, toast }) {
+  const owner = m.role === "owner";
+  const [role, setRole] = useState(m.role);
+  const [perms, setPerms] = useState(m.permissions || {});
+  const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [newPw, setNewPw] = useState("");
+  const [rBusy, setRBusy] = useState(false);
+  const [shown, setShown] = useState("");
+  const isAdmin = isAdminRole(role);
+  const dirty = role !== m.role || JSON.stringify(perms) !== JSON.stringify(m.permissions || {});
+  const save = async () => { setSaving(true); if (await actions.updateMember(m.email, { role, permissions: isAdmin ? {} : perms })) toast("Access updated for " + m.email); setSaving(false); };
+  const remove = async () => { if (confirm("Remove " + m.email + "? Their access is revoked (the login itself stays in Supabase).") && await actions.removeMember(m.email)) toast("Removed " + m.email); };
+  const openReset = () => { setNewPw(genPassword()); setShown(""); setResetting(true); };
+  const doReset = async () => {
+    setRBusy(true);
+    const ok = await actions.resetUserPassword(m.email, newPw);
+    setRBusy(false);
+    if (ok) { setShown(newPw); setResetting(false); toast("Password reset for " + m.email); }
+  };
+
+  return <div style={{ padding: "10px 0", borderBottom: "1px solid var(--line, #e6e9ef)" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <span style={{ fontWeight: 600 }}>{m.email}</span>
+      {self && <span className="subtle">· you</span>}
+      {!m.userId && <span className="subtle">· not signed in yet</span>}
+      <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+        {m.userId && <button className="btn ghost sm" title="Set a new password for this user" onClick={openReset}>Reset password</button>}
+        {owner ? <span className="badge green"><span className="dot"></span>Owner</span>
+          : <select className="select" value={role} onChange={e => setRole(e.target.value)} disabled={self}>
+            <option value="member">Member</option><option value="admin">Admin</option>
+          </select>}
+        {!owner && !self && <button className="btn ghost icon" title="Remove user" onClick={remove}><Ico d={ICONS.trash} size={14} /></button>}
       </div>
     </div>
+    {owner || isAdmin
+      ? <p className="subtle" style={{ margin: "6px 0 0" }}>Full access to everything.</p>
+      : <PermMatrix value={perms} onChange={setPerms} />}
+    {resetting && <div style={{ background: "var(--canvas)", borderRadius: 9, padding: 12, marginTop: 8 }}>
+      <div className="subtle" style={{ fontWeight: 600, marginBottom: 6 }}>New password for {m.email}</div>
+      <div style={{ display: "flex", gap: 6, maxWidth: 360 }}>
+        <PasswordInput value={newPw} onChange={e => setNewPw(e.target.value)} />
+        <button className="btn" type="button" onClick={() => setNewPw(genPassword())} title="Generate">↻</button>
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <button className="btn sm primary" disabled={rBusy || newPw.length < 8} onClick={doReset}>{rBusy ? "Setting…" : "Set Password"}</button>
+        <button className="btn sm" onClick={() => setResetting(false)}>Cancel</button>
+      </div>
+    </div>}
+    {shown && <p className="subtle" style={{ margin: "8px 0 0" }}>New password set — share it: <span className="mono">{shown}</span></p>}
+    {dirty && <button className="btn sm primary" disabled={saving} style={{ marginTop: 8 }} onClick={save}>{saving ? "Saving…" : "Save changes"}</button>}
+  </div>;
+}
+
+function CreateUserForm({ actions, toast }) {
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState(genPassword());
+  const [role, setRole] = useState("member");
+  const [perms, setPerms] = useState({});
+  const [busy, setBusy] = useState(false);
+  const [created, setCreated] = useState(null);
+
+  const create = async () => {
+    if (!email.includes("@")) { toast("⚠ Enter a valid email"); return; }
+    if (password.length < 8) { toast("⚠ Password must be at least 8 characters"); return; }
+    setBusy(true);
+    const ok = await actions.createUser({ email: email.trim().toLowerCase(), password, role, permissions: isAdminRole(role) ? {} : perms });
+    setBusy(false);
+    if (ok) {
+      setCreated({ email: email.trim().toLowerCase(), password });
+      setEmail(""); setPassword(genPassword()); setRole("member"); setPerms({});
+      toast("User created");
+    }
+  };
+
+  if (!open) return <div>
+    {created && <div className="auth-note" style={{ marginBottom: 10 }}>
+      Created <b>{created.email}</b>. Share these credentials — the password isn't stored and won't be shown again:<br />
+      <span className="mono">{created.email}</span> / <span className="mono">{created.password}</span>
+    </div>}
+    <button className="btn primary" onClick={() => { setCreated(null); setOpen(true); }}><Ico d={ICONS.plus} size={15} />Create User</button>
+  </div>;
+
+  return <div>
+    <div className="row">
+      <Field label="Email"><input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="barry@example.com" /></Field>
+      <Field label="Initial Password" hint="Give this to the user; they can change it later">
+        <div style={{ display: "flex", gap: 6 }}>
+          <input className="input mono" value={password} onChange={e => setPassword(e.target.value)} />
+          <button className="btn" type="button" onClick={() => setPassword(genPassword())} title="Generate">↻</button>
+        </div></Field>
+      <Field label="Role"><select className="select" value={role} onChange={e => setRole(e.target.value)}>
+        <option value="member">Member</option><option value="admin">Admin (full access)</option>
+      </select></Field>
+    </div>
+    {!isAdminRole(role) && <><div className="subtle" style={{ fontWeight: 600 }}>Access</div><PermMatrix value={perms} onChange={setPerms} /></>}
+    <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+      <button className="btn primary" disabled={busy} onClick={create}>{busy ? "Creating…" : "Create User"}</button>
+      <button className="btn" disabled={busy} onClick={() => setOpen(false)}>Cancel</button>
+    </div>
+    <p className="subtle" style={{ margin: "8px 0 0" }}>Requires the <span className="mono">admin-create-user</span> edge function to be deployed.</p>
   </div>;
 }

@@ -331,6 +331,28 @@ export function useLedger(session, onError) {
         return true;
       } catch (e) { return fail(e); }
     },
+    // Standalone create or edit of a sales order (not from a quote/proposal).
+    // New ones claim the next SO number; line items copy through the SO adapter
+    // so the invoiced/ready flags round-trip.
+    async saveSalesOrder(s) {
+      try {
+        const isNew = !!s._new;
+        const so = { ...s }; delete so._new;
+        const manual = (so.number || "").trim();
+        const dupe = num => dbRef.current.salesOrders.some(x => x.id !== so.id && (x.number || "").toLowerCase() === num.toLowerCase());
+        if (isNew && isAutoNumber(manual)) {
+          so.number = dbRef.current.settings.soPrefix + "-" + pad4(await claimNumber("so"));
+        } else {
+          // Manual number (override or edit): must not collide with another SO.
+          if (dupe(manual)) throw new Error(`Sales order number "${manual}" is already used.`);
+          so.number = manual;
+        }
+        th(await supabase.from("sales_orders").upsert(A.soToRow(so)));
+        await replaceLineItems("sales_order_line_items", "sales_order_id", so.id, so.lineItems, A.soLineItemsToRows);
+        setDb(d => ({ ...d, salesOrders: upsertList(d.salesOrders, so) }));
+        return so;
+      } catch (e) { return fail(e); }
+    },
     async deleteSO(id) {
       try {
         const so = dbRef.current.salesOrders.find(s => s.id === id);

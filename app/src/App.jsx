@@ -6,6 +6,7 @@ import { invoiceStatus, paid } from "./calc/ledger.js";
 import { NAV_AREA, currentMember, canRead, canWrite, isAdminRole } from "./lib/permissions.js";
 import { Ico, ICONS } from "./components/ui.jsx";
 import DocumentView from "./components/DocumentView.jsx";
+import GlobalSearch from "./components/GlobalSearch.jsx";
 import Dashboard from "./views/Dashboard.jsx";
 import ReportsView from "./views/Reports.jsx";
 import ProposalsView from "./views/Proposals.jsx";
@@ -153,6 +154,7 @@ export default function App({ session }) {
         <button className="btn ghost icon menu-btn" onClick={() => setNavOpen(o => !o)}><Ico d={ICONS.menu} size={20} /></button>
         <div><h1>{t}</h1><div className="sub">{sub}</div></div>
         <div className="topbar-actions">
+          <GlobalSearch db={db} member={member} go={go} />
           <button className="btn ghost icon" title="Refresh from server" onClick={() => actions.reload()}><Ico d={ICONS.refresh} size={17} /></button>
         </div>
       </div>

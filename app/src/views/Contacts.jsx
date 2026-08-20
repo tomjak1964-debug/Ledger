@@ -7,7 +7,11 @@ export default function ContactsView({ db, actions, toast, readOnly }) {
   const [edit, setEdit] = useState(null);
   const list = db.contacts.filter(c => c.type === tab);
   const save = async (c) => { if (await actions.saveContact(c)) { setEdit(null); toast("Saved"); } };
-  const del = async (id) => { if (!confirm("Delete this contact?")) return; if (await actions.deleteContact(id)) toast("Deleted"); };
+  const del = async (id) => {
+    if (!confirm("Delete this contact?")) return;
+    const rec = db.contacts.find(c => c.id === id);
+    if (await actions.deleteContact(id)) toast("Deleted " + (rec?.name || "contact"), { actionLabel: "Undo", onAction: async () => { if (await actions.restoreRecord("contact", rec)) toast((rec.name || "Contact") + " restored"); } });
+  };
   const startNew = () => setEdit({ id: uid(), type: tab, name: "", contact: "", email: "", phone: "", address: "", code: "" });
   return <div>
     <div className="toolbar">

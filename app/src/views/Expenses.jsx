@@ -7,7 +7,11 @@ export default function ExpensesView({ db, actions, toast, readOnly }) {
   const [edit, setEdit] = useState(null);
   const vendors = db.contacts.filter(c => c.type === "vendor");
   const save = async (x) => { if (await actions.saveExpense(x)) { setEdit(null); toast("Expense saved"); } };
-  const del = async (id) => { if (!confirm("Delete this expense?")) return; if (await actions.deleteExpense(id)) toast("Deleted"); };
+  const del = async (id) => {
+    if (!confirm("Delete this expense?")) return;
+    const rec = db.expenses.find(e => e.id === id);
+    if (await actions.deleteExpense(id)) toast("Expense deleted", { actionLabel: "Undo", onAction: async () => { if (await actions.restoreRecord("expense", rec)) toast("Expense restored"); } });
+  };
   const startNew = () => setEdit({ id: uid(), _new: true, date: todayISO(), category: "Materials", vendor: "", amount: 0, method: "Credit Card", notes: "", salesOrderId: "" });
   const openSOs = db.salesOrders.filter(s => s.status === "open");
   const byCat = {};

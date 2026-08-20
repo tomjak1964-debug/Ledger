@@ -12,7 +12,11 @@ export default function SalesOrdersView({ db, actions, toast, openDoc, readOnly 
   const [edit, setEdit] = useState(null);
   const customers = db.contacts.filter(c => c.type === "customer");
 
-  const del = async (id) => { if (!confirm("Delete this sales order?")) return; if (await actions.deleteSO(id)) toast("Deleted"); };
+  const del = async (id) => {
+    if (!confirm("Delete this sales order?")) return;
+    const rec = db.salesOrders.find(s => s.id === id);
+    if (await actions.deleteSO(id)) toast("Deleted " + (rec?.number || ""), { actionLabel: "Undo", onAction: async () => { if (await actions.restoreRecord("sales_order", rec)) toast(rec.number + " restored"); } });
+  };
   const reopen = async (so) => {
     if (!confirm(`Reopen ${so.number} for invoicing? Its prior invoice no longer exists.`)) return;
     if (await actions.reopenSO(so.id)) toast(so.number + " reopened");

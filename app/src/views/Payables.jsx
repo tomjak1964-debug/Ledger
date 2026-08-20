@@ -36,7 +36,11 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
   const totalOpen = bk.cur + bk.d30 + bk.d60 + bk.d90 + bk.d90p;
 
   const save = async (bill) => { if (await actions.saveBill(bill)) { setEdit(null); toast("Bill saved"); } };
-  const del = async (id) => { if (!confirm("Delete this bill?")) return; if (await actions.deleteBill(id)) toast("Deleted"); };
+  const del = async (id) => {
+    if (!confirm("Delete this bill?")) return;
+    const rec = db.bills.find(b => b.id === id);
+    if (await actions.deleteBill(id)) toast("Deleted " + (rec?.number || "bill"), { actionLabel: "Undo", onAction: async () => { if (await actions.restoreRecord("bill", rec)) toast(rec.number + " restored"); } });
+  };
   const startNew = () => {
     const n = db.settings.billPrefix + "-" + String(db.settings.counters.bill).padStart(4, "0");
     setEdit({ id: uid(), number: n, _new: true, vendorId: vendors[0]?.id || "", date: todayISO(), dueDate: addDays(todayISO(), db.settings.terms), amount: 0, ref: "", notes: "", salesOrderId: "", payments: [] });

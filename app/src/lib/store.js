@@ -639,6 +639,37 @@ export function useLedger(session, onError) {
       } catch (e) { return fail(e); }
     },
 
+    // Re-insert a just-deleted record (+ its children) to undo a delete. Covers
+    // the document types with straightforward, side-effect-free deletes.
+    async restoreRecord(type, rec) {
+      try {
+        if (type === "sales_order") {
+          th(await supabase.from("sales_orders").insert(A.soToRow(rec)));
+          if (rec.lineItems?.length) th(await supabase.from("sales_order_line_items").insert(A.soLineItemsToRows(rec.lineItems, rec.id)));
+          setDb(d => ({ ...d, salesOrders: upsertList(d.salesOrders, rec) }));
+        } else if (type === "quote") {
+          th(await supabase.from("quotes").insert(A.quoteToRow(rec)));
+          if (rec.lineItems?.length) th(await supabase.from("quote_line_items").insert(A.lineItemsToRows(rec.lineItems, "quote_id", rec.id)));
+          setDb(d => ({ ...d, quotes: upsertList(d.quotes, rec) }));
+        } else if (type === "bill") {
+          th(await supabase.from("bills").insert(A.billToRow(rec)));
+          if (rec.payments?.length) th(await supabase.from("payments").insert(rec.payments.map(p => A.paymentToRow(p, "bill", rec.id))));
+          setDb(d => ({ ...d, bills: upsertList(d.bills, rec) }));
+        } else if (type === "expense") {
+          th(await supabase.from("expenses").insert(A.expenseToRow(rec)));
+          setDb(d => ({ ...d, expenses: upsertList(d.expenses, rec) }));
+        } else if (type === "purchase_order") {
+          th(await supabase.from("purchase_orders").insert(A.poToRow(rec)));
+          if (rec.lineItems?.length) th(await supabase.from("purchase_order_line_items").insert(A.lineItemsToRows(rec.lineItems, "purchase_order_id", rec.id)));
+          setDb(d => ({ ...d, purchaseOrders: upsertList(d.purchaseOrders, rec) }));
+        } else if (type === "contact") {
+          th(await supabase.from("contacts").insert(A.contactToRow(rec)));
+          setDb(d => ({ ...d, contacts: upsertList(d.contacts, rec) }));
+        } else { return null; }
+        return true;
+      } catch (e) { return fail(e); }
+    },
+
     /* ---- expenses ---- */
     async saveExpense(x) {
       try {

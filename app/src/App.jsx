@@ -85,7 +85,12 @@ export default function App({ session }) {
   const [doc, setDoc] = useState(null); // {kind,doc}
   const [toastMsg, setToastMsg] = useState(null);
   const [navOpen, setNavOpen] = useState(false);
-  const toast = useCallback((m) => { setToastMsg(m); setTimeout(() => setToastMsg(null), 2600); }, []);
+  // toast("msg") or toast("msg", { actionLabel, onAction }) for an Undo button.
+  const toast = useCallback((m, opts) => {
+    const t = { text: m, ...(opts || {}) };
+    setToastMsg(t);
+    setTimeout(() => setToastMsg(null), t.onAction ? 8000 : 2600);
+  }, []);
   const { db, loading, loadError, actions } = useLedger(session, toast);
   const openDoc = (kind, d) => setDoc({ kind, doc: d });
   const go = (v) => { setView(v); setNavOpen(false); window.scrollTo(0, 0); };
@@ -175,6 +180,9 @@ export default function App({ session }) {
 
     {doc && <DocumentView kind={doc.kind} doc={doc.doc}
       contact={db.contacts.find(c => c.id === (doc.doc.customerId || doc.doc.vendorId))} settings={db.settings} onClose={() => setDoc(null)} />}
-    {toastMsg && <div className="toast"><Ico d={ICONS.check} size={16} />{toastMsg}</div>}
+    {toastMsg && <div className="toast"><Ico d={ICONS.check} size={16} />{toastMsg.text}
+      {toastMsg.onAction && <button className="link-btn" style={{ color: "#7FB0FF", marginLeft: 10, fontWeight: 600 }}
+        onClick={() => { toastMsg.onAction(); setToastMsg(null); }}>{toastMsg.actionLabel || "Undo"}</button>}
+    </div>}
   </div>;
 }

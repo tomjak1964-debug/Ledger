@@ -10,7 +10,11 @@ export default function PurchaseOrdersView({ db, actions, toast, openDoc, readOn
   const openSOs = db.salesOrders.filter(s => s.status === "open");
 
   const save = async (po) => { const saved = await actions.savePurchaseOrder(po); if (saved) { setEdit(null); toast(po._new ? "PO " + saved.number + " created" : "PO saved"); } };
-  const del = async (id) => { if (!confirm("Delete this purchase order?")) return; if (await actions.deletePurchaseOrder(id)) toast("Deleted"); };
+  const del = async (id) => {
+    if (!confirm("Delete this purchase order?")) return;
+    const rec = db.purchaseOrders.find(p => p.id === id);
+    if (await actions.deletePurchaseOrder(id)) toast("Deleted " + (rec?.number || "PO"), { actionLabel: "Undo", onAction: async () => { if (await actions.restoreRecord("purchase_order", rec)) toast(rec.number + " restored"); } });
+  };
   const createBill = async (po) => { const b = await actions.createBillFromPO(po); if (b) toast("Bill " + b.number + " created from " + po.number); };
   const blankPO = (from) => ({
     id: uid(), _new: true, number: "(assigned at save)", vendorId: from?.vendorId || vendors[0]?.id || "",

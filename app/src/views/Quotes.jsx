@@ -27,7 +27,11 @@ export default function QuotesView({ db, actions, toast, openDoc, readOnly }) {
     if (saved) { setEdit(null); toast(q._new ? "Quote created" : "Quote saved"); }
   };
   const setStatus = async (id, status) => { if (await actions.setQuoteStatus(id, status)) toast("Marked " + status); };
-  const del = async (id) => { if (!confirm("Delete this quote?")) return; if (await actions.deleteQuote(id)) toast("Quote deleted"); };
+  const del = async (id) => {
+    if (!confirm("Delete this quote?")) return;
+    const rec = db.quotes.find(q => q.id === id);
+    if (await actions.deleteQuote(id)) toast("Deleted " + (rec?.number || "quote"), { actionLabel: "Undo", onAction: async () => { if (await actions.restoreRecord("quote", rec)) toast(rec.number + " restored"); } });
+  };
 
   const convertToSO = async (q) => {
     const po = prompt("Purchase Order number from customer (optional):", q.poNumber || "");

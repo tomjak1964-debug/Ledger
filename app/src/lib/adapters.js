@@ -125,11 +125,24 @@ export const proposalFromRow = r => ({
 export const billToRow = b => ({
   id: b.id, number: b.number, vendor_id: idOrNull(b.vendorId), date: dateOrNull(b.date),
   due_date: dateOrNull(b.dueDate), amount: num(b.amount), ref: b.ref ?? "", notes: b.notes ?? "",
-  sales_order_id: idOrNull(b.salesOrderId),
+  sales_order_id: idOrNull(b.salesOrderId), purchase_order_id: idOrNull(b.purchaseOrderId),
 });
 export const billFromRow = (r, payments) => ({
   id: r.id, number: r.number, vendorId: r.vendor_id || "", date: r.date || "", dueDate: r.due_date || "",
-  amount: num(r.amount), ref: r.ref, notes: r.notes, salesOrderId: r.sales_order_id || "", payments: payments || [],
+  amount: num(r.amount), ref: r.ref, notes: r.notes, salesOrderId: r.sales_order_id || "",
+  purchaseOrderId: r.purchase_order_id || "", payments: payments || [],
+});
+
+/* ---- purchase orders ---- */
+export const poToRow = p => ({
+  id: p.id, number: p.number, vendor_id: idOrNull(p.vendorId), date: dateOrNull(p.date),
+  expected_date: dateOrNull(p.expectedDate), status: p.status, tax_rate: num(p.taxRate),
+  notes: p.notes ?? "", sales_order_id: idOrNull(p.salesOrderId),
+});
+export const poFromRow = (r, items) => ({
+  id: r.id, number: r.number, vendorId: r.vendor_id || "", date: r.date || "", expectedDate: r.expected_date || "",
+  status: r.status, taxRate: num(r.tax_rate), notes: r.notes || "", salesOrderId: r.sales_order_id || "",
+  lineItems: items || [],
 });
 
 /* ---- expenses ---- */

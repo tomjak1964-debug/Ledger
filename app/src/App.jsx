@@ -18,6 +18,7 @@ import TasksView from "./views/Tasks.jsx";
 import TimeTrackingView from "./views/TimeTracking.jsx";
 import InvoicesView from "./views/Invoices.jsx";
 import ReceivablesView from "./views/Receivables.jsx";
+import PurchaseOrdersView from "./views/PurchaseOrders.jsx";
 import PayablesView from "./views/Payables.jsx";
 import ExpensesView from "./views/Expenses.jsx";
 import ContactsView from "./views/Contacts.jsx";
@@ -50,6 +51,7 @@ const NAV = [
   },
   {
     group: "Spend", items: [
+      { k: "purchaseOrders", label: "Purchase Orders", icon: ICONS.so },
       { k: "payables", label: "Payables", icon: ICONS.ap },
       { k: "expenses", label: "Expenses", icon: ICONS.exp },
     ]
@@ -69,6 +71,7 @@ const TITLES = {
   jobs: ["Jobs", "Track progress and mark items ready to invoice"], tasks: ["Tasks", "Work waiting on you"],
   timeTracking: ["Time Tracking", "Log hours against a job"],
   receivables: ["Receivables", "What customers owe you, by age"], payables: ["Payables", "Vendor bills you owe"],
+  purchaseOrders: ["Purchase Orders", "Orders you issue to vendors for parts"],
   expenses: ["Expenses", "Business spend by category"], contacts: ["Contacts", "Customers and vendors"],
   catalog: ["Item Catalog", "Reusable quote line items"], settings: ["Settings", "Company info and defaults"],
   reports: ["Reports", "P&L, sales tax, customers, and statements"],
@@ -161,6 +164,7 @@ export default function App({ session }) {
         {activeView === "timeTracking" && <TimeTrackingView {...props} />}
         {activeView === "invoices" && <InvoicesView {...props} />}
         {activeView === "receivables" && <ReceivablesView {...props} />}
+        {activeView === "purchaseOrders" && <PurchaseOrdersView {...props} />}
         {activeView === "payables" && <PayablesView {...props} />}
         {activeView === "expenses" && <ExpensesView {...props} />}
         {activeView === "contacts" && <ContactsView {...props} />}
@@ -170,7 +174,7 @@ export default function App({ session }) {
     </div>
 
     {doc && <DocumentView kind={doc.kind} doc={doc.doc}
-      contact={db.contacts.find(c => c.id === doc.doc.customerId)} settings={db.settings} onClose={() => setDoc(null)} />}
+      contact={db.contacts.find(c => c.id === (doc.doc.customerId || doc.doc.vendorId))} settings={db.settings} onClose={() => setDoc(null)} />}
     {toastMsg && <div className="toast"><Ico d={ICONS.check} size={16} />{toastMsg}</div>}
   </div>;
 }

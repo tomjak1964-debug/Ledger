@@ -14,7 +14,7 @@ import * as A from "./adapters.js";
 import { uid, todayISO, addDays, pad4 } from "./helpers.js";
 import { defaultSettings, sampleData } from "./seed.js";
 import { proposalConfig, phaseAmount } from "../calc/proposals.js";
-import { round2 } from "../calc/ledger.js";
+import { round2, lineTotals } from "../calc/ledger.js";
 
 const SEQ_TYPES = ["quote", "so", "invoice", "bill"];
 // Placeholder shown in the invoice-number field; means "use the auto sequence".
@@ -31,7 +31,7 @@ const th = (res) => { if (res.error) throw res.error; return res.data; };
 
 async function fetchAll() {
   const [settings, sequences, contacts, catalog, quotes, qli, sos, soli, invoices, invli, payments, bills, expenses,
-    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments] = await Promise.all([
+    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments, pos, poli] = await Promise.all([
     supabase.from("settings").select("*").maybeSingle(),
     supabase.from("org_sequences").select("*"),
     supabase.from("contacts").select("*").order("created_at"),
@@ -55,6 +55,8 @@ async function fetchAll() {
     supabase.from("time_categories").select("*").order("sort").order("created_at"),
     supabase.from("time_entries").select("*").order("date", { ascending: false }),
     supabase.from("attachments").select("*").order("created_at", { ascending: false }),
+    supabase.from("purchase_orders").select("*").order("created_at"),
+    supabase.from("purchase_order_line_items").select("*").order("sort"),
   ]);
   return {
     settingsRow: th(settings), sequences: th(sequences),
@@ -71,6 +73,8 @@ async function fetchAll() {
     timeCats: timeCats && !timeCats.error ? (timeCats.data || []) : [],
     timeEntries: timeEntries && !timeEntries.error ? (timeEntries.data || []) : [],
     attachments: attachments && !attachments.error ? (attachments.data || []) : [],
+    pos: pos && !pos.error ? (pos.data || []) : [],
+    poli: poli && !poli.error ? (poli.data || []) : [],
   };
 }
 
@@ -103,6 +107,7 @@ function assemble(raw) {
     timeCategories: (raw.timeCats || []).map(A.timeCategoryFromRow),
     timeEntries: (raw.timeEntries || []).map(A.timeEntryFromRow),
     attachments: (raw.attachments || []).map(A.attachmentFromRow),
+    purchaseOrders: (() => { const items = groupBy(raw.poli || [], "purchase_order_id"); return (raw.pos || []).map(r => A.poFromRow(r, li(items[r.id]))); })(),
   };
 }
 
@@ -580,6 +585,57 @@ export function useLedger(session, onError) {
         setDb(d => ({ ...d, bills: d.bills.filter(b => b.id !== id) }));
         await logDeletion("bill", bill?.number || "", bill?.ref ? `Ref: ${bill.ref}` : "");
         return true;
+      } catch (e) { return fail(e); }
+    },
+
+    /* ---- purchase orders ---- */
+    async savePurchaseOrder(p) {
+      try {
+        const isNew = !!p._new;
+        const po = { ...p }; delete po._new;
+        if (isNew) po.number = (dbRef.current.settings.poPrefix || "PO") + "-" + pad4(await claimNumber("po"));
+        th(await supabase.from("purchase_orders").upsert(A.poToRow(po)));
+        await replaceLineItems("purchase_order_line_items", "purchase_order_id", po.id, po.lineItems);
+        setDb(d => ({ ...d, purchaseOrders: upsertList(d.purchaseOrders, po) }));
+        return po;
+      } catch (e) { return fail(e); }
+    },
+    async setPOStatus(id, status) {
+      try {
+        th(await supabase.from("purchase_orders").update({ status }).eq("id", id));
+        setDb(d => ({ ...d, purchaseOrders: d.purchaseOrders.map(p => p.id === id ? { ...p, status } : p) }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
+    async deletePurchaseOrder(id) {
+      try {
+        const po = dbRef.current.purchaseOrders.find(p => p.id === id);
+        th(await supabase.from("purchase_orders").delete().eq("id", id));
+        setDb(d => ({ ...d, purchaseOrders: d.purchaseOrders.filter(p => p.id !== id) }));
+        await logDeletion("purchase_order", po?.number || "");
+        return true;
+      } catch (e) { return fail(e); }
+    },
+    // Turn a PO into a vendor bill (amount from the PO), link them, and mark the
+    // PO received. Guards against billing the same PO twice.
+    async createBillFromPO(po) {
+      try {
+        const d0 = dbRef.current;
+        if (d0.bills.some(b => b.purchaseOrderId === po.id)) throw new Error(`A bill was already created from ${po.number}.`);
+        const bill = {
+          id: uid(), number: (d0.settings.billPrefix || "BILL") + "-" + pad4(await claimNumber("bill")),
+          vendorId: po.vendorId, date: todayISO(), dueDate: addDays(todayISO(), d0.settings.terms),
+          amount: round2(lineTotals(po.lineItems, po.taxRate).total), ref: po.number, notes: `From PO ${po.number}`,
+          salesOrderId: po.salesOrderId || "", purchaseOrderId: po.id, payments: [],
+        };
+        th(await supabase.from("bills").insert(A.billToRow(bill)));
+        th(await supabase.from("purchase_orders").update({ status: "received" }).eq("id", po.id));
+        setDb(d => ({
+          ...d,
+          bills: [...d.bills, bill],
+          purchaseOrders: d.purchaseOrders.map(p => p.id === po.id ? { ...p, status: "received" } : p),
+        }));
+        return bill;
       } catch (e) { return fail(e); }
     },
 

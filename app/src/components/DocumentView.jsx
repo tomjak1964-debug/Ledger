@@ -3,10 +3,11 @@ import { lineTotals, paid, balance } from "../calc/ledger.js";
 import { Ico, ICONS } from "./ui.jsx";
 
 export default function DocumentView({ kind, doc, contact, settings, onClose }) {
+  if (kind === "invoice") return <InvoiceDoc inv={doc} contact={contact} settings={settings} onClose={onClose} />;
   const t = lineTotals(doc.lineItems, doc.taxRate);
   const isQuote = kind === "quote";
-  const title = isQuote ? "Quote" : "Invoice";
-  if (!isQuote) return <InvoiceDoc inv={doc} contact={contact} settings={settings} onClose={onClose} />;
+  const isPO = kind === "po";
+  const title = isQuote ? "Quote" : isPO ? "Purchase Order" : "Document";
   return <div className="doc-screen">
     <div className="doc-bar">
       <button className="btn" onClick={onClose}><Ico d={ICONS.back} size={16} />Close</button>
@@ -25,14 +26,13 @@ export default function DocumentView({ kind, doc, contact, settings, onClose }) 
       </div>
       <div className="doc-parties">
         <div className="blk">
-          <div className="h">{isQuote ? "Quote For" : "Bill To"}</div>
+          <div className="h">{isPO ? "Vendor" : "Quote For"}</div>
           <div className="b">{contact ? [contact.name, contact.contact, contact.address, contact.email].filter(Boolean).join("\n") : "—"}</div>
         </div>
         <div className="doc-meta-grid">
           <div className="m"><div className="h">Date</div><div className="v">{fmtDate(doc.date)}</div></div>
-          {isQuote
-            ? <div className="m"><div className="h">Valid Until</div><div className="v">{fmtDate(doc.expiryDate)}</div></div>
-            : <div className="m"><div className="h">Due</div><div className="v">{fmtDate(doc.dueDate)}</div></div>}
+          {isQuote && <div className="m"><div className="h">Valid Until</div><div className="v">{fmtDate(doc.expiryDate)}</div></div>}
+          {isPO && doc.expectedDate && <div className="m"><div className="h">Expected</div><div className="v">{fmtDate(doc.expectedDate)}</div></div>}
           {doc.poNumber && <div className="m"><div className="h">PO #</div><div className="v">{doc.poNumber}</div></div>}
         </div>
       </div>
@@ -51,11 +51,10 @@ export default function DocumentView({ kind, doc, contact, settings, onClose }) 
       <div className="doc-tot"><div className="box">
         <div className="l"><span>Subtotal</span><span className="v">{money(t.sub)}</span></div>
         <div className="l"><span>Tax ({doc.taxRate || 0}%)</span><span className="v">{money(t.tax)}</span></div>
-        {!isQuote && paid(doc) > 0 && <div className="l"><span>Paid</span><span className="v">-{money(paid(doc))}</span></div>}
-        <div className="l g"><span>{!isQuote && paid(doc) > 0 ? "Balance Due" : "Total"}</span><span className="v">{money(!isQuote && paid(doc) > 0 ? balance(doc) : t.total)}</span></div>
+        <div className="l g"><span>Total</span><span className="v">{money(t.total)}</span></div>
       </div></div>
-      {(doc.notes || (isQuote ? settings.quoteNotes : settings.invoiceNotes)) &&
-        <div className="doc-notes">{doc.notes || (isQuote ? settings.quoteNotes : settings.invoiceNotes)}</div>}
+      {(doc.notes || (isQuote ? settings.quoteNotes : "")) &&
+        <div className="doc-notes">{doc.notes || (isQuote ? settings.quoteNotes : "")}</div>}
       <div className="doc-foot">{settings.company} · {settings.companyEmail}</div>
     </div>
   </div>;

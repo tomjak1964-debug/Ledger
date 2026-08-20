@@ -7,6 +7,7 @@ import PaymentModal from "../components/PaymentModal.jsx";
 import LineItemsEditor from "../components/LineItemsEditor.jsx";
 import EmailModal from "../components/EmailModal.jsx";
 import InvoiceFromSOModal from "../components/InvoiceFromSOModal.jsx";
+import Attachments from "../components/Attachments.jsx";
 import { invoicePdf } from "../lib/invoicePdf.js";
 
 export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) {
@@ -39,7 +40,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
     if (saved) { setEdit(null); toast(inv._new ? "Invoice created" : "Invoice saved"); }
   };
 
-  if (edit) return <InvoiceEditor invoice={edit} customers={customers} catalog={db.catalog} onCancel={() => setEdit(null)} onSave={save} />;
+  if (edit) return <InvoiceEditor invoice={edit} customers={customers} catalog={db.catalog} onCancel={() => setEdit(null)} onSave={save} db={db} actions={actions} toast={toast} readOnly={readOnly} />;
 
   return <div>
     {!readOnly && <div className="toolbar">
@@ -111,7 +112,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
   </div>;
 }
 
-function InvoiceEditor({ invoice, customers, catalog, onCancel, onSave }) {
+function InvoiceEditor({ invoice, customers, catalog, onCancel, onSave, db, actions, toast, readOnly }) {
   const [inv, setInv] = useState(invoice);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setInv(p => ({ ...p, [k]: v }));
@@ -141,6 +142,9 @@ function InvoiceEditor({ invoice, customers, catalog, onCancel, onSave }) {
       <LineItemsEditor items={inv.lineItems} setItems={v => set("lineItems", v)} taxRate={inv.taxRate} setTaxRate={v => set("taxRate", v)} catalog={catalog} />
       <div className="divider"></div>
       <Field label="Notes (printed on invoice)" hint="Leave blank to use the default from Settings"><textarea className="input" value={inv.notes || ""} onChange={e => set("notes", e.target.value)} /></Field>
+      {inv._new
+        ? <p className="subtle" style={{ margin: "8px 0 0" }}>Save the invoice first to attach files (signed POs, etc.).</p>
+        : <><div className="divider"></div><Attachments db={db} actions={actions} toast={toast} parentType="invoice" parentId={inv.id} readOnly={readOnly} /></>}
     </div></div>
   </div>;
 }

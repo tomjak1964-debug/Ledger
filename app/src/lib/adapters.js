@@ -31,6 +31,9 @@ export const soLineItemFromRow = r => ({ ...lineItemFromRow(r), invoiced: !!r.in
 /* ---- audit log (deletion tracking) ---- */
 export const auditFromRow = r => ({ id: r.id, userEmail: r.user_email || "", action: r.action, entityType: r.entity_type, entityNumber: r.entity_number || "", detail: r.detail || "", createdAt: r.created_at });
 
+/* ---- attachments ---- */
+export const attachmentFromRow = r => ({ id: r.id, parentType: r.parent_type, parentId: r.parent_id, path: r.path, filename: r.filename || "", size: Number(r.size) || 0, contentType: r.content_type || "", uploadedBy: r.uploaded_by || "", createdAt: r.created_at });
+
 /* ---- tasks ---- */
 export const taskFromRow = r => ({ id: r.id, type: r.type, status: r.status, salesOrderId: r.sales_order_id || "", title: r.title || "", detail: r.detail || "", createdBy: r.created_by || "", doneBy: r.done_by || "", createdAt: r.created_at, doneAt: r.done_at || "" });
 export const taskToRow = t => ({ id: t.id, type: t.type || "create_invoice", status: t.status || "open", sales_order_id: idOrNull(t.salesOrderId), title: t.title ?? "", detail: t.detail ?? "", created_by: t.createdBy ?? "" });

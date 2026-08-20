@@ -5,6 +5,7 @@ import { checksPdf } from "../lib/checkPrint.js";
 import { remittancesPdf } from "../lib/remittance.js";
 import { Ico, ICONS, Badge, Empty, Modal, Field } from "../components/ui.jsx";
 import PaymentModal from "../components/PaymentModal.jsx";
+import Attachments from "../components/Attachments.jsx";
 import { openCheckPdf } from "../lib/checkPrint.js";
 import { remittancePdf, openRemittancePdf } from "../lib/remittance.js";
 import EmailModal from "../components/EmailModal.jsx";
@@ -104,6 +105,9 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
           {edit.salesOrderId && !openSOs.some(s => s.id === edit.salesOrderId) && <option value={edit.salesOrderId}>{db.salesOrders.find(s => s.id === edit.salesOrderId)?.number || "(job)"}</option>}
         </select></Field>
       <Field label="Notes"><textarea className="input" value={edit.notes} onChange={e => setEdit({ ...edit, notes: e.target.value })} /></Field>
+      {edit._new
+        ? <p className="subtle" style={{ margin: "8px 0 0" }}>Save the bill first to attach receipts.</p>
+        : <><div className="divider"></div><Attachments db={db} actions={actions} toast={toast} parentType="bill" parentId={edit.id} readOnly={readOnly} /></>}
     </Modal>;
     })()}
     {pay && <PaymentModal doc={pay} isBill onClose={() => setPay(null)}

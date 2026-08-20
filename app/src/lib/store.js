@@ -31,7 +31,7 @@ const th = (res) => { if (res.error) throw res.error; return res.data; };
 
 async function fetchAll() {
   const [settings, sequences, contacts, catalog, quotes, qli, sos, soli, invoices, invli, payments, bills, expenses,
-    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries] = await Promise.all([
+    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments] = await Promise.all([
     supabase.from("settings").select("*").maybeSingle(),
     supabase.from("org_sequences").select("*"),
     supabase.from("contacts").select("*").order("created_at"),
@@ -54,6 +54,7 @@ async function fetchAll() {
     supabase.from("tasks").select("*").order("created_at", { ascending: false }),
     supabase.from("time_categories").select("*").order("sort").order("created_at"),
     supabase.from("time_entries").select("*").order("date", { ascending: false }),
+    supabase.from("attachments").select("*").order("created_at", { ascending: false }),
   ]);
   return {
     settingsRow: th(settings), sequences: th(sequences),
@@ -69,6 +70,7 @@ async function fetchAll() {
     tasks: tasks && !tasks.error ? (tasks.data || []) : [],
     timeCats: timeCats && !timeCats.error ? (timeCats.data || []) : [],
     timeEntries: timeEntries && !timeEntries.error ? (timeEntries.data || []) : [],
+    attachments: attachments && !attachments.error ? (attachments.data || []) : [],
   };
 }
 
@@ -100,6 +102,7 @@ function assemble(raw) {
     tasks: (raw.tasks || []).map(A.taskFromRow),
     timeCategories: (raw.timeCats || []).map(A.timeCategoryFromRow),
     timeEntries: (raw.timeEntries || []).map(A.timeEntryFromRow),
+    attachments: (raw.attachments || []).map(A.attachmentFromRow),
   };
 }
 
@@ -414,6 +417,37 @@ export function useLedger(session, onError) {
         th(await supabase.from("time_entries").delete().eq("id", id));
         setDb(d => ({ ...d, timeEntries: d.timeEntries.filter(e => e.id !== id) }));
         return true;
+      } catch (e) { return fail(e); }
+    },
+
+    /* ---- attachments (files in Storage + metadata row) ---- */
+    async uploadAttachment(parentType, parentId, file) {
+      try {
+        const orgId = dbRef.current.org.id;
+        const safe = (file.name || "file").replace(/[^\w.\-]+/g, "_");
+        const path = `${orgId}/${parentType}/${parentId}/${uid()}__${safe}`;
+        const up = await supabase.storage.from("attachments").upload(path, file, { contentType: file.type || "application/octet-stream" });
+        if (up.error) throw up.error;
+        const att = { id: uid(), parentType, parentId, path, filename: file.name || safe, size: file.size || 0, contentType: file.type || "", uploadedBy: session.user.email };
+        th(await supabase.from("attachments").insert({ id: att.id, org_id: orgId, parent_type: parentType, parent_id: parentId, path, filename: att.filename, size: att.size, content_type: att.contentType, uploaded_by: att.uploadedBy }));
+        setDb(d => ({ ...d, attachments: [att, ...(d.attachments || [])] }));
+        return att;
+      } catch (e) { return fail(e); }
+    },
+    async deleteAttachment(att) {
+      try {
+        await supabase.storage.from("attachments").remove([att.path]);
+        th(await supabase.from("attachments").delete().eq("id", att.id));
+        setDb(d => ({ ...d, attachments: (d.attachments || []).filter(a => a.id !== att.id) }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
+    // Short-lived signed URL to view/download a private file.
+    async attachmentUrl(att) {
+      try {
+        const { data, error } = await supabase.storage.from("attachments").createSignedUrl(att.path, 3600);
+        if (error) throw error;
+        return data.signedUrl;
       } catch (e) { return fail(e); }
     },
 

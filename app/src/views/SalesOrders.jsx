@@ -4,6 +4,7 @@ import { lineTotals } from "../calc/ledger.js";
 import { AUTO_NUMBER } from "../lib/store.js";
 import { Ico, ICONS, Badge, Empty, Field } from "../components/ui.jsx";
 import LineItemsEditor from "../components/LineItemsEditor.jsx";
+import Attachments from "../components/Attachments.jsx";
 import InvoiceFromSOModal from "../components/InvoiceFromSOModal.jsx";
 
 export default function SalesOrdersView({ db, actions, toast, openDoc, readOnly }) {
@@ -36,7 +37,7 @@ export default function SalesOrdersView({ db, actions, toast, openDoc, readOnly 
       : [{ id: uid(), desc: "", qty: 1, unit: "", unitPrice: 0 }],
   });
 
-  if (edit) return <SalesOrderEditor so={edit} customers={customers} catalog={db.catalog} onCancel={() => setEdit(null)} onSave={save} />;
+  if (edit) return <SalesOrderEditor so={edit} customers={customers} catalog={db.catalog} onCancel={() => setEdit(null)} onSave={save} db={db} actions={actions} toast={toast} readOnly={readOnly} />;
 
   return <div>
     {!readOnly && <div className="toolbar">
@@ -84,7 +85,7 @@ export default function SalesOrdersView({ db, actions, toast, openDoc, readOnly 
   </div>;
 }
 
-function SalesOrderEditor({ so, customers, catalog, onCancel, onSave }) {
+function SalesOrderEditor({ so, customers, catalog, onCancel, onSave, db, actions, toast, readOnly }) {
   const [o, setO] = useState(so);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setO(p => ({ ...p, [k]: v }));
@@ -115,6 +116,9 @@ function SalesOrderEditor({ so, customers, catalog, onCancel, onSave }) {
           Some line items are already invoiced — editing them here won't change invoices that were already issued.
         </p>}
       <LineItemsEditor items={o.lineItems} setItems={v => set("lineItems", v)} taxRate={o.taxRate} setTaxRate={v => set("taxRate", v)} catalog={catalog} />
+      {o._new
+        ? <p className="subtle" style={{ margin: "12px 0 0" }}>Save the sales order first to attach files (drawings, signed POs).</p>
+        : <><div className="divider"></div><Attachments db={db} actions={actions} toast={toast} parentType="sales_order" parentId={o.id} readOnly={readOnly} /></>}
     </div></div>
   </div>;
 }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { uid, money, fmtDate, todayISO, sum, EXPENSE_CATS } from "../lib/helpers.js";
 import { Ico, ICONS, Empty, Modal, Field } from "../components/ui.jsx";
+import Attachments from "../components/Attachments.jsx";
 
 export default function ExpensesView({ db, actions, toast, readOnly }) {
   const [edit, setEdit] = useState(null);
@@ -61,6 +62,9 @@ export default function ExpensesView({ db, actions, toast, readOnly }) {
           {edit.salesOrderId && !openSOs.some(s => s.id === edit.salesOrderId) && <option value={edit.salesOrderId}>{db.salesOrders.find(s => s.id === edit.salesOrderId)?.number || "(job)"}</option>}
         </select></Field>
       <Field label="Notes"><textarea className="input" value={edit.notes} onChange={e => setEdit({ ...edit, notes: e.target.value })} /></Field>
+      {edit._new
+        ? <p className="subtle" style={{ margin: "8px 0 0" }}>Save the expense first to attach a receipt.</p>
+        : <><div className="divider"></div><Attachments db={db} actions={actions} toast={toast} parentType="expense" parentId={edit.id} readOnly={readOnly} /></>}
     </Modal>}
   </div>;
 }

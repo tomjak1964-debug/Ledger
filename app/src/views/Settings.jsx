@@ -187,11 +187,11 @@ function ChangePassword({ toast }) {
 function TimeCategoriesCard({ db, actions, toast }) {
   const [edit, setEdit] = useState(null);
   const cats = db.timeCategories || [];
-  const save = async () => { if (await actions.saveTimeCategory({ ...edit, rate: Number(edit.rate) || 0 })) { setEdit(null); toast("Category saved"); } };
+  const save = async () => { if (await actions.saveTimeCategory({ ...edit, rate: Number(edit.rate) || 0, costRate: Number(edit.costRate) || 0 })) { setEdit(null); toast("Category saved"); } };
   const del = async (id) => { if (confirm("Delete this category? Existing time entries keep their snapshot rate.") && await actions.deleteTimeCategory(id)) toast("Removed"); };
   return <div className="card" style={{ marginBottom: 16 }}>
     <div className="card-head"><h3>Time Categories</h3>
-      <button className="btn primary sm" style={{ marginLeft: "auto" }} onClick={() => setEdit({ id: uid(), _new: true, name: "", rate: 0, active: true, sort: cats.length })}><Ico d={ICONS.plus} size={14} />New Category</button>
+      <button className="btn primary sm" style={{ marginLeft: "auto" }} onClick={() => setEdit({ id: uid(), _new: true, name: "", rate: 0, costRate: 0, active: true, sort: cats.length })}><Ico d={ICONS.plus} size={14} />New Category</button>
     </div>
     <div className="card-body">
       <p className="subtle" style={{ marginTop: 0 }}>Categories and flat hourly rates users pick when logging time. The rate is snapshotted onto each time entry.</p>
@@ -199,7 +199,7 @@ function TimeCategoriesCard({ db, actions, toast }) {
         ? <p className="subtle" style={{ margin: 0 }}>No categories yet — add Engineering, Field Service, etc.</p>
         : cats.map(c => <div key={c.id} className="cat-row">
           <span style={{ fontWeight: 600 }}>{c.name}</span>
-          <span className="mono subtle">{money(c.rate)}/hr</span>
+          <span className="mono subtle">bill {money(c.rate)}/hr · cost {money(c.costRate || 0)}/hr</span>
           {!c.active && <span className="subtle">· inactive</span>}
           <span style={{ marginLeft: "auto", whiteSpace: "nowrap" }}>
             <button className="btn ghost icon" onClick={() => setEdit({ ...c })} title="Edit"><Ico d={ICONS.edit} size={14} /></button>
@@ -209,7 +209,8 @@ function TimeCategoriesCard({ db, actions, toast }) {
       {edit && <div style={{ background: "var(--canvas)", borderRadius: 9, padding: 12, marginTop: 10 }}>
         <div className="row">
           <Field label="Name"><input className="input" value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} placeholder="Engineering" /></Field>
-          <Field label="Rate ($/hr)"><input className="input mono" type="number" step="any" value={edit.rate} onChange={e => setEdit({ ...edit, rate: e.target.value })} /></Field>
+          <Field label="Bill Rate ($/hr)" hint="Charged to the customer"><input className="input mono" type="number" step="any" value={edit.rate} onChange={e => setEdit({ ...edit, rate: e.target.value })} /></Field>
+          <Field label="Cost Rate ($/hr)" hint="What it costs you"><input className="input mono" type="number" step="any" value={edit.costRate || 0} onChange={e => setEdit({ ...edit, costRate: e.target.value })} /></Field>
           <Field label="Active"><select className="select" value={edit.active ? "1" : "0"} onChange={e => setEdit({ ...edit, active: e.target.value === "1" })}><option value="1">Active</option><option value="0">Inactive</option></select></Field>
         </div>
         <div style={{ display: "flex", gap: 8 }}>

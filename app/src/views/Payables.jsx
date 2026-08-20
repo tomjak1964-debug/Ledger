@@ -29,6 +29,7 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
   const [edit, setEdit] = useState(null);
   const [pay, setPay] = useState(null);
   const vendors = db.contacts.filter(c => c.type === "vendor");
+  const openSOs = db.salesOrders.filter(s => s.status === "open");
   const open = db.bills.filter(b => ((Number(b.amount) || 0) - paid(b)) > 0.005);
   const bk = agingBuckets(open, b => b.dueDate, b => (Number(b.amount) || 0) - paid(b));
   const totalOpen = bk.cur + bk.d30 + bk.d60 + bk.d90 + bk.d90p;
@@ -37,7 +38,7 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
   const del = async (id) => { if (!confirm("Delete this bill?")) return; if (await actions.deleteBill(id)) toast("Deleted"); };
   const startNew = () => {
     const n = db.settings.billPrefix + "-" + String(db.settings.counters.bill).padStart(4, "0");
-    setEdit({ id: uid(), number: n, _new: true, vendorId: vendors[0]?.id || "", date: todayISO(), dueDate: addDays(todayISO(), db.settings.terms), amount: 0, ref: "", notes: "", payments: [] });
+    setEdit({ id: uid(), number: n, _new: true, vendorId: vendors[0]?.id || "", date: todayISO(), dueDate: addDays(todayISO(), db.settings.terms), amount: 0, ref: "", notes: "", salesOrderId: "", payments: [] });
   };
 
   return <div>
@@ -96,6 +97,12 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
         <Field label="Due Date"><input className="input" type="date" value={edit.dueDate} onChange={e => setEdit({ ...edit, dueDate: e.target.value })} /></Field>
         <Field label="Amount"><input className="input mono" type="number" step="any" value={edit.amount} onChange={e => setEdit({ ...edit, amount: e.target.value })} /></Field>
       </div>
+      <Field label="Job (optional)" hint="Attribute this bill to a sales order for job costing">
+        <select className="select" value={edit.salesOrderId || ""} onChange={e => setEdit({ ...edit, salesOrderId: e.target.value })}>
+          <option value="">— none —</option>
+          {openSOs.map(s => <option key={s.id} value={s.id}>{s.number} — {nameOf(db, s.customerId)}</option>)}
+          {edit.salesOrderId && !openSOs.some(s => s.id === edit.salesOrderId) && <option value={edit.salesOrderId}>{db.salesOrders.find(s => s.id === edit.salesOrderId)?.number || "(job)"}</option>}
+        </select></Field>
       <Field label="Notes"><textarea className="input" value={edit.notes} onChange={e => setEdit({ ...edit, notes: e.target.value })} /></Field>
     </Modal>;
     })()}

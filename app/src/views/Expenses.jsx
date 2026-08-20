@@ -7,7 +7,8 @@ export default function ExpensesView({ db, actions, toast, readOnly }) {
   const vendors = db.contacts.filter(c => c.type === "vendor");
   const save = async (x) => { if (await actions.saveExpense(x)) { setEdit(null); toast("Expense saved"); } };
   const del = async (id) => { if (!confirm("Delete this expense?")) return; if (await actions.deleteExpense(id)) toast("Deleted"); };
-  const startNew = () => setEdit({ id: uid(), _new: true, date: todayISO(), category: "Materials", vendor: "", amount: 0, method: "Credit Card", notes: "" });
+  const startNew = () => setEdit({ id: uid(), _new: true, date: todayISO(), category: "Materials", vendor: "", amount: 0, method: "Credit Card", notes: "", salesOrderId: "" });
+  const openSOs = db.salesOrders.filter(s => s.status === "open");
   const byCat = {};
   db.expenses.forEach(e => { byCat[e.category] = (byCat[e.category] || 0) + (Number(e.amount) || 0); });
   const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
@@ -53,6 +54,12 @@ export default function ExpensesView({ db, actions, toast, readOnly }) {
         <Field label="Method"><select className="select" value={edit.method} onChange={e => setEdit({ ...edit, method: e.target.value })}>
           {["Credit Card", "Check", "ACH / Wire", "Cash", "Other"].map(m => <option key={m}>{m}</option>)}</select></Field>
       </div>
+      <Field label="Job (optional)" hint="Attribute this cost to a sales order for job costing">
+        <select className="select" value={edit.salesOrderId || ""} onChange={e => setEdit({ ...edit, salesOrderId: e.target.value })}>
+          <option value="">— none —</option>
+          {openSOs.map(s => <option key={s.id} value={s.id}>{s.number} — {nameOf(db, s.customerId)}</option>)}
+          {edit.salesOrderId && !openSOs.some(s => s.id === edit.salesOrderId) && <option value={edit.salesOrderId}>{db.salesOrders.find(s => s.id === edit.salesOrderId)?.number || "(job)"}</option>}
+        </select></Field>
       <Field label="Notes"><textarea className="input" value={edit.notes} onChange={e => setEdit({ ...edit, notes: e.target.value })} /></Field>
     </Modal>}
   </div>;

@@ -21,11 +21,14 @@ export default function TimeTrackingView({ db, actions, toast, readOnly, session
   const valid = soId && lines.some(l => (Number(l.hours) || 0) > 0 && l.categoryId);
   const save = async () => {
     setSaving(true);
-    const entries = lines.filter(l => (Number(l.hours) || 0) > 0 && l.categoryId).map(l => ({
-      id: uid(), salesOrderId: soId, categoryId: l.categoryId, date: l.date,
-      hours: Number(l.hours) || 0, rate: cats.find(c => c.id === l.categoryId)?.rate || 0,
-      description: l.description, userEmail: session.user.email,
-    }));
+    const entries = lines.filter(l => (Number(l.hours) || 0) > 0 && l.categoryId).map(l => {
+      const cat = cats.find(c => c.id === l.categoryId);
+      return {
+        id: uid(), salesOrderId: soId, categoryId: l.categoryId, date: l.date,
+        hours: Number(l.hours) || 0, rate: cat?.rate || 0, cost: cat?.costRate || 0,
+        description: l.description, userEmail: session.user.email,
+      };
+    });
     const ok = await actions.saveTimeEntries(entries);
     setSaving(false);
     if (ok) { setLines([blankLine()]); toast(`Logged ${entries.length} time line${entries.length > 1 ? "s" : ""}`); }

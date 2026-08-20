@@ -29,6 +29,7 @@ export const AREAS = [
 export const NAV_AREA = {
   dashboard: null,
   reports: "reports",
+  jobCosting: "reports",
   proposals: "proposals",
   machineRates: "proposals",
   quotes: "quotes",

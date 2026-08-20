@@ -11,7 +11,8 @@ import { Modal, Field, Badge } from "./ui.jsx";
 export default function InvoiceFromSOModal({ so, db, onClose, onGenerate, onlyReady }) {
   const [sel, setSel] = useState(() => Object.fromEntries((so.lineItems || []).map(li =>
     [li.id, !li.invoiced && (onlyReady ? !!li.ready : true)])));
-  const jobTime = (db.timeEntries || []).filter(t => t.salesOrderId === so.id && !t.invoiceId);
+  const jobTime = (db.timeEntries || []).filter(t => t.salesOrderId === so.id && !t.invoiceId && t.approved);
+  const pendingTime = (db.timeEntries || []).filter(t => t.salesOrderId === so.id && !t.invoiceId && !t.approved).length;
   const [selTime, setSelTime] = useState(() => Object.fromEntries(jobTime.map(t => [t.id, true])));
   const [date, setDate] = useState(todayISO());
   const [number, setNumber] = useState(AUTO_NUMBER);
@@ -73,9 +74,10 @@ export default function InvoiceFromSOModal({ so, db, onClose, onGenerate, onlyRe
       })}</tbody></table>
     {billable.length === 0 && <p className="subtle" style={{ margin: "8px 0 0" }}>Every line on this order has already been invoiced.</p>}
 
+    {pendingTime > 0 && <p className="subtle" style={{ margin: "10px 0 0" }}>{pendingTime} time {pendingTime === 1 ? "entry is" : "entries are"} awaiting approval and can't be billed yet.</p>}
     {jobTime.length > 0 && <>
       <div className="divider"></div>
-      <div className="subtle" style={{ fontWeight: 600, marginBottom: 6 }}>Unbilled time on this job</div>
+      <div className="subtle" style={{ fontWeight: 600, marginBottom: 6 }}>Unbilled time on this job (approved)</div>
       <table><thead><tr><th style={{ width: 34 }}></th><th>Date</th><th>Category</th><th>Description</th><th className="num">Hours</th><th className="num">Rate</th><th className="num">Amount</th></tr></thead>
         <tbody>{jobTime.map(t => <tr key={t.id} style={selTime[t.id] ? {} : { opacity: 0.6 }}>
           <td><input type="checkbox" checked={!!selTime[t.id]} onChange={e => setSelTime(p => ({ ...p, [t.id]: e.target.checked }))} /></td>

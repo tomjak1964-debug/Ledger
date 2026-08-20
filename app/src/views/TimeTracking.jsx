@@ -6,7 +6,7 @@ import { Ico, ICONS, Empty, Field, Badge } from "../components/ui.jsx";
 // hours, description), and save. The category's flat rate is snapshotted onto
 // each line so later rate changes don't rewrite history. Entries can later be
 // billed onto an invoice from the job.
-export default function TimeTrackingView({ db, actions, toast, readOnly, session }) {
+export default function TimeTrackingView({ db, actions, toast, readOnly, session, isAdmin }) {
   const jobs = db.salesOrders.filter(s => s.status === "open");
   const cats = (db.timeCategories || []).filter(c => c.active);
   const [soId, setSoId] = useState(jobs[0]?.id || "");
@@ -69,6 +69,25 @@ export default function TimeTrackingView({ db, actions, toast, readOnly, session
       </div>
     </div>}
 
+    {isAdmin && (() => {
+      const pending = (db.timeEntries || []).filter(t => !t.invoiceId && !t.approved);
+      return <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-head"><h3>Time Awaiting Approval</h3>{pending.length > 0 && <span className="count" style={{ marginLeft: 8 }}>{pending.length}</span>}</div>
+        {pending.length === 0
+          ? <div className="card-body"><p className="subtle" style={{ margin: 0 }}>Nothing pending — all logged time is approved.</p></div>
+          : <table><thead><tr><th>Date</th><th>Who</th><th>Job</th><th>Category</th><th className="num">Hours</th><th className="num">Amount</th><th></th></tr></thead>
+            <tbody>{pending.map(t => <tr key={t.id}>
+              <td className="subtle">{fmtDate(t.date)}</td>
+              <td className="subtle">{t.userEmail}</td>
+              <td className="doc-id">{jobNo(t.salesOrderId)}</td>
+              <td>{catName(t.categoryId)}</td>
+              <td className="num mono">{t.hours}</td>
+              <td className="num mono">{money((Number(t.hours) || 0) * (Number(t.rate) || 0))}</td>
+              <td style={{ textAlign: "right" }}><button className="btn sm primary" onClick={async () => { if (await actions.setTimeApproval(t.id, true)) toast("Approved"); }}>Approve</button></td>
+            </tr>)}</tbody></table>}
+      </div>;
+    })()}
+
     <div className="card">
       <div className="card-head"><h3>My Recent Time</h3></div>
       {mine.length === 0
@@ -81,7 +100,7 @@ export default function TimeTrackingView({ db, actions, toast, readOnly, session
             <td className="subtle">{t.description || "—"}</td>
             <td className="num mono">{t.hours}</td>
             <td className="num mono">{money((Number(t.hours) || 0) * (Number(t.rate) || 0))}</td>
-            <td>{t.invoiceId ? <Badge status="invoiced" /> : <span className="subtle">unbilled</span>}</td>
+            <td>{t.invoiceId ? <Badge status="invoiced" /> : t.approved ? <span style={{ color: "var(--pos)", fontWeight: 600 }}>approved</span> : <span style={{ color: "var(--warn)", fontWeight: 600 }}>pending</span>}</td>
             <td style={{ textAlign: "right" }}>{!readOnly && !t.invoiceId &&
               <button className="btn ghost icon" title="Delete" onClick={async () => { if (confirm("Delete this time entry?") && await actions.deleteTimeEntry(t.id)) toast("Deleted"); }}><Ico d={ICONS.trash} size={14} /></button>}</td>
           </tr>)}</tbody></table>}

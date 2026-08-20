@@ -41,8 +41,8 @@ export const taskToRow = t => ({ id: t.id, type: t.type || "create_invoice", sta
 /* ---- time tracking ---- */
 export const timeCategoryFromRow = r => ({ id: r.id, name: r.name, rate: num(r.rate), costRate: num(r.cost_rate), active: r.active !== false, sort: num(r.sort) });
 export const timeCategoryToRow = c => ({ id: c.id, name: c.name ?? "", rate: num(c.rate), cost_rate: num(c.costRate), active: c.active !== false, sort: num(c.sort) });
-export const timeEntryFromRow = r => ({ id: r.id, userEmail: r.user_email || "", salesOrderId: r.sales_order_id || "", categoryId: r.category_id || "", date: r.date || "", hours: num(r.hours), rate: num(r.rate), cost: num(r.cost), description: r.description || "", invoiceId: r.invoice_id || "" });
-export const timeEntryToRow = e => ({ id: e.id, user_email: e.userEmail ?? "", sales_order_id: idOrNull(e.salesOrderId), category_id: idOrNull(e.categoryId), date: dateOrNull(e.date), hours: num(e.hours), rate: num(e.rate), cost: num(e.cost), description: e.description ?? "", invoice_id: idOrNull(e.invoiceId) });
+export const timeEntryFromRow = r => ({ id: r.id, userEmail: r.user_email || "", salesOrderId: r.sales_order_id || "", categoryId: r.category_id || "", date: r.date || "", hours: num(r.hours), rate: num(r.rate), cost: num(r.cost), description: r.description || "", invoiceId: r.invoice_id || "", approved: !!r.approved, approvedBy: r.approved_by || "" });
+export const timeEntryToRow = e => ({ id: e.id, user_email: e.userEmail ?? "", sales_order_id: idOrNull(e.salesOrderId), category_id: idOrNull(e.categoryId), date: dateOrNull(e.date), hours: num(e.hours), rate: num(e.rate), cost: num(e.cost), description: e.description ?? "", invoice_id: idOrNull(e.invoiceId), approved: !!e.approved, approved_by: e.approvedBy ?? "" });
 
 /* ---- payments ---- */
 export const paymentToRow = (p, parentType, parentId) => ({ id: p.id, parent_type: parentType, parent_id: parentId, amount: num(p.amount), date: dateOrNull(p.date), method: p.method ?? "", ref: p.ref ?? "" });

@@ -424,6 +424,15 @@ export function useLedger(session, onError) {
         return true;
       } catch (e) { return fail(e); }
     },
+    // Approve (or un-approve) logged time. Only approved time can be billed.
+    async setTimeApproval(id, approved) {
+      try {
+        const by = approved ? session.user.email : "";
+        th(await supabase.from("time_entries").update({ approved, approved_by: by }).eq("id", id));
+        setDb(d => ({ ...d, timeEntries: d.timeEntries.map(e => e.id === id ? { ...e, approved, approvedBy: by } : e) }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
 
     /* ---- attachments (files in Storage + metadata row) ---- */
     async uploadAttachment(parentType, parentId, file) {

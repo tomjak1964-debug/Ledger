@@ -4,10 +4,13 @@ import { lineTotals, balance, invoiceStatus, agingBuckets, round2 } from "../cal
 import { Ico, ICONS, Badge, Empty } from "../components/ui.jsx";
 import PaymentModal from "../components/PaymentModal.jsx";
 import ReceiptModal from "../components/ReceiptModal.jsx";
+import EmailModal from "../components/EmailModal.jsx";
+import { invoicePdf } from "../lib/invoicePdf.js";
 
 export default function ReceivablesView({ db, actions, toast, openDoc, readOnly }) {
   const [pay, setPay] = useState(null);
   const [receipt, setReceipt] = useState(false);
+  const [remind, setRemind] = useState(null);
   // Every invoice with a non-zero balance: positive balances are owed to us,
   // negative balances are open credits waiting to be applied.
   const open = db.invoices.filter(i => Math.abs(balance(i)) > 0.005);
@@ -54,6 +57,7 @@ export default function ReceivablesView({ db, actions, toast, openDoc, readOnly 
               <td className="num" style={{ fontWeight: 600, color: balance(inv) < 0 ? "var(--accent)" : undefined }}>{money(balance(inv))}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                 {!readOnly && !credit && <button className="btn sm primary" onClick={() => setPay(inv)}>Record Payment</button>}
+                {!readOnly && !credit && od > 0 && <button className="btn ghost icon" title="Email payment reminder" onClick={() => setRemind(inv)}><Ico d={ICONS.mail} size={16} /></button>}
                 <button className="btn ghost icon" title="Print" onClick={() => openDoc("invoice", inv)}><Ico d={ICONS.print} size={16} /></button>
               </td>
             </tr>;
@@ -65,6 +69,13 @@ export default function ReceivablesView({ db, actions, toast, openDoc, readOnly 
         if (ok) toast("Receipt recorded");
         return ok;
       }} />}
+    {remind && <EmailModal
+      title={"Payment Reminder · " + remind.number}
+      defaultTo={db.contactPeople.find(p => p.id === remind.contactPersonId)?.email || db.contacts.find(c => c.id === remind.customerId)?.email || ""}
+      defaultSubject={`Payment reminder — invoice ${remind.number} (${db.settings.company})`}
+      defaultBody={`Hello,\n\nA friendly reminder that invoice ${remind.number} for ${money(balance(remind))} was due ${fmtDate(remind.dueDate)} and is now ${daysBetween(remind.dueDate, todayISO())} days past due.\n\nPlease remit at your earliest convenience. If payment is already on the way, thank you and please disregard.\n\n${db.settings.company}\n${db.settings.companyPhone || ""}`}
+      buildAttachment={() => invoicePdf(remind, db)}
+      onClose={() => setRemind(null)} toast={toast} />}
     {pay && <PaymentModal doc={pay} onClose={() => setPay(null)}
       onSave={async (p) => {
         if (await actions.recordPayment("invoice", pay.id, p)) { setPay(null); toast("Payment recorded"); }

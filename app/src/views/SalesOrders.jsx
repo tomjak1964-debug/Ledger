@@ -72,6 +72,7 @@ export default function SalesOrdersView({ db, actions, toast, openDoc, readOnly 
                   : orphaned
                     ? !readOnly && <button className="btn sm" title="Prior invoice was deleted" onClick={() => reopen(so)}><Ico d={ICONS.refresh} size={14} />Reopen</button>
                     : <span className="subtle">Invoiced ✓</span>)}
+                {!readOnly && <button className="btn ghost icon" onClick={() => setEdit({ ...so, lineItems: (so.lineItems || []).map(li => ({ ...li })) })} title="View / edit"><Ico d={ICONS.edit} size={15} /></button>}
                 {!readOnly && <button className="btn ghost icon" onClick={() => setEdit(blankSO(so))} title="Copy to a new sales order"><Ico d={ICONS.copy} size={15} /></button>}
                 {!readOnly && <button className="btn ghost icon" onClick={() => del(so.id)} title="Delete"><Ico d={ICONS.trash} size={15} /></button>}
               </td>
@@ -109,6 +110,10 @@ function SalesOrderEditor({ so, customers, catalog, onCancel, onSave }) {
         <Field label="Order Date"><input className="input" type="date" value={o.date} onChange={e => set("date", e.target.value)} /></Field>
       </div>
       <div className="divider"></div>
+      {!o._new && (o.lineItems || []).some(li => li.invoiced) &&
+        <p className="subtle" style={{ margin: "0 0 10px", color: "var(--warn)" }}>
+          Some line items are already invoiced — editing them here won't change invoices that were already issued.
+        </p>}
       <LineItemsEditor items={o.lineItems} setItems={v => set("lineItems", v)} taxRate={o.taxRate} setTaxRate={v => set("taxRate", v)} catalog={catalog} />
     </div></div>
   </div>;

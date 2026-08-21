@@ -7,9 +7,11 @@ export function defaultSettings() {
     company: "", companyAddress: "", companyEmail: "", companyPhone: "",
     taxRate: 6,
     terms: 30,
-    quotePrefix: "QUO", soPrefix: "SO", invPrefix: "INV", billPrefix: "BILL",
+    quotePrefix: "QUO", soPrefix: "SO", invPrefix: "INV", billPrefix: "BILL", poPrefix: "PO",
     quoteNotes: "Quote valid for 30 days. Lead times confirmed at PO. Prices exclude freight unless noted.",
     invoiceNotes: "Payment due within terms. Make checks payable to the company above. Thank you for your business.",
+    // Automated backup config (run by the scheduled-backup edge function).
+    backup: { enabled: false, email: false, recipient: "", storage: true },
   };
 }
 

@@ -14,7 +14,7 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
     ["company", "Company"],
     ["data", "Data"],
     ["checks", "Check Printing"],
-    ...(isAdmin ? [["users", "Users & Access"], ["time", "Time Categories"]] : []),
+    ...(isAdmin ? [["users", "Users & Access"], ["time", "Time Categories"], ["backups", "Backups"]] : []),
     ["activity", "Activity"],
     ["account", "Account"],
   ];
@@ -131,6 +131,7 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
 
     {tab === "users" && isAdmin && <UsersCard db={db} actions={actions} toast={toast} session={session} />}
     {tab === "time" && isAdmin && <TimeCategoriesCard db={db} actions={actions} toast={toast} />}
+    {tab === "backups" && isAdmin && <BackupsCard s={s} set={set} saveAll={saveAll} actions={actions} toast={toast} readOnly={readOnly} />}
 
     {tab === "activity" && <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-head"><h3>Activity — Deletions</h3></div>
@@ -180,6 +181,41 @@ function ChangePassword({ toast }) {
     </div>
     {err && <p className="subtle" style={{ margin: "0 0 8px", color: "var(--neg)" }}>{err}</p>}
     <button className="btn primary" disabled={busy || !pw || !!err || pw !== confirm} onClick={save}>{busy ? "Saving…" : "Update Password"}</button>
+  </div>;
+}
+
+// Automated backup settings + on-demand backup. Config lives in settings.backup.
+function BackupsCard({ s, set, saveAll, actions, toast, readOnly }) {
+  const b = s.backup || { enabled: false, email: false, recipient: "", storage: true };
+  const [busy, setBusy] = useState(false);
+  const setB = (patch) => set("backup", { ...b, ...patch });
+  const bool = (v) => v ? "1" : "0";
+  const runNow = async () => {
+    setBusy(true);
+    const res = await actions.runBackupNow();
+    setBusy(false);
+    if (res && res.results) {
+      const r = res.results[0] || {};
+      if (r.skipped) toast("Backups aren't enabled yet — turn them on and save first.");
+      else toast(`Backup done${r.stored ? " · saved" : ""}${r.emailed ? " · emailed" : ""}`);
+    }
+  };
+  return <div className="card" style={{ marginBottom: 16 }}>
+    <div className="card-head"><h3>Automated Backups</h3></div>
+    <div className="card-body">
+      <p className="subtle" style={{ marginTop: 0 }}>A full JSON snapshot of your books, emailed and/or saved to private storage. Choose either or both. Runs on the schedule you set in Supabase; use “Back up now” to test.</p>
+      <div className="row">
+        <Field label="Automated backups"><select className="select" value={bool(b.enabled)} onChange={e => setB({ enabled: e.target.value === "1" })}><option value="0">Off</option><option value="1">On</option></select></Field>
+        <Field label="Save to storage" hint="Private “backups” bucket"><select className="select" value={bool(b.storage)} onChange={e => setB({ storage: e.target.value === "1" })}><option value="0">Off</option><option value="1">On</option></select></Field>
+        <Field label="Email backup"><select className="select" value={bool(b.email)} onChange={e => setB({ email: e.target.value === "1" })}><option value="0">Off</option><option value="1">On</option></select></Field>
+      </div>
+      {b.email && <Field label="Email to"><input className="input" value={b.recipient || ""} onChange={e => setB({ recipient: e.target.value })} placeholder="you@example.com" /></Field>}
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <button className="btn primary" disabled={readOnly} onClick={saveAll}><Ico d={ICONS.check} size={15} />Save Settings</button>
+        <button className="btn" disabled={busy || readOnly} onClick={runNow}>{busy ? "Backing up…" : "Back up now"}</button>
+      </div>
+      <p className="subtle" style={{ margin: "10px 0 0" }}>Requires the <span className="mono">scheduled-backup</span> edge function deployed. For the recurring schedule, add a Cron job in Supabase that calls it with the <span className="mono">x-cron-secret</span> header.</p>
+    </div>
   </div>;
 }
 

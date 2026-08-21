@@ -741,6 +741,20 @@ export function useLedger(session, onError) {
       } catch (e) { return fail(e); }
     },
 
+    // Run the backup edge function immediately for this org (per its settings).
+    async runBackupNow() {
+      try {
+        const { data, error } = await supabase.functions.invoke("scheduled-backup");
+        if (error) {
+          let msg = error.message;
+          try { const body = await error.context.json(); if (body?.error) msg = body.error; } catch { /* keep generic */ }
+          throw new Error(msg);
+        }
+        if (data && data.ok === false) throw new Error(data.error);
+        return data;
+      } catch (e) { return fail(e); }
+    },
+
     /* ---- team / users (admin only; enforced by RLS + the edge function) ---- */
     // Create a login for a teammate with an initial password (feature 6). The
     // service-role edge function makes the auth user and the membership row.

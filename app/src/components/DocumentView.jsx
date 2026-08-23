@@ -1,8 +1,12 @@
+import { useEffect } from "react";
 import { money, fmtDate } from "../lib/helpers.js";
 import { lineTotals, paid, balance } from "../calc/ledger.js";
 import { Ico, ICONS } from "./ui.jsx";
 
 export default function DocumentView({ kind, doc, contact, settings, onClose }) {
+  // While a document overlay is open, flag the body so print hides the app
+  // content behind it (otherwise the list page prints along with the document).
+  useEffect(() => { document.body.classList.add("doc-open"); return () => document.body.classList.remove("doc-open"); }, []);
   if (kind === "invoice") return <InvoiceDoc inv={doc} contact={contact} settings={settings} onClose={onClose} />;
   const t = lineTotals(doc.lineItems, doc.taxRate);
   const isQuote = kind === "quote";

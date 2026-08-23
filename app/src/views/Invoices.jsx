@@ -19,9 +19,9 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
   const customers = db.contacts.filter(c => c.type === "customer");
   const openSOs = db.salesOrders.filter(s => s.status === "open");
   const del = async (id) => { if (!confirm("Delete this invoice?")) return; if (await actions.deleteInvoice(id)) toast("Deleted"); };
-  const generateFromSO = async (so, ids, opts) => {
+  const generateFromSO = async (so, ids, opts, print) => {
     const inv = await actions.generateInvoice(so, ids, opts);
-    if (inv) { toast("Invoice " + inv.number + " generated"); openDoc("invoice", inv); }
+    if (inv) { toast("Invoice " + inv.number + " generated"); if (print) openDoc("invoice", inv); }
     return inv;
   };
 
@@ -91,7 +91,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
         })}
     </Modal>}
     {invoiceSO && <InvoiceFromSOModal so={invoiceSO} db={db} onClose={() => setInvoiceSO(null)}
-      onGenerate={(ids, opts) => generateFromSO(invoiceSO, ids, opts)} />}
+      onGenerate={(ids, opts, print) => generateFromSO(invoiceSO, ids, opts, print)} />}
     {email && <EmailModal
       title={"Email · " + email.number}
       defaultTo={db.contactPeople.find(p => p.id === email.contactPersonId)?.email || db.contacts.find(c => c.id === email.customerId)?.email || ""}

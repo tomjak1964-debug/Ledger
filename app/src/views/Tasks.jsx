@@ -11,9 +11,9 @@ export default function TasksView({ db, actions, toast, openDoc, readOnly }) {
   const [invoiceSO, setInvoiceSO] = useState(null);
   const openTasks = (db.tasks || []).filter(t => t.status === "open");
 
-  const generate = async (so, ids, opts) => {
+  const generate = async (so, ids, opts, print) => {
     const inv = await actions.generateInvoice(so, ids, opts);
-    if (inv) { toast("Invoice " + inv.number + " generated"); openDoc("invoice", inv); }
+    if (inv) { toast("Invoice " + inv.number + " generated"); if (print) openDoc("invoice", inv); }
     return inv;
   };
   const dismiss = async (t) => { if (confirm("Dismiss this task?") && await actions.setTaskStatus(t.id, "dismissed")) toast("Task dismissed"); };
@@ -41,6 +41,6 @@ export default function TasksView({ db, actions, toast, openDoc, readOnly }) {
           })}</tbody></table>}
     </div>
     {invoiceSO && <InvoiceFromSOModal so={invoiceSO} db={db} onlyReady onClose={() => setInvoiceSO(null)}
-      onGenerate={(ids, opts) => generate(invoiceSO, ids, opts)} />}
+      onGenerate={(ids, opts, print) => generate(invoiceSO, ids, opts, print)} />}
   </div>;
 }

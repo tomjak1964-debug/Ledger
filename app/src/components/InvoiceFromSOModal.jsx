@@ -27,12 +27,13 @@ export default function InvoiceFromSOModal({ so, db, onClose, onGenerate, onlyRe
   const subtotal = subLines + subTime;
   const tax = subtotal * (Number(so.taxRate) || 0) / 100;
 
-  const submit = async () => {
+  const submit = async (print) => {
     setSaving(true);
-    const inv = await onGenerate(chosen.map(li => li.id), { number, date, timeEntryIds: chosenTime.map(t => t.id) });
+    const inv = await onGenerate(chosen.map(li => li.id), { number, date, timeEntryIds: chosenTime.map(t => t.id) }, print);
     setSaving(false);
     if (inv) onClose();
   };
+  const nothing = chosen.length === 0 && chosenTime.length === 0;
 
   return <Modal wide title={"Invoice from " + so.number} onClose={onClose}
     foot={<>
@@ -40,9 +41,10 @@ export default function InvoiceFromSOModal({ so, db, onClose, onGenerate, onlyRe
         {(chosen.length || chosenTime.length) ? `${money(subtotal + tax)} on this invoice` : "Select what to invoice"}
       </div>
       <button className="btn" onClick={onClose}>Cancel</button>
-      <button className="btn primary" disabled={saving || (chosen.length === 0 && chosenTime.length === 0)} onClick={submit}>
-        {saving ? "Generating…" : "Generate & Print"}
+      <button className="btn" disabled={saving || nothing} onClick={() => submit(false)} title="Create the invoice without opening print">
+        {saving ? "Saving…" : "Generate"}
       </button>
+      <button className="btn primary" disabled={saving || nothing} onClick={() => submit(true)}>Generate &amp; Print</button>
     </>}>
     <div className="row">
       <Field label="Customer"><input className="input" value={nameOf(db, so.customerId)} disabled /></Field>

@@ -258,6 +258,8 @@ table.doc-items td.mono{font-family:"IBM Plex Mono"}
   @page{margin:16mm}
   /* printing app pages (reports, statements): hide the chrome */
   .sidebar,.topbar,.toolbar.no-print,.no-print{display:none!important}
+  /* when a printable document overlay is open, hide the app content behind it */
+  body.doc-open .main{display:none!important}
   .app{display:block}
   .content{padding:0;max-width:none}
   .card{box-shadow:none;break-inside:avoid}

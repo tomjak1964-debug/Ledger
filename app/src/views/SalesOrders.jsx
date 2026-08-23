@@ -21,9 +21,9 @@ export default function SalesOrdersView({ db, actions, toast, openDoc, readOnly 
     if (!confirm(`Reopen ${so.number} for invoicing? Its prior invoice no longer exists.`)) return;
     if (await actions.reopenSO(so.id)) toast(so.number + " reopened");
   };
-  const generate = async (so, ids, opts) => {
+  const generate = async (so, ids, opts, print) => {
     const inv = await actions.generateInvoice(so, ids, opts);
-    if (inv) { toast("Invoice " + inv.number + " generated"); openDoc("invoice", inv); }
+    if (inv) { toast("Invoice " + inv.number + " generated"); if (print) openDoc("invoice", inv); }
     return inv;
   };
   const save = async (so) => {
@@ -85,7 +85,7 @@ export default function SalesOrdersView({ db, actions, toast, openDoc, readOnly 
           })}</tbody></table>}
     </div>
     {invoiceSO && <InvoiceFromSOModal so={invoiceSO} db={db} onClose={() => setInvoiceSO(null)}
-      onGenerate={(ids, opts) => generate(invoiceSO, ids, opts)} />}
+      onGenerate={(ids, opts, print) => generate(invoiceSO, ids, opts, print)} />}
   </div>;
 }
 

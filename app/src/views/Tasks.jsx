@@ -41,6 +41,7 @@ export default function TasksView({ db, actions, toast, openDoc, readOnly }) {
           })}</tbody></table>}
     </div>
     {invoiceSO && <InvoiceFromSOModal so={invoiceSO} db={db} onlyReady onClose={() => setInvoiceSO(null)}
-      onGenerate={(ids, opts, print) => generate(invoiceSO, ids, opts, print)} />}
+      onGenerate={(ids, opts, print) => generate(invoiceSO, ids, opts, print)}
+      onCloseLine={async (lineId, closed) => { if (await actions.setLineClosed(invoiceSO.id, lineId, closed)) toast(closed ? "Line closed" : "Line reopened"); }} />}
   </div>;
 }

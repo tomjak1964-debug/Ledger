@@ -25,8 +25,8 @@ export const lineItemFromRow = r => ({ id: r.id, desc: r.description, qty: num(r
 // shared line-item shape. quote/invoice line tables have no such columns, so
 // these mappers stay SO-only.
 export const soLineItemsToRows = (items, parentId) =>
-  (items || []).map((it, i) => ({ id: it.id, sales_order_id: parentId, description: it.desc ?? "", qty: num(it.qty), unit: it.unit ?? "", unit_price: num(it.unitPrice), sort: i, invoiced: !!it.invoiced, invoice_id: idOrNull(it.invoiceId), ready: !!it.ready }));
-export const soLineItemFromRow = r => ({ ...lineItemFromRow(r), invoiced: !!r.invoiced, invoiceId: r.invoice_id || "", ready: !!r.ready });
+  (items || []).map((it, i) => ({ id: it.id, sales_order_id: parentId, description: it.desc ?? "", qty: num(it.qty), unit: it.unit ?? "", unit_price: num(it.unitPrice), sort: i, invoiced: !!it.invoiced, invoice_id: idOrNull(it.invoiceId), ready: !!it.ready, closed: !!it.closed }));
+export const soLineItemFromRow = r => ({ ...lineItemFromRow(r), invoiced: !!r.invoiced, invoiceId: r.invoice_id || "", ready: !!r.ready, closed: !!r.closed });
 
 /* ---- audit log (deletion tracking) ---- */
 export const auditFromRow = r => ({ id: r.id, userEmail: r.user_email || "", action: r.action, entityType: r.entity_type, entityNumber: r.entity_number || "", detail: r.detail || "", createdAt: r.created_at });
@@ -78,13 +78,13 @@ export const invoiceToRow = i => ({
   id: i.id, number: i.number, sales_order_id: idOrNull(i.salesOrderId), quote_id: idOrNull(i.quoteId),
   customer_id: idOrNull(i.customerId), po_number: i.poNumber ?? "", date: dateOrNull(i.date),
   due_date: dateOrNull(i.dueDate), tax_rate: num(i.taxRate), notes: i.notes ?? "",
-  proposal_id: idOrNull(i.proposalId), contact_person_id: idOrNull(i.contactPersonId),
+  proposal_id: idOrNull(i.proposalId), contact_person_id: idOrNull(i.contactPersonId), printed: !!i.printed,
 });
 export const invoiceFromRow = (r, items, payments) => ({
   id: r.id, number: r.number, salesOrderId: r.sales_order_id || "", quoteId: r.quote_id || "",
   customerId: r.customer_id || "", poNumber: r.po_number, date: r.date || "", dueDate: r.due_date || "",
   taxRate: num(r.tax_rate), notes: r.notes || "", proposalId: r.proposal_id || "",
-  contactPersonId: r.contact_person_id || "", lineItems: items || [], payments: payments || [],
+  contactPersonId: r.contact_person_id || "", printed: !!r.printed, lineItems: items || [], payments: payments || [],
 });
 
 /* ---- contact people ---- */

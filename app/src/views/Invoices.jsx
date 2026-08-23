@@ -16,6 +16,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
   const [email, setEmail] = useState(null);
   const [pickSO, setPickSO] = useState(false);   // choose an SO to invoice from
   const [invoiceSO, setInvoiceSO] = useState(null);
+  const [unprintedOnly, setUnprintedOnly] = useState(false);
   const customers = db.contacts.filter(c => c.type === "customer");
   const openSOs = db.salesOrders.filter(s => s.status === "open");
   const del = async (id) => { if (!confirm("Delete this invoice?")) return; if (await actions.deleteInvoice(id)) toast("Deleted"); };
@@ -42,26 +43,34 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
 
   if (edit) return <InvoiceEditor invoice={edit} customers={customers} catalog={db.catalog} onCancel={() => setEdit(null)} onSave={save} db={db} actions={actions} toast={toast} readOnly={readOnly} />;
 
+  const unprintedCount = db.invoices.filter(i => !i.printed).length;
+  const rows = db.invoices.slice().reverse().filter(i => !unprintedOnly || !i.printed);
+
   return <div>
-    {!readOnly && <div className="toolbar">
-      <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setPickSO(true)} disabled={openSOs.length === 0}
-        title={openSOs.length === 0 ? "No open sales orders" : "Bill selected lines from a sales order"}>
-        <Ico d={ICONS.so} size={15} />Invoice from Sales Order</button>
-      <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Invoice</button>
-    </div>}
+    <div className="toolbar">
+      <button className={"btn" + (unprintedOnly ? " primary" : "")} onClick={() => setUnprintedOnly(v => !v)}
+        title="Invoices you haven't printed yet">
+        <Ico d={ICONS.print} size={14} />{unprintedOnly ? "Showing unprinted" : `Unprinted${unprintedCount ? " · " + unprintedCount : ""}`}</button>
+      {!readOnly && <>
+        <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setPickSO(true)} disabled={openSOs.length === 0}
+          title={openSOs.length === 0 ? "No open sales orders" : "Bill selected lines from a sales order"}>
+          <Ico d={ICONS.so} size={15} />Invoice from Sales Order</button>
+        <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Invoice</button>
+      </>}
+    </div>
     <div className="card">
       {db.invoices.length === 0
         ? <Empty icon={ICONS.inv} title="No invoices" msg="Generate an invoice from a sales order, or create a standalone one for service and T&M work. Record payments to update its status."
           action={<button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Invoice</button>} />
         : <table><thead><tr><th>Invoice</th><th>Customer</th><th>Date</th><th>Due</th><th>Status</th><th className="num">Total</th><th className="num">Balance</th><th></th></tr></thead>
-          <tbody>{db.invoices.slice().reverse().map(inv => {
+          <tbody>{rows.map(inv => {
             const st = invoiceStatus(inv);
             return <tr key={inv.id}>
               <td className="doc-id">{inv.number}</td>
               <td>{nameOf(db, inv.customerId)}</td>
               <td className="subtle">{fmtDate(inv.date)}</td>
               <td className="subtle">{fmtDate(inv.dueDate)}</td>
-              <td><Badge status={st} /></td>
+              <td><Badge status={st} />{!inv.printed && <span className="badge amber" style={{ marginLeft: 6 }} title="Not printed yet"><span className="dot"></span>Unprinted</span>}</td>
               <td className="num">{money(lineTotals(inv.lineItems, inv.taxRate).total)}</td>
               <td className="num" style={{ fontWeight: 600 }}>{money(balance(inv))}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
@@ -91,7 +100,8 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
         })}
     </Modal>}
     {invoiceSO && <InvoiceFromSOModal so={invoiceSO} db={db} onClose={() => setInvoiceSO(null)}
-      onGenerate={(ids, opts, print) => generateFromSO(invoiceSO, ids, opts, print)} />}
+      onGenerate={(ids, opts, print) => generateFromSO(invoiceSO, ids, opts, print)}
+      onCloseLine={async (lineId, closed) => { if (await actions.setLineClosed(invoiceSO.id, lineId, closed)) toast(closed ? "Line closed" : "Line reopened"); }} />}
     {email && <EmailModal
       title={"Email · " + email.number}
       defaultTo={db.contactPeople.find(p => p.id === email.contactPersonId)?.email || db.contacts.find(c => c.id === email.customerId)?.email || ""}

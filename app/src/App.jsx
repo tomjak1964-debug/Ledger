@@ -181,7 +181,9 @@ export default function App({ session }) {
     </div>
 
     {doc && <DocumentView kind={doc.kind} doc={doc.doc}
-      contact={db.contacts.find(c => c.id === (doc.doc.customerId || doc.doc.vendorId))} settings={db.settings} onClose={() => setDoc(null)} />}
+      contact={db.contacts.find(c => c.id === (doc.doc.customerId || doc.doc.vendorId))} settings={db.settings}
+      onPrinted={doc.kind === "invoice" ? () => actions.markInvoicePrinted(doc.doc.id) : undefined}
+      onClose={() => setDoc(null)} />}
     {toastMsg && <div className="toast"><Ico d={ICONS.check} size={16} />{toastMsg.text}
       {toastMsg.onAction && <button className="link-btn" style={{ color: "#7FB0FF", marginLeft: 10, fontWeight: 600 }}
         onClick={() => { toastMsg.onAction(); setToastMsg(null); }}>{toastMsg.actionLabel || "Undo"}</button>}

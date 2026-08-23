@@ -56,7 +56,7 @@ export default function SalesOrdersView({ db, actions, toast, openDoc, readOnly 
             const q = db.quotes.find(x => x.id === so.quoteId);
             const lines = so.lineItems || [];
             const billed = lines.filter(li => li.invoiced);
-            const openLines = lines.filter(li => !li.invoiced);
+            const openLines = lines.filter(li => !li.invoiced && !li.closed);
             const remaining = lineTotals(openLines, so.taxRate).total;
             const total = lineTotals(lines, so.taxRate).total;
             const invoiceExists = db.invoices.some(i => i.salesOrderId === so.id);
@@ -85,7 +85,8 @@ export default function SalesOrdersView({ db, actions, toast, openDoc, readOnly 
           })}</tbody></table>}
     </div>
     {invoiceSO && <InvoiceFromSOModal so={invoiceSO} db={db} onClose={() => setInvoiceSO(null)}
-      onGenerate={(ids, opts, print) => generate(invoiceSO, ids, opts, print)} />}
+      onGenerate={(ids, opts, print) => generate(invoiceSO, ids, opts, print)}
+      onCloseLine={async (lineId, closed) => { if (await actions.setLineClosed(invoiceSO.id, lineId, closed)) toast(closed ? "Line closed" : "Line reopened"); }} />}
   </div>;
 }
 

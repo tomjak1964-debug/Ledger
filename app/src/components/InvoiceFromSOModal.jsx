@@ -8,9 +8,11 @@ import { Modal, Field, Badge } from "./ui.jsx";
 // lines show greyed. When onlyReady is set (invoicing from a task), only the
 // ready-and-un-invoiced lines are pre-checked. PO comes from the SO. The invoice
 // number defaults to auto — type over it to override.
-export default function InvoiceFromSOModal({ so, db, onClose, onGenerate, onlyReady }) {
-  const [sel, setSel] = useState(() => Object.fromEntries((so.lineItems || []).map(li =>
-    [li.id, !li.invoiced && (onlyReady ? !!li.ready : true)])));
+export default function InvoiceFromSOModal({ so, db, onClose, onGenerate, onlyReady, onCloseLine }) {
+  // Read lines live from the store so closing a line updates the modal.
+  const lines = (db.salesOrders.find(s => s.id === so.id)?.lineItems) || so.lineItems || [];
+  const [sel, setSel] = useState(() => Object.fromEntries(lines.map(li =>
+    [li.id, !li.invoiced && !li.closed && (onlyReady ? !!li.ready : true)])));
   const jobTime = (db.timeEntries || []).filter(t => t.salesOrderId === so.id && !t.invoiceId && t.approved);
   const pendingTime = (db.timeEntries || []).filter(t => t.salesOrderId === so.id && !t.invoiceId && !t.approved).length;
   const [selTime, setSelTime] = useState(() => Object.fromEntries(jobTime.map(t => [t.id, true])));
@@ -19,8 +21,8 @@ export default function InvoiceFromSOModal({ so, db, onClose, onGenerate, onlyRe
   const [saving, setSaving] = useState(false);
   const catName = id => (db.timeCategories || []).find(c => c.id === id)?.name || "Labor";
 
-  const billable = (so.lineItems || []).filter(li => !li.invoiced);
-  const chosen = (so.lineItems || []).filter(li => !li.invoiced && sel[li.id]);
+  const billable = lines.filter(li => !li.invoiced && !li.closed);
+  const chosen = lines.filter(li => !li.invoiced && !li.closed && sel[li.id]);
   const chosenTime = jobTime.filter(t => selTime[t.id]);
   const subLines = chosen.reduce((s, li) => s + (Number(li.qty) || 0) * (Number(li.unitPrice) || 0), 0);
   const subTime = chosenTime.reduce((s, t) => s + (Number(t.hours) || 0) * (Number(t.rate) || 0), 0);
@@ -59,19 +61,23 @@ export default function InvoiceFromSOModal({ so, db, onClose, onGenerate, onlyRe
       <th style={{ width: 34 }}></th><th>Description</th><th className="num">Qty</th><th>Unit</th>
       <th className="num">Price</th><th className="num">Amount</th><th></th>
     </tr></thead>
-      <tbody>{(so.lineItems || []).map(li => {
+      <tbody>{lines.map(li => {
         const amt = (Number(li.qty) || 0) * (Number(li.unitPrice) || 0);
-        const done = li.invoiced;
-        return <tr key={li.id} style={done ? { opacity: 0.5 } : (sel[li.id] ? {} : { opacity: 0.6 })}>
-          <td>{done
-            ? <span title="Already invoiced">✓</span>
-            : <input type="checkbox" checked={!!sel[li.id]} onChange={e => setSel(p => ({ ...p, [li.id]: e.target.checked }))} />}</td>
+        const done = li.invoiced, closed = li.closed;
+        const inactive = done || closed;
+        return <tr key={li.id} style={inactive ? { opacity: 0.5 } : (sel[li.id] ? {} : { opacity: 0.6 })}>
+          <td>{done ? <span title="Already invoiced">✓</span>
+            : closed ? <span title="Closed">—</span>
+              : <input type="checkbox" checked={!!sel[li.id]} onChange={e => setSel(p => ({ ...p, [li.id]: e.target.checked }))} />}</td>
           <td>{li.desc}</td>
           <td className="num mono">{li.qty}</td>
           <td className="subtle">{li.unit}</td>
           <td className="num mono">{money(li.unitPrice)}</td>
           <td className="num mono">{money(amt)}</td>
-          <td>{done ? <Badge status="invoiced" /> : li.ready ? <Badge status="fulfilled" /> : null}</td>
+          <td style={{ whiteSpace: "nowrap" }}>
+            {done ? <Badge status="invoiced" /> : closed ? <Badge status="closed" /> : li.ready ? <Badge status="fulfilled" /> : null}
+            {!done && onCloseLine && <button className="btn ghost sm" style={{ marginLeft: 6 }} onClick={() => onCloseLine(li.id, !closed)}>{closed ? "Reopen" : "Close"}</button>}
+          </td>
         </tr>;
       })}</tbody></table>
     {billable.length === 0 && <p className="subtle" style={{ margin: "8px 0 0" }}>Every line on this order has already been invoiced.</p>}

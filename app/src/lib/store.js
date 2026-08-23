@@ -308,7 +308,7 @@ export function useLedger(session, onError) {
         const timeBilledIds = timeToBill.map(te => te.id);
         if (timeBilledIds.length)
           th(await supabase.from("time_entries").update({ invoice_id: inv.id }).in("id", timeBilledIds));
-        const fullyBilled = (so.lineItems || []).length > 0 && (so.lineItems || []).every(li => li.invoiced || billedIds.includes(li.id));
+        const fullyBilled = (so.lineItems || []).length > 0 && (so.lineItems || []).every(li => li.invoiced || li.closed || billedIds.includes(li.id));
         if (fullyBilled)
           th(await supabase.from("sales_orders").update({ status: "invoiced", invoice_id: inv.id }).eq("id", so.id));
         setDb(d => ({
@@ -380,6 +380,32 @@ export function useLedger(session, onError) {
         setDb(d => ({ ...d, salesOrders: d.salesOrders.map(s => s.id === soId
           ? { ...s, lineItems: (s.lineItems || []).map(li => li.id === lineId ? { ...li, ready } : li) } : s) }));
         await reconcileJobTask(soId);
+        return true;
+      } catch (e) { return fail(e); }
+    },
+    // Close an SO line you won't bill (cancelled scope). It clears from "to
+    // invoice"; the SO reads complete once every line is invoiced or closed.
+    async setLineClosed(soId, lineId, closed) {
+      try {
+        const patch = closed ? { closed: true, ready: false } : { closed: false };
+        th(await supabase.from("sales_order_line_items").update(patch).eq("id", lineId));
+        setDb(d => ({ ...d, salesOrders: d.salesOrders.map(s => s.id === soId
+          ? { ...s, lineItems: (s.lineItems || []).map(li => li.id === lineId ? { ...li, ...patch } : li) } : s) }));
+        const so = dbRef.current.salesOrders.find(s => s.id === soId);
+        const lines = so?.lineItems || [];
+        const newStatus = (lines.length > 0 && lines.every(li => li.invoiced || li.closed)) ? "invoiced" : "open";
+        if (so && so.status !== newStatus) {
+          th(await supabase.from("sales_orders").update({ status: newStatus }).eq("id", soId));
+          setDb(d => ({ ...d, salesOrders: d.salesOrders.map(s => s.id === soId ? { ...s, status: newStatus } : s) }));
+        }
+        await reconcileJobTask(soId);
+        return true;
+      } catch (e) { return fail(e); }
+    },
+    async markInvoicePrinted(id) {
+      try {
+        th(await supabase.from("invoices").update({ printed: true }).eq("id", id));
+        setDb(d => ({ ...d, invoices: d.invoices.map(i => i.id === id ? { ...i, printed: true } : i) }));
         return true;
       } catch (e) { return fail(e); }
     },

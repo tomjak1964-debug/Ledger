@@ -3,11 +3,12 @@ import { money, fmtDate } from "../lib/helpers.js";
 import { lineTotals, paid, balance } from "../calc/ledger.js";
 import { Ico, ICONS } from "./ui.jsx";
 
-export default function DocumentView({ kind, doc, contact, settings, onClose }) {
+export default function DocumentView({ kind, doc, contact, settings, onClose, onPrinted }) {
   // While a document overlay is open, flag the body so print hides the app
   // content behind it (otherwise the list page prints along with the document).
   useEffect(() => { document.body.classList.add("doc-open"); return () => document.body.classList.remove("doc-open"); }, []);
-  if (kind === "invoice") return <InvoiceDoc inv={doc} contact={contact} settings={settings} onClose={onClose} />;
+  const print = () => { onPrinted?.(); window.print(); };
+  if (kind === "invoice") return <InvoiceDoc inv={doc} contact={contact} settings={settings} onClose={onClose} print={print} />;
   const t = lineTotals(doc.lineItems, doc.taxRate);
   const isQuote = kind === "quote";
   const isPO = kind === "po";
@@ -15,7 +16,7 @@ export default function DocumentView({ kind, doc, contact, settings, onClose }) 
   return <div className="doc-screen">
     <div className="doc-bar">
       <button className="btn" onClick={onClose}><Ico d={ICONS.back} size={16} />Close</button>
-      <button className="btn primary" onClick={() => window.print()}><Ico d={ICONS.print} size={16} />Print / Save PDF</button>
+      <button className="btn primary" onClick={print}><Ico d={ICONS.print} size={16} />Print / Save PDF</button>
     </div>
     <div className="printable">
       <div className="doc-top">
@@ -66,7 +67,7 @@ export default function DocumentView({ kind, doc, contact, settings, onClose }) 
 
 // Sage-style invoice layout, matching Examples/Invoice Example.pdf.
 // qty-0 lines are unbilled-phase reference lines: unit price, no amount.
-function InvoiceDoc({ inv, contact, settings, onClose }) {
+function InvoiceDoc({ inv, contact, settings, onClose, print }) {
   const t = lineTotals(inv.lineItems, inv.taxRate);
   const p = paid(inv);
   const addr = [contact?.name, ...(contact?.address || "").split("\n")].filter(Boolean).join("\n");
@@ -74,7 +75,7 @@ function InvoiceDoc({ inv, contact, settings, onClose }) {
   return <div className="doc-screen">
     <div className="doc-bar">
       <button className="btn" onClick={onClose}><Ico d={ICONS.back} size={16} />Close</button>
-      <button className="btn primary" onClick={() => window.print()}><Ico d={ICONS.print} size={16} />Print / Save PDF</button>
+      <button className="btn primary" onClick={print}><Ico d={ICONS.print} size={16} />Print / Save PDF</button>
     </div>
     <div className="printable inv-doc">
       <div className="inv-top">

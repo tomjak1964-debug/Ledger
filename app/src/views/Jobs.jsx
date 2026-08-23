@@ -41,15 +41,15 @@ export default function JobsView({ db, actions, toast, readOnly }) {
               </tr>
               {isOpen && <tr><td colSpan={6} style={{ background: "var(--canvas)" }}>
                 <table><thead><tr><th style={{ width: 90 }}>Ready</th><th>Description</th><th className="num">Qty</th><th>Status</th></tr></thead>
-                  <tbody>{lines.map(li => <tr key={li.id}>
-                    <td><label style={{ display: "flex", alignItems: "center", gap: 6, cursor: li.invoiced || readOnly ? "default" : "pointer" }}>
-                      <input type="checkbox" checked={!!li.ready} disabled={li.invoiced || readOnly}
+                  <tbody>{lines.map(li => <tr key={li.id} style={li.closed ? { opacity: 0.55 } : {}}>
+                    <td><label style={{ display: "flex", alignItems: "center", gap: 6, cursor: li.invoiced || li.closed || readOnly ? "default" : "pointer" }}>
+                      <input type="checkbox" checked={!!li.ready} disabled={li.invoiced || li.closed || readOnly}
                         onChange={e => toggleReady(so, li, e.target.checked)} />
                       {li.ready ? "Ready" : ""}
                     </label></td>
                     <td>{li.desc}</td>
                     <td className="num mono">{li.qty} {li.unit}</td>
-                    <td>{li.invoiced ? <Badge status="invoiced" /> : li.ready ? <Badge status="fulfilled" /> : <span className="subtle">in progress</span>}</td>
+                    <td>{li.invoiced ? <Badge status="invoiced" /> : li.closed ? <Badge status="closed" /> : li.ready ? <Badge status="fulfilled" /> : <span className="subtle">in progress</span>}</td>
                   </tr>)}</tbody></table>
               </td></tr>}
             </Fragment>;

@@ -12,7 +12,7 @@ export default function ContactsView({ db, actions, toast, readOnly }) {
     const rec = db.contacts.find(c => c.id === id);
     if (await actions.deleteContact(id)) toast("Deleted " + (rec?.name || "contact"), { actionLabel: "Undo", onAction: async () => { if (await actions.restoreRecord("contact", rec)) toast((rec.name || "Contact") + " restored"); } });
   };
-  const startNew = () => setEdit({ id: uid(), type: tab, name: "", contact: "", email: "", phone: "", address: "", code: "" });
+  const startNew = () => setEdit({ id: uid(), type: tab, name: "", contact: "", email: "", phone: "", address: "", code: "", lat: "", lng: "" });
   return <div>
     <div className="toolbar">
       <div className="pill-tabs">
@@ -50,6 +50,14 @@ export default function ContactsView({ db, actions, toast, readOnly }) {
         <Field label="Phone"><input className="input" value={edit.phone} onChange={e => setEdit({ ...edit, phone: e.target.value })} /></Field>
       </div>
       <Field label="Address"><textarea className="input" value={edit.address} onChange={e => setEdit({ ...edit, address: e.target.value })} /></Field>
+      {edit.type === "customer" && <Field label="Site Location" hint="Used by the Field app to sort jobs by distance">
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          <input className="input mono" style={{ maxWidth: 130 }} placeholder="latitude" value={edit.lat ?? ""} onChange={e => setEdit({ ...edit, lat: e.target.value })} />
+          <input className="input mono" style={{ maxWidth: 130 }} placeholder="longitude" value={edit.lng ?? ""} onChange={e => setEdit({ ...edit, lng: e.target.value })} />
+          <button className="btn" type="button" onClick={() => navigator.geolocation
+            ? navigator.geolocation.getCurrentPosition(p => setEdit(x => ({ ...x, lat: p.coords.latitude.toFixed(6), lng: p.coords.longitude.toFixed(6) })), () => toast("⚠ Couldn't get location"))
+            : toast("⚠ Location not available")}>Use current location</button>
+        </div></Field>}
       {db.contacts.some(c => c.id === edit.id)
         ? <PeopleEditor contactId={edit.id} db={db} actions={actions} toast={toast} />
         : <p className="subtle">Save this {edit.type} first, then re-open it to add contact people.</p>}

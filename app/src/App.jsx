@@ -17,6 +17,7 @@ import JobsView from "./views/Jobs.jsx";
 import JobCostingView from "./views/JobCosting.jsx";
 import TasksView from "./views/Tasks.jsx";
 import TimeTrackingView from "./views/TimeTracking.jsx";
+import FieldView from "./views/Field.jsx";
 import InvoicesView from "./views/Invoices.jsx";
 import ReceivablesView from "./views/Receivables.jsx";
 import PurchaseOrdersView from "./views/PurchaseOrders.jsx";
@@ -47,6 +48,7 @@ const NAV = [
   },
   {
     group: "Work", items: [
+      { k: "field", label: "Field", icon: ICONS.job },
       { k: "timeTracking", label: "Time Tracking", icon: ICONS.clock },
     ]
   },
@@ -71,6 +73,7 @@ const TITLES = {
   salesOrders: ["Sales Orders", "Confirmed orders awaiting invoicing"], invoices: ["Invoices", "Issued invoices and payments"],
   jobs: ["Jobs", "Track progress and mark items ready to invoice"], tasks: ["Tasks", "Work waiting on you"],
   timeTracking: ["Time Tracking", "Log hours against a job"],
+  field: ["Field", "Nearby jobs · log time, expenses, and progress"],
   receivables: ["Receivables", "What customers owe you, by age"], payables: ["Payables", "Vendor bills you owe"],
   purchaseOrders: ["Purchase Orders", "Orders you issue to vendors for parts"],
   expenses: ["Expenses", "Business spend by category"], contacts: ["Contacts", "Customers and vendors"],
@@ -169,6 +172,7 @@ export default function App({ session }) {
         {activeView === "jobs" && <JobsView {...props} />}
         {activeView === "tasks" && <TasksView {...props} />}
         {activeView === "timeTracking" && <TimeTrackingView {...props} />}
+        {activeView === "field" && <FieldView {...props} />}
         {activeView === "invoices" && <InvoicesView {...props} />}
         {activeView === "receivables" && <ReceivablesView {...props} />}
         {activeView === "purchaseOrders" && <PurchaseOrdersView {...props} />}

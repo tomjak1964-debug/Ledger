@@ -279,6 +279,26 @@ table.doc-items td.mono{font-family:"IBM Plex Mono"}
 }
 .menu-btn{display:none}
 @media(max-width:900px){.menu-btn{display:inline-flex}}
+
+/* ---------- phones: stack forms, full-width modals, bigger touch targets ---------- */
+@media (max-width:640px){
+  .content{padding:14px}
+  .topbar{flex-wrap:wrap;row-gap:8px}
+  .topbar h1{font-size:20px}
+  .topbar-actions{margin-left:auto}
+  .search{min-width:0}
+  .row>.field{min-width:100%}          /* one field per line */
+  .overlay{padding:10px}
+  .modal{max-width:none}
+  .modal.wide{max-width:none}
+  .grid[style*="repeat(4"],.grid[style*="repeat(2"]{grid-template-columns:1fr!important}
+  .pipeline{grid-template-columns:1fr}
+  .aging{grid-template-columns:1fr 1fr}
+  .btn{padding:9px 13px}               /* easier to tap */
+  .btn.sm{padding:7px 10px}
+  input.input,select.select,textarea.input{font-size:16px}  /* avoid iOS zoom-on-focus */
+  table{font-size:13px}
+}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 

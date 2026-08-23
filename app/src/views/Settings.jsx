@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { uid, money, todayISO, fmtDate } from "../lib/helpers.js";
 import { Ico, ICONS, Field, PasswordInput } from "../components/ui.jsx";
 import { AREAS, isAdminRole } from "../lib/permissions.js";
@@ -188,8 +188,13 @@ function ChangePassword({ toast }) {
 function BackupsCard({ s, set, saveAll, actions, toast, readOnly }) {
   const b = s.backup || { enabled: false, email: false, recipient: "", storage: true };
   const [busy, setBusy] = useState(false);
+  const [files, setFiles] = useState(null);
   const setB = (patch) => set("backup", { ...b, ...patch });
   const bool = (v) => v ? "1" : "0";
+  const loadFiles = async () => { const list = await actions.listBackups(); if (list) setFiles(list); };
+  useEffect(() => { loadFiles(); }, []);
+  const download = async (path) => { const url = await actions.backupUrl(path); if (url) window.open(url, "_blank"); };
+  const size = n => n < 1024 ? n + " B" : n < 1048576 ? Math.round(n / 1024) + " KB" : (n / 1048576).toFixed(1) + " MB";
   const runNow = async () => {
     setBusy(true);
     const res = await actions.runBackupNow();
@@ -198,6 +203,7 @@ function BackupsCard({ s, set, saveAll, actions, toast, readOnly }) {
       const r = res.results[0] || {};
       if (r.skipped) toast("Backups aren't enabled yet — turn them on and save first.");
       else toast(`Backup done${r.stored ? " · saved" : ""}${r.emailed ? " · emailed" : ""}`);
+      loadFiles();
     }
   };
   return <div className="card" style={{ marginBottom: 16 }}>
@@ -214,7 +220,19 @@ function BackupsCard({ s, set, saveAll, actions, toast, readOnly }) {
         <button className="btn primary" disabled={readOnly} onClick={saveAll}><Ico d={ICONS.check} size={15} />Save Settings</button>
         <button className="btn" disabled={busy || readOnly} onClick={runNow}>{busy ? "Backing up…" : "Back up now"}</button>
       </div>
-      <p className="subtle" style={{ margin: "10px 0 0" }}>Requires the <span className="mono">scheduled-backup</span> edge function deployed. For the recurring schedule, add a Cron job in Supabase that calls it with the <span className="mono">x-cron-secret</span> header.</p>
+      <div className="divider"></div>
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+        <span className="subtle" style={{ fontWeight: 700 }}>Recent backups</span>
+        <button className="btn ghost sm" style={{ marginLeft: "auto" }} onClick={loadFiles}><Ico d={ICONS.refresh} size={13} />Refresh</button>
+      </div>
+      {files === null ? <p className="subtle" style={{ margin: 0 }}>Loading…</p>
+        : files.length === 0 ? <p className="subtle" style={{ margin: 0 }}>No stored backups yet. Turn on “Save to storage” and run one.</p>
+          : files.map(f => <div key={f.path} className="cat-row">
+            <button className="link-btn" style={{ color: "var(--accent)", fontWeight: 600 }} onClick={() => download(f.path)}>{f.name}</button>
+            <span className="subtle">{size(f.size)}</span>
+            <span className="subtle" style={{ marginLeft: "auto" }}>{f.updatedAt ? fmtDate(f.updatedAt.slice(0, 10)) : ""}</span>
+          </div>)}
+      <p className="subtle" style={{ margin: "10px 0 0" }}>Requires the <span className="mono">scheduled-backup</span> edge function. For the recurring schedule, a Supabase Cron job calls it with the <span className="mono">x-cron-secret</span> header.</p>
     </div>
   </div>;
 }

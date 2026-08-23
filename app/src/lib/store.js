@@ -780,6 +780,23 @@ export function useLedger(session, onError) {
         return data;
       } catch (e) { return fail(e); }
     },
+    // List stored backup files for this org (newest first).
+    async listBackups() {
+      try {
+        const orgId = dbRef.current.org.id;
+        const { data, error } = await supabase.storage.from("backups").list(orgId, { limit: 100, sortBy: { column: "name", order: "desc" } });
+        if (error) throw error;
+        return (data || []).filter(f => f.name.endsWith(".json")).map(f => ({ name: f.name, path: `${orgId}/${f.name}`, size: f.metadata?.size || 0, updatedAt: f.updated_at || f.created_at || "" }));
+      } catch (e) { return fail(e); }
+    },
+    // Short-lived signed URL to download a stored backup file.
+    async backupUrl(path) {
+      try {
+        const { data, error } = await supabase.storage.from("backups").createSignedUrl(path, 300);
+        if (error) throw error;
+        return data.signedUrl;
+      } catch (e) { return fail(e); }
+    },
 
     /* ---- team / users (admin only; enforced by RLS + the edge function) ---- */
     // Create a login for a teammate with an initial password (feature 6). The

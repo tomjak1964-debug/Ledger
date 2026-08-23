@@ -45,3 +45,8 @@ Keys and Passwords/
 # Business data exports for migration - never commit
 Sage Export/
 Examples/
+
+# Capacitor: generated web assets copied by `cap sync` (regenerate, don't commit)
+app/android/app/src/main/assets/public/
+app/android/app/src/main/assets/capacitor.config.json
+app/android/app/src/main/res/xml/config.xml

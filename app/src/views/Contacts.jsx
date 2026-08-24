@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { uid, cls } from "../lib/helpers.js";
-import { Ico, ICONS, Empty, Modal, Field } from "../components/ui.jsx";
+import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort } from "../components/ui.jsx";
 
 export default function ContactsView({ db, actions, toast, readOnly }) {
   const [tab, setTab] = useState("customer");
@@ -13,6 +13,9 @@ export default function ContactsView({ db, actions, toast, readOnly }) {
     if (await actions.deleteContact(id)) toast("Deleted " + (rec?.name || "contact"), { actionLabel: "Undo", onAction: async () => { if (await actions.restoreRecord("contact", rec)) toast((rec.name || "Contact") + " restored"); } });
   };
   const startNew = () => setEdit({ id: uid(), type: tab, name: "", contact: "", email: "", phone: "", address: "", code: "", lat: "", lng: "" });
+  const { sorted: contactRows, sort, onSort } = useTableSort(list, {
+    name: c => c.name, contact: c => c.contact || "", email: c => c.email || "", phone: c => c.phone || "",
+  }, { key: "name", dir: "asc" });
   return <div>
     <div className="toolbar">
       <div className="pill-tabs">
@@ -25,8 +28,12 @@ export default function ContactsView({ db, actions, toast, readOnly }) {
       {list.length === 0
         ? <Empty icon={ICONS.contacts} title={"No " + tab + "s yet"} msg={"Add " + (tab === "customer" ? "the companies you quote and invoice." : "vendors and subs you buy from.")}
           action={!readOnly && <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New {tab === "customer" ? "Customer" : "Vendor"}</button>} />
-        : <table><thead><tr><th>Name</th><th>Contact</th><th>Email</th><th>Phone</th><th></th></tr></thead>
-          <tbody>{list.map(c => (
+        : <table><thead><tr>
+          <SortTh label="Name" col="name" sort={sort} onSort={onSort} />
+          <SortTh label="Contact" col="contact" sort={sort} onSort={onSort} />
+          <SortTh label="Email" col="email" sort={sort} onSort={onSort} />
+          <SortTh label="Phone" col="phone" sort={sort} onSort={onSort} /><th></th></tr></thead>
+          <tbody>{contactRows.map(c => (
             <tr key={c.id}>
               <td style={{ fontWeight: 600 }}>{c.name}</td><td className="subtle">{c.contact || "—"}</td>
               <td className="subtle">{c.email || "—"}</td><td className="mono subtle">{c.phone || "—"}</td>

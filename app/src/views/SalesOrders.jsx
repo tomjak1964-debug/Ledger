@@ -2,7 +2,7 @@ import { useState } from "react";
 import { uid, money, fmtDate, todayISO, nameOf } from "../lib/helpers.js";
 import { lineTotals } from "../calc/ledger.js";
 import { AUTO_NUMBER } from "../lib/store.js";
-import { Ico, ICONS, Badge, Empty, Field } from "../components/ui.jsx";
+import { Ico, ICONS, Badge, Empty, Field, SortTh, useTableSort } from "../components/ui.jsx";
 import LineItemsEditor from "../components/LineItemsEditor.jsx";
 import Attachments from "../components/Attachments.jsx";
 import InvoiceFromSOModal from "../components/InvoiceFromSOModal.jsx";
@@ -17,6 +17,11 @@ export default function SalesOrdersView({ db, actions, toast, openDoc, readOnly 
     const rec = db.salesOrders.find(s => s.id === id);
     if (await actions.deleteSO(id)) toast("Deleted " + (rec?.number || ""), { actionLabel: "Undo", onAction: async () => { if (await actions.restoreRecord("sales_order", rec)) toast(rec.number + " restored"); } });
   };
+  const { sorted: soRows, sort, onSort } = useTableSort(db.salesOrders.slice().reverse(), {
+    number: s => s.number, customer: s => nameOf(db, s.customerId), po: s => s.poNumber || "",
+    quote: s => db.quotes.find(q => q.id === s.quoteId)?.number || "", date: s => s.date, status: s => s.status,
+    total: s => lineTotals(s.lineItems, s.taxRate).total,
+  });
   const reopen = async (so) => {
     if (!confirm(`Reopen ${so.number} for invoicing? Its prior invoice no longer exists.`)) return;
     if (await actions.reopenSO(so.id)) toast(so.number + " reopened");
@@ -51,8 +56,15 @@ export default function SalesOrdersView({ db, actions, toast, openDoc, readOnly 
       {db.salesOrders.length === 0
         ? <Empty icon={ICONS.so} title="No sales orders" msg="Create one directly, or convert an accepted quote / won proposal. From an SO you pick which line items to invoice, so you can bill in phases."
           action={!readOnly && <button className="btn primary" onClick={() => setEdit(blankSO())}><Ico d={ICONS.plus} size={15} />New Sales Order</button>} />
-        : <table><thead><tr><th>Order</th><th>Customer</th><th>PO #</th><th>From Quote</th><th>Date</th><th>Status</th><th className="num">Total</th><th></th></tr></thead>
-          <tbody>{db.salesOrders.slice().reverse().map(so => {
+        : <table><thead><tr>
+          <SortTh label="Order" col="number" sort={sort} onSort={onSort} />
+          <SortTh label="Customer" col="customer" sort={sort} onSort={onSort} />
+          <SortTh label="PO #" col="po" sort={sort} onSort={onSort} />
+          <SortTh label="From Quote" col="quote" sort={sort} onSort={onSort} />
+          <SortTh label="Date" col="date" sort={sort} onSort={onSort} />
+          <SortTh label="Status" col="status" sort={sort} onSort={onSort} />
+          <SortTh label="Total" col="total" sort={sort} onSort={onSort} num /><th></th></tr></thead>
+          <tbody>{soRows.map(so => {
             const q = db.quotes.find(x => x.id === so.quoteId);
             const lines = so.lineItems || [];
             const billed = lines.filter(li => li.invoiced);

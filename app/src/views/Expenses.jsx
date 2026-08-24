@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { uid, money, fmtDate, todayISO, sum, EXPENSE_CATS } from "../lib/helpers.js";
-import { Ico, ICONS, Empty, Modal, Field } from "../components/ui.jsx";
+import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort } from "../components/ui.jsx";
 import Attachments from "../components/Attachments.jsx";
 
 export default function ExpensesView({ db, actions, toast, readOnly }) {
@@ -18,6 +18,9 @@ export default function ExpensesView({ db, actions, toast, readOnly }) {
   db.expenses.forEach(e => { byCat[e.category] = (byCat[e.category] || 0) + (Number(e.amount) || 0); });
   const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
   const total = sum(db.expenses, e => Number(e.amount) || 0);
+  const { sorted: expRows, sort, onSort } = useTableSort(db.expenses, {
+    date: e => e.date, category: e => e.category, vendor: e => e.vendor || "", method: e => e.method || "", notes: e => e.notes || "", amount: e => Number(e.amount) || 0,
+  }, { key: "date", dir: "desc" });
   return <div>
     {cats.length > 0 && <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-head"><h3>By Category</h3><span className="mono" style={{ marginLeft: "auto", fontWeight: 600 }}>{money(total)} total</span></div>
@@ -32,8 +35,14 @@ export default function ExpensesView({ db, actions, toast, readOnly }) {
       {db.expenses.length === 0
         ? <Empty icon={ICONS.exp} title="No expenses" msg="Log business spend by category — materials, subs, tools, travel. Totals roll up above and into the dashboard."
           action={!readOnly && <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Expense</button>} />
-        : <table><thead><tr><th>Date</th><th>Category</th><th>Vendor / Payee</th><th>Method</th><th>Notes</th><th className="num">Amount</th><th></th></tr></thead>
-          <tbody>{db.expenses.slice().sort((a, b) => b.date.localeCompare(a.date)).map(e => (
+        : <table><thead><tr>
+          <SortTh label="Date" col="date" sort={sort} onSort={onSort} />
+          <SortTh label="Category" col="category" sort={sort} onSort={onSort} />
+          <SortTh label="Vendor / Payee" col="vendor" sort={sort} onSort={onSort} />
+          <SortTh label="Method" col="method" sort={sort} onSort={onSort} />
+          <SortTh label="Notes" col="notes" sort={sort} onSort={onSort} />
+          <SortTh label="Amount" col="amount" sort={sort} onSort={onSort} num /><th></th></tr></thead>
+          <tbody>{expRows.map(e => (
             <tr key={e.id}>
               <td className="subtle">{fmtDate(e.date)}</td><td>{e.category}</td><td>{e.vendor || "—"}</td>
               <td className="subtle">{e.method}</td><td className="subtle" style={{ maxWidth: 220 }}>{e.notes || "—"}</td>

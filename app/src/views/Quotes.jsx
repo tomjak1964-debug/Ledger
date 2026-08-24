@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { uid, money, fmtDate, todayISO, addDays, nameOf } from "../lib/helpers.js";
 import { lineTotals } from "../calc/ledger.js";
-import { Ico, ICONS, Badge, Empty, Field, MenuItem } from "../components/ui.jsx";
+import { Ico, ICONS, Badge, Empty, Field, MenuItem, SortTh, useTableSort } from "../components/ui.jsx";
 import LineItemsEditor from "../components/LineItemsEditor.jsx";
 
 export default function QuotesView({ db, actions, toast, openDoc, readOnly }) {
@@ -11,6 +11,10 @@ export default function QuotesView({ db, actions, toast, openDoc, readOnly }) {
   const filtered = db.quotes.filter(q => {
     const s = search.toLowerCase(); if (!s) return true;
     return q.number.toLowerCase().includes(s) || nameOf(db, q.customerId).toLowerCase().includes(s) || (q.status || "").includes(s);
+  });
+  const { sorted: qRows, sort, onSort } = useTableSort(filtered.slice().reverse(), {
+    number: q => q.number, customer: q => nameOf(db, q.customerId), date: q => q.date,
+    expiry: q => q.expiryDate, status: q => q.status, total: q => lineTotals(q.lineItems, q.taxRate).total,
   });
 
   const startNew = () => {
@@ -51,8 +55,14 @@ export default function QuotesView({ db, actions, toast, openDoc, readOnly }) {
       {db.quotes.length === 0
         ? <Empty icon={ICONS.quote} title="No quotes yet" msg="Build a quote with the dynamic line-item form. Accepted quotes convert straight into sales orders."
           action={!readOnly && <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Quote</button>} />
-        : <table><thead><tr><th>Quote</th><th>Customer</th><th>Date</th><th>Valid Until</th><th>Status</th><th className="num">Total</th><th></th></tr></thead>
-          <tbody>{filtered.slice().reverse().map(q => {
+        : <table><thead><tr>
+          <SortTh label="Quote" col="number" sort={sort} onSort={onSort} />
+          <SortTh label="Customer" col="customer" sort={sort} onSort={onSort} />
+          <SortTh label="Date" col="date" sort={sort} onSort={onSort} />
+          <SortTh label="Valid Until" col="expiry" sort={sort} onSort={onSort} />
+          <SortTh label="Status" col="status" sort={sort} onSort={onSort} />
+          <SortTh label="Total" col="total" sort={sort} onSort={onSort} num /><th></th></tr></thead>
+          <tbody>{qRows.map(q => {
             const t = lineTotals(q.lineItems, q.taxRate).total;
             return <tr key={q.id}>
               <td className="doc-id">{q.number}</td>

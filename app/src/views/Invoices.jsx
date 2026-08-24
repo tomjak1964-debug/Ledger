@@ -2,7 +2,7 @@ import { useState } from "react";
 import { uid, money, fmtDate, todayISO, addDays, nameOf } from "../lib/helpers.js";
 import { lineTotals, balance, invoiceStatus } from "../calc/ledger.js";
 import { AUTO_NUMBER } from "../lib/store.js";
-import { Ico, ICONS, Badge, Empty, Field, Modal } from "../components/ui.jsx";
+import { Ico, ICONS, Badge, Empty, Field, Modal, SortTh, useTableSort } from "../components/ui.jsx";
 import PaymentModal from "../components/PaymentModal.jsx";
 import LineItemsEditor from "../components/LineItemsEditor.jsx";
 import EmailModal from "../components/EmailModal.jsx";
@@ -44,7 +44,11 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
   if (edit) return <InvoiceEditor invoice={edit} customers={customers} catalog={db.catalog} onCancel={() => setEdit(null)} onSave={save} db={db} actions={actions} toast={toast} readOnly={readOnly} />;
 
   const unprintedCount = db.invoices.filter(i => !i.printed).length;
-  const rows = db.invoices.slice().reverse().filter(i => !unprintedOnly || !i.printed);
+  const base = db.invoices.slice().reverse().filter(i => !unprintedOnly || !i.printed);
+  const { sorted: rows, sort, onSort } = useTableSort(base, {
+    number: i => i.number, customer: i => nameOf(db, i.customerId), date: i => i.date, due: i => i.dueDate,
+    status: i => invoiceStatus(i), total: i => lineTotals(i.lineItems, i.taxRate).total, balance: i => balance(i),
+  });
 
   return <div>
     <div className="toolbar">
@@ -62,7 +66,14 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
       {db.invoices.length === 0
         ? <Empty icon={ICONS.inv} title="No invoices" msg="Generate an invoice from a sales order, or create a standalone one for service and T&M work. Record payments to update its status."
           action={<button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Invoice</button>} />
-        : <table><thead><tr><th>Invoice</th><th>Customer</th><th>Date</th><th>Due</th><th>Status</th><th className="num">Total</th><th className="num">Balance</th><th></th></tr></thead>
+        : <table><thead><tr>
+          <SortTh label="Invoice" col="number" sort={sort} onSort={onSort} />
+          <SortTh label="Customer" col="customer" sort={sort} onSort={onSort} />
+          <SortTh label="Date" col="date" sort={sort} onSort={onSort} />
+          <SortTh label="Due" col="due" sort={sort} onSort={onSort} />
+          <SortTh label="Status" col="status" sort={sort} onSort={onSort} />
+          <SortTh label="Total" col="total" sort={sort} onSort={onSort} num />
+          <SortTh label="Balance" col="balance" sort={sort} onSort={onSort} num /><th></th></tr></thead>
           <tbody>{rows.map(inv => {
             const st = invoiceStatus(inv);
             return <tr key={inv.id}>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { uid, money, fmtDate, todayISO, nameOf } from "../lib/helpers.js";
 import { lineTotals } from "../calc/ledger.js";
-import { Ico, ICONS, Badge, Empty, Field } from "../components/ui.jsx";
+import { Ico, ICONS, Badge, Empty, Field, SortTh, useTableSort } from "../components/ui.jsx";
 import LineItemsEditor from "../components/LineItemsEditor.jsx";
 
 export default function PurchaseOrdersView({ db, actions, toast, openDoc, readOnly }) {
@@ -24,6 +24,11 @@ export default function PurchaseOrdersView({ db, actions, toast, openDoc, readOn
       : [{ id: uid(), desc: "", qty: 1, unit: "", unitPrice: 0 }],
   });
 
+  const { sorted: poRows, sort, onSort } = useTableSort(db.purchaseOrders.slice().reverse(), {
+    number: p => p.number, vendor: p => nameOf(db, p.vendorId), job: p => db.salesOrders.find(s => s.id === p.salesOrderId)?.number || "",
+    date: p => p.date, status: p => p.status, total: p => lineTotals(p.lineItems, p.taxRate).total,
+  });
+
   if (edit) return <POEditor po={edit} vendors={vendors} openSOs={openSOs} db={db} catalog={db.catalog} onCancel={() => setEdit(null)} onSave={save} />;
 
   return <div>
@@ -34,8 +39,14 @@ export default function PurchaseOrdersView({ db, actions, toast, openDoc, readOn
       {db.purchaseOrders.length === 0
         ? <Empty icon={ICONS.ap} title="No purchase orders" msg="Issue POs to your vendors for parts and materials. Tie a PO to a job to feed job costing, then turn it into a bill when the invoice arrives."
           action={!readOnly && <button className="btn primary" onClick={() => setEdit(blankPO())}><Ico d={ICONS.plus} size={15} />New Purchase Order</button>} />
-        : <table><thead><tr><th>PO</th><th>Vendor</th><th>Job</th><th>Date</th><th>Status</th><th className="num">Total</th><th></th></tr></thead>
-          <tbody>{db.purchaseOrders.slice().reverse().map(po => {
+        : <table><thead><tr>
+          <SortTh label="PO" col="number" sort={sort} onSort={onSort} />
+          <SortTh label="Vendor" col="vendor" sort={sort} onSort={onSort} />
+          <SortTh label="Job" col="job" sort={sort} onSort={onSort} />
+          <SortTh label="Date" col="date" sort={sort} onSort={onSort} />
+          <SortTh label="Status" col="status" sort={sort} onSort={onSort} />
+          <SortTh label="Total" col="total" sort={sort} onSort={onSort} num /><th></th></tr></thead>
+          <tbody>{poRows.map(po => {
             const billed = db.bills.some(b => b.purchaseOrderId === po.id);
             const job = po.salesOrderId && db.salesOrders.find(s => s.id === po.salesOrderId);
             return <tr key={po.id}>

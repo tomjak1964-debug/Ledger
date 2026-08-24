@@ -1,6 +1,33 @@
 // UI primitives, ported verbatim from ledger.html.
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { cls } from "../lib/helpers.js";
+
+// Click-to-sort table support. `accessors` maps a column key to a value getter;
+// returns the sorted rows plus a header click handler. Use <SortTh> for headers.
+export function useTableSort(rows, accessors, initial) {
+  const [sort, setSort] = useState(initial || { key: null, dir: "asc" });
+  const onSort = (key) => setSort(s => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" });
+  const sorted = useMemo(() => {
+    const acc = accessors[sort.key];
+    if (!acc) return rows;
+    const d = sort.dir === "desc" ? -1 : 1;
+    return [...rows].sort((a, b) => {
+      const x = acc(a), y = acc(b);
+      if (typeof x === "number" && typeof y === "number") return (x - y) * d;
+      return String(x ?? "").localeCompare(String(y ?? ""), undefined, { numeric: true, sensitivity: "base" }) * d;
+    });
+  }, [rows, accessors, sort]);
+  return { sorted, sort, onSort };
+}
+
+// A clickable, sortable column header. `col` is the accessor key.
+export function SortTh({ label, col, sort, onSort, num, style }) {
+  const active = sort.key === col;
+  return <th className={num ? "num" : ""} onClick={() => onSort(col)}
+    style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap", ...style }} title="Sort">
+    {label}<span style={{ opacity: active ? 0.9 : 0.25, fontSize: 11 }}> {active ? (sort.dir === "asc" ? "▲" : "▼") : "↕"}</span>
+  </th>;
+}
 
 export const Ico = ({ d, size = 17 }) => <svg className="ico" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>;
 

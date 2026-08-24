@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { money, fmtDate, todayISO, daysBetween, nameOf } from "../lib/helpers.js";
 import { lineTotals, balance, invoiceStatus, agingBuckets, round2 } from "../calc/ledger.js";
-import { Ico, ICONS, Badge, Empty } from "../components/ui.jsx";
+import { Ico, ICONS, Badge, Empty, SortTh, useTableSort } from "../components/ui.jsx";
 import PaymentModal from "../components/PaymentModal.jsx";
 import ReceiptModal from "../components/ReceiptModal.jsx";
 import EmailModal from "../components/EmailModal.jsx";
@@ -19,6 +19,10 @@ export default function ReceivablesView({ db, actions, toast, openDoc, readOnly 
   const credits = open.filter(i => balance(i) < -0.005);
   const creditTotal = round2(credits.reduce((s, i) => s + balance(i), 0));
   const isCredit = i => lineTotals(i.lineItems, i.taxRate).total < 0;
+  const { sorted: arRows, sort, onSort } = useTableSort(open, {
+    number: i => i.number, customer: i => nameOf(db, i.customerId), due: i => i.dueDate,
+    age: i => daysBetween(i.dueDate, todayISO()), status: i => invoiceStatus(i), balance: i => balance(i),
+  }, { key: "due", dir: "asc" });
 
   return <div>
     {!readOnly && <div className="toolbar">
@@ -45,8 +49,14 @@ export default function ReceivablesView({ db, actions, toast, openDoc, readOnly 
       <div className="card-head"><h3>Open Invoices</h3></div>
       {open.length === 0
         ? <Empty icon={ICONS.ar} title="Nothing outstanding" msg="All invoices are paid. Receivables shows what customers still owe you, bucketed by age." />
-        : <table><thead><tr><th>Invoice</th><th>Customer</th><th>Due</th><th>Age</th><th>Status</th><th className="num">Balance</th><th></th></tr></thead>
-          <tbody>{open.sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || "")).map(inv => {
+        : <table><thead><tr>
+          <SortTh label="Invoice" col="number" sort={sort} onSort={onSort} />
+          <SortTh label="Customer" col="customer" sort={sort} onSort={onSort} />
+          <SortTh label="Due" col="due" sort={sort} onSort={onSort} />
+          <SortTh label="Age" col="age" sort={sort} onSort={onSort} />
+          <SortTh label="Status" col="status" sort={sort} onSort={onSort} />
+          <SortTh label="Balance" col="balance" sort={sort} onSort={onSort} num /><th></th></tr></thead>
+          <tbody>{arRows.map(inv => {
             const od = daysBetween(inv.dueDate, todayISO());
             const credit = isCredit(inv);
             return <tr key={inv.id}>

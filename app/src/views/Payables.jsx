@@ -3,7 +3,7 @@ import { uid, money, fmtDate, todayISO, addDays, nameOf, sum } from "../lib/help
 import { paid, billStatus, agingBuckets, round2 } from "../calc/ledger.js";
 import { checksPdf } from "../lib/checkPrint.js";
 import { remittancesPdf } from "../lib/remittance.js";
-import { Ico, ICONS, Badge, Empty, Modal, Field } from "../components/ui.jsx";
+import { Ico, ICONS, Badge, Empty, Modal, Field, SortTh, useTableSort } from "../components/ui.jsx";
 import PaymentModal from "../components/PaymentModal.jsx";
 import Attachments from "../components/Attachments.jsx";
 import { openCheckPdf } from "../lib/checkPrint.js";
@@ -34,6 +34,10 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
   const open = db.bills.filter(b => ((Number(b.amount) || 0) - paid(b)) > 0.005);
   const bk = agingBuckets(open, b => b.dueDate, b => (Number(b.amount) || 0) - paid(b));
   const totalOpen = bk.cur + bk.d30 + bk.d60 + bk.d90 + bk.d90p;
+  const { sorted: billRows, sort, onSort } = useTableSort(db.bills.slice().reverse(), {
+    number: b => b.number, vendor: b => nameOf(db, b.vendorId), ref: b => b.ref || "", date: b => b.date, due: b => b.dueDate,
+    status: b => billStatus(b), amount: b => Number(b.amount) || 0, balance: b => (Number(b.amount) || 0) - paid(b),
+  });
 
   const save = async (bill) => { if (await actions.saveBill(bill)) { setEdit(null); toast("Bill saved"); } };
   const del = async (id) => {
@@ -64,8 +68,16 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
       {db.bills.length === 0
         ? <Empty icon={ICONS.ap} title="No bills recorded" msg="Track money you owe vendors and subs. Add a bill with an amount and due date, then record payments against it."
           action={<button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Bill</button>} />
-        : <table><thead><tr><th>Bill</th><th>Vendor</th><th>Ref</th><th>Date</th><th>Due</th><th>Status</th><th className="num">Amount</th><th className="num">Balance</th><th></th></tr></thead>
-          <tbody>{db.bills.slice().reverse().map(b => {
+        : <table><thead><tr>
+          <SortTh label="Bill" col="number" sort={sort} onSort={onSort} />
+          <SortTh label="Vendor" col="vendor" sort={sort} onSort={onSort} />
+          <SortTh label="Ref" col="ref" sort={sort} onSort={onSort} />
+          <SortTh label="Date" col="date" sort={sort} onSort={onSort} />
+          <SortTh label="Due" col="due" sort={sort} onSort={onSort} />
+          <SortTh label="Status" col="status" sort={sort} onSort={onSort} />
+          <SortTh label="Amount" col="amount" sort={sort} onSort={onSort} num />
+          <SortTh label="Balance" col="balance" sort={sort} onSort={onSort} num /><th></th></tr></thead>
+          <tbody>{billRows.map(b => {
             const bal = (Number(b.amount) || 0) - paid(b);
             return <tr key={b.id}>
               <td className="doc-id">{b.number}</td><td>{nameOf(db, b.vendorId)}</td><td className="mono subtle">{b.ref || "—"}</td>

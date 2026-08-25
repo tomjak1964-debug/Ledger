@@ -136,6 +136,13 @@ export function useLedger(session, onError) {
         raw = await fetchAll();
       }
       setDb(assemble(raw));
+      // Ensure jobs with ready, un-invoiced lines have an open invoice task —
+      // covers 'ready' set outside the app (e.g. a bulk data import).
+      for (const so of (dbRef.current?.salesOrders || [])) {
+        const hasReady = (so.lineItems || []).some(li => li.ready && !li.invoiced);
+        const hasTask = (dbRef.current?.tasks || []).some(t => t.salesOrderId === so.id && t.type === "create_invoice" && t.status === "open");
+        if (hasReady && !hasTask) await reconcileJobTask(so.id);
+      }
     } catch (e) {
       setLoadError(e.message || String(e));
     }

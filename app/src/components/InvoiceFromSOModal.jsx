@@ -11,8 +11,10 @@ import { Modal, Field, Badge } from "./ui.jsx";
 export default function InvoiceFromSOModal({ so, db, onClose, onGenerate, onlyReady, onCloseLine }) {
   // Read lines live from the store so closing a line updates the modal.
   const lines = (db.salesOrders.find(s => s.id === so.id)?.lineItems) || so.lineItems || [];
+  // Default everything unchecked — the user picks what to bill. (From a task,
+  // pre-check the ready-and-un-invoiced lines as a convenience.)
   const [sel, setSel] = useState(() => Object.fromEntries(lines.map(li =>
-    [li.id, !li.invoiced && !li.closed && (onlyReady ? !!li.ready : true)])));
+    [li.id, !!(onlyReady && li.ready && !li.invoiced && !li.closed)])));
   const jobTime = (db.timeEntries || []).filter(t => t.salesOrderId === so.id && !t.invoiceId && t.approved);
   const pendingTime = (db.timeEntries || []).filter(t => t.salesOrderId === so.id && !t.invoiceId && !t.approved).length;
   const [selTime, setSelTime] = useState(() => Object.fromEntries(jobTime.map(t => [t.id, true])));
@@ -75,7 +77,7 @@ export default function InvoiceFromSOModal({ so, db, onClose, onGenerate, onlyRe
           <td className="num mono">{money(li.unitPrice)}</td>
           <td className="num mono">{money(amt)}</td>
           <td style={{ whiteSpace: "nowrap" }}>
-            {done ? <Badge status="invoiced" /> : closed ? <Badge status="closed" /> : li.ready ? <Badge status="fulfilled" /> : null}
+            {done ? <Badge status="invoiced" /> : closed ? <Badge status="closed" /> : li.ready ? <Badge status="ready" /> : null}
             {!done && onCloseLine && <button className="btn ghost sm" style={{ marginLeft: 6 }} onClick={() => onCloseLine(li.id, !closed)}>{closed ? "Reopen" : "Close"}</button>}
           </td>
         </tr>;

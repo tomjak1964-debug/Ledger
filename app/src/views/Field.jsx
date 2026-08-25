@@ -133,7 +133,7 @@ function Progress({ so, lines, actions, toast }) {
           <input type="checkbox" checked={!!li.ready} disabled={li.invoiced || li.closed} onChange={e => toggle(li, e.target.checked)} />
           <span>{li.desc} <span className="subtle">· {li.qty} {li.unit}</span></span>
         </label>
-        {li.invoiced ? <Badge status="invoiced" /> : li.closed ? <Badge status="closed" /> : li.ready ? <Badge status="fulfilled" /> : null}
+        {li.invoiced ? <Badge status="invoiced" /> : li.closed ? <Badge status="closed" /> : li.ready ? <Badge status="ready" /> : null}
       </div>)}
     <p className="subtle" style={{ margin: "8px 0 0" }}>Marking items ready flags the job for invoicing in the office.</p>
   </div></div>;

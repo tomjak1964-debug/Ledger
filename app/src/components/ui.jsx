@@ -79,6 +79,7 @@ export function Badge({ status }) {
     submitted: ["blue", "Submitted"], won: ["green", "Won"], lost: ["red", "Lost"],
     credit: ["blue", "Credit"],
     received: ["green", "Received"], closed: ["gray", "Closed"], cancelled: ["red", "Cancelled"],
+    ready: ["blue", "Ready"],
   };
   const [c, l] = map[status] || ["gray", status];
   return <span className={"badge " + c}><span className="dot"></span>{l}</span>;

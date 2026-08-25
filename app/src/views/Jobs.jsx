@@ -49,7 +49,7 @@ export default function JobsView({ db, actions, toast, readOnly }) {
                     </label></td>
                     <td>{li.desc}</td>
                     <td className="num mono">{li.qty} {li.unit}</td>
-                    <td>{li.invoiced ? <Badge status="invoiced" /> : li.closed ? <Badge status="closed" /> : li.ready ? <Badge status="fulfilled" /> : <span className="subtle">in progress</span>}</td>
+                    <td>{li.invoiced ? <Badge status="invoiced" /> : li.closed ? <Badge status="closed" /> : li.ready ? <Badge status="ready" /> : <span className="subtle">in progress</span>}</td>
                   </tr>)}</tbody></table>
               </td></tr>}
             </Fragment>;

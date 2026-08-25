@@ -10,7 +10,11 @@ export function buildProposalContent(p, db) {
   const cfg = proposalConfig(db.settings);
   const mt = db.machineTypes.find(m => m.id === p.machineTypeId);
   const customer = db.contacts.find(c => c.id === p.customerId);
-  const person = db.contactPeople.find(x => x.id === p.contactPersonId);
+  // Effective contact: the proposal's free-text name, else a linked contact
+  // person, else the customer's contact field.
+  const personRec = db.contactPeople.find(x => x.id === p.contactPersonId);
+  const contactName = (p.contactName || personRec?.name || customer?.contact || "").trim();
+  const person = contactName ? { name: contactName, email: personRec?.email || "" } : null;
   const s = p.specs || {};
   const cams = Number(s.cameras) || 0, gens = Number(s.generators) || 0, welds = Number(s.welds) || 0;
   const plc = s.plcType || cfg.plcType, hmi = s.hmiType || cfg.hmiType;
@@ -71,7 +75,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
 
   const startNew = () => setEdit({
     id: uid(), _new: true, number: "(assigned at save)", customerId: customers[0]?.id || "",
-    contactPersonId: "", date: todayISO(), status: "draft", jobNumber: "", description: "",
+    contactPersonId: "", contactName: customers[0]?.contact || "", date: todayISO(), status: "draft", jobNumber: "", description: "",
     location: cfg.location, machineTypeId: db.machineTypes[0]?.id || "",
     specs: { ...emptySpecs(), dataNational: true, ioBlocks: "" },
     pricing: {}, phases: cfg.phases.map(ph => ({ ...ph })), notes: "",
@@ -176,13 +180,18 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
     </div>
     <div className="card" style={{ marginBottom: 16 }}><div className="card-body">
       <div className="row">
-        <Field label="Customer"><select className="select" value={x.customerId} onChange={e => { set("customerId", e.target.value); set("contactPersonId", ""); }}>
+        <Field label="Customer"><select className="select" value={x.customerId} onChange={e => {
+          const cid = e.target.value, cc = db.contacts.find(c => c.id === cid)?.contact || "";
+          setX(prev => ({ ...prev, customerId: cid, contactPersonId: "", contactName: prev.contactName || cc }));
+        }}>
           <option value="">Select customer…</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select></Field>
-        <Field label="Contact Person" hint={people.length === 0 ? "Add people under Contacts" : undefined}>
-          <select className="select" value={x.contactPersonId} onChange={e => set("contactPersonId", e.target.value)}>
-            <option value="">— none —</option>{people.map(cp => <option key={cp.id} value={cp.id}>{cp.name}</option>)}
-          </select></Field>
+        <Field label="Contact / Attn" hint="Type any name, or pick a suggestion">
+          <input className="input" list={"attn-" + x.customerId} value={x.contactName || ""} onChange={e => set("contactName", e.target.value)} placeholder="e.g. Mr. John Murphy" />
+          <datalist id={"attn-" + x.customerId}>
+            {[db.contacts.find(c => c.id === x.customerId)?.contact, ...people.map(cp => cp.name)].filter(Boolean).map((n, i) => <option key={i} value={n} />)}
+          </datalist>
+        </Field>
         <Field label="Date"><input className="input" type="date" value={x.date} onChange={e => set("date", e.target.value)} /></Field>
       </div>
       <div className="row">

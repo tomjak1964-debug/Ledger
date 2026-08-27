@@ -3,7 +3,7 @@ import { uid, money, fmtDate, todayISO } from "../lib/helpers.js";
 import { paid, balance, round2 } from "../calc/ledger.js";
 import { Modal, Field, Ico, ICONS } from "./ui.jsx";
 
-export default function PaymentModal({ doc, onClose, onSave, onDelete, onPrintCheck, isBill }) {
+export default function PaymentModal({ doc, onClose, onSave, onDelete, onPrintCheck, onEmailDoc, isBill }) {
   const bal = isBill ? ((Number(doc.amount) || 0) - paid(doc)) : balance(doc);
   const [amount, setAmount] = useState(round2(bal));
   const [date, setDate] = useState(todayISO());
@@ -26,7 +26,8 @@ export default function PaymentModal({ doc, onClose, onSave, onDelete, onPrintCh
     {isBill && method === "Check" && <p className="subtle" style={{ margin: "0 0 8px" }}>Recording a Check payment opens a printable check on your pre-printed stock (alignment in Settings → Check Printing).</p>}
     {(doc.payments || []).length > 0 && <><div className="divider"></div><div className="subtle" style={{ marginBottom: 8, fontWeight: 600 }}>Payment history</div>
       {doc.payments.map(p => <div key={p.id} className="cat-row"><span className="mono">{money(p.amount)}</span><span className="subtle">{p.method}{p.ref ? " #" + p.ref : ""}</span><span className="subtle" style={{ marginLeft: "auto" }}>{fmtDate(p.date)}</span>
-        {onPrintCheck && <button className="btn ghost icon" title="Print check" onClick={() => onPrintCheck(p)}><Ico d={ICONS.print} size={14} /></button>}
+        {onPrintCheck && <button className="btn ghost icon" title={p.method === "Check" ? "Print / save check" : "Print / save remittance"} onClick={() => onPrintCheck(p)}><Ico d={ICONS.print} size={14} /></button>}
+        {onEmailDoc && p.method !== "Check" && <button className="btn ghost icon" title="Email remittance" onClick={() => onEmailDoc(p)}><Ico d={ICONS.mail} size={14} /></button>}
         {onDelete && <button className="btn ghost icon" title="Delete payment" onClick={() => { if (confirm("Delete this " + money(p.amount) + " payment?")) onDelete(p.id); }}><Ico d={ICONS.trash} size={14} /></button>}</div>)}</>}
   </Modal>;
 }

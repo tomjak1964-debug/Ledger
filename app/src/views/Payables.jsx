@@ -87,6 +87,7 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
               <td className="num" style={{ fontWeight: 600 }}>{money(bal)}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                 {!readOnly && bal > 0.005 && <button className="btn sm" onClick={() => setPay(b)}><Ico d={ICONS.money} size={14} />Pay</button>}
+                {(b.payments || []).length > 0 && <button className="btn ghost icon" title="Payments · print / email remittance" onClick={() => setPay(b)}><Ico d={ICONS.mail} size={15} /></button>}
                 {!readOnly && <button className="btn ghost icon" onClick={() => setEdit({ ...b })} title="Edit"><Ico d={ICONS.edit} size={15} /></button>}
                 {!readOnly && <button className="btn ghost icon" onClick={() => del(b.id)} title="Delete"><Ico d={ICONS.trash} size={15} /></button>}
               </td>
@@ -129,12 +130,15 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
     {pay && <PaymentModal doc={pay} isBill onClose={() => setPay(null)}
       onSave={async (p) => {
         if (await actions.recordPayment("bill", pay.id, p)) {
-          setPay(null); toast("Payment recorded");
+          toast("Payment recorded");
+          // Keep the modal open so the payment appears in history with
+          // print / email / save actions. Checks still open for stock printing.
+          setPay(prev => ({ ...prev, payments: [...(prev.payments || []), p] }));
           if (p.method === "Check") printCheckFor(pay, p);
-          else { openRemittancePdf(remitArgs(pay, p)); setEmailRemit({ bill: pay, payment: p }); }
         }
       }}
       onPrintCheck={(p) => printDocFor(pay, p)}
+      onEmailDoc={(p) => setEmailRemit({ bill: pay, payment: p })}
       onDelete={async (pid) => {
         if (await actions.deletePayment("bill", pay.id, pid)) {
           setPay(prev => ({ ...prev, payments: (prev.payments || []).filter(x => x.id !== pid) }));

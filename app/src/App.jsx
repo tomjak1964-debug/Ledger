@@ -22,6 +22,7 @@ import InvoicesView from "./views/Invoices.jsx";
 import ReceivablesView from "./views/Receivables.jsx";
 import PurchaseOrdersView from "./views/PurchaseOrders.jsx";
 import PayablesView from "./views/Payables.jsx";
+import PaymentsView from "./views/Payments.jsx";
 import ExpensesView from "./views/Expenses.jsx";
 import ContactsView from "./views/Contacts.jsx";
 import CatalogView from "./views/Catalog.jsx";
@@ -56,6 +57,7 @@ const NAV = [
     group: "Spend", items: [
       { k: "purchaseOrders", label: "Purchase Orders", icon: ICONS.so },
       { k: "payables", label: "Payables", icon: ICONS.ap },
+      { k: "payments", label: "Payments", icon: ICONS.money },
       { k: "expenses", label: "Expenses", icon: ICONS.exp },
     ]
   },
@@ -75,6 +77,7 @@ const TITLES = {
   timeTracking: ["Time Tracking", "Log hours against a job"],
   field: ["Field", "Nearby jobs · log time, expenses, and progress"],
   receivables: ["Receivables", "What customers owe you, by age"], payables: ["Payables", "Vendor bills you owe"],
+  payments: ["Payments", "Every payment made — edit, correct, or void"],
   purchaseOrders: ["Purchase Orders", "Orders you issue to vendors for parts"],
   expenses: ["Expenses", "Business spend by category"], contacts: ["Contacts", "Customers and vendors"],
   catalog: ["Item Catalog", "Reusable quote line items"], settings: ["Settings", "Company info and defaults"],
@@ -177,6 +180,7 @@ export default function App({ session }) {
         {activeView === "receivables" && <ReceivablesView {...props} />}
         {activeView === "purchaseOrders" && <PurchaseOrdersView {...props} />}
         {activeView === "payables" && <PayablesView {...props} />}
+        {activeView === "payments" && <PaymentsView {...props} />}
         {activeView === "expenses" && <ExpensesView {...props} />}
         {activeView === "contacts" && <ContactsView {...props} />}
         {activeView === "catalog" && <CatalogView {...props} />}

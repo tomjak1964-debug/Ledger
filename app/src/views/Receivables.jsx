@@ -5,10 +5,12 @@ import { Ico, ICONS, Badge, Empty, SortTh, useTableSort } from "../components/ui
 import PaymentModal from "../components/PaymentModal.jsx";
 import ReceiptModal from "../components/ReceiptModal.jsx";
 import EmailModal from "../components/EmailModal.jsx";
+import PaymentRegister from "../components/PaymentRegister.jsx";
 import { invoicePdf } from "../lib/invoicePdf.js";
 
 export default function ReceivablesView({ db, actions, toast, openDoc, readOnly }) {
   const [pay, setPay] = useState(null);
+  const [tab, setTab] = useState("open");
   const [receipt, setReceipt] = useState(false);
   const [remind, setRemind] = useState(null);
   // Every invoice with a non-zero balance: positive balances are owed to us,
@@ -25,12 +27,17 @@ export default function ReceivablesView({ db, actions, toast, openDoc, readOnly 
   }, { key: "due", dir: "asc" });
 
   return <div>
-    {!readOnly && <div className="toolbar">
-      <button className="btn primary" style={{ marginLeft: "auto" }} onClick={() => setReceipt(true)}>
+    <div className="toolbar">
+      <div className="pill-tabs">
+        <button className={tab === "open" ? "on" : ""} onClick={() => setTab("open")}>Open Invoices</button>
+        <button className={tab === "receipts" ? "on" : ""} onClick={() => setTab("receipts")}>Receipts</button>
+      </div>
+      {!readOnly && <button className="btn primary" style={{ marginLeft: "auto" }} onClick={() => setReceipt(true)}>
         <Ico d={ICONS.money} size={15} />Receive Payment
-      </button>
-    </div>}
-    <div className="card" style={{ marginBottom: 16 }}>
+      </button>}
+    </div>
+    {tab === "receipts" && <PaymentRegister db={db} actions={actions} toast={toast} readOnly={readOnly} kind="invoice" />}
+    {tab === "open" && <><div className="card" style={{ marginBottom: 16 }}>
       <div className="card-head"><h3>A/R Aging</h3><span className="mono" style={{ marginLeft: "auto", fontWeight: 600, fontSize: 16 }}>{money(total)}</span></div>
       <div className="card-body">
         <div className="aging">
@@ -72,7 +79,7 @@ export default function ReceivablesView({ db, actions, toast, openDoc, readOnly 
               </td>
             </tr>;
           })}</tbody></table>}
-    </div>
+    </div></>}
     {receipt && <ReceiptModal db={db} onClose={() => setReceipt(false)}
       onSave={async (allocations, meta) => {
         const ok = await actions.recordReceipt(allocations, meta);
@@ -88,10 +95,17 @@ export default function ReceivablesView({ db, actions, toast, openDoc, readOnly 
       onClose={() => setRemind(null)} toast={toast} />}
     {pay && <PaymentModal doc={pay} onClose={() => setPay(null)}
       onSave={async (p) => {
-        if (await actions.recordPayment("invoice", pay.id, p)) { setPay(null); toast("Payment recorded"); }
+        if (!await actions.recordPayment("invoice", pay.id, p)) return false;
+        toast("Payment recorded");
+        return true;
+      }}
+      onVoid={async (p) => {
+        if (!await actions.deletePayments([p.id])) return false;
+        toast("Payment reversed — " + pay.number + " is open again");
+        return true;
       }}
       onDelete={async (pid) => {
-        if (await actions.deletePayment("invoice", pay.id, pid)) {
+        if (await actions.deletePayments([pid])) {
           setPay(prev => ({ ...prev, payments: (prev.payments || []).filter(x => x.id !== pid) }));
           toast("Payment deleted");
         }

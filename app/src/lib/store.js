@@ -15,6 +15,7 @@ import { uid, todayISO, addDays, pad4 } from "./helpers.js";
 import { defaultSettings, sampleData } from "./seed.js";
 import { proposalConfig, phaseAmount } from "../calc/proposals.js";
 import { round2, lineTotals } from "../calc/ledger.js";
+import { checkNumberTaken, isCheckPayment, normRef } from "./checks.js";
 
 const SEQ_TYPES = ["quote", "so", "invoice", "bill"];
 // Placeholder shown in the invoice-number field; means "use the auto sequence".
@@ -154,6 +155,15 @@ export function useLedger(session, onError) {
   /* ------------ internals ------------ */
 
   const fail = (e) => { onError("⚠ " + (e?.message || "Something went wrong — change not saved")); return null; };
+
+  // No two checks may carry the same number. A number only frees up when the
+  // check that used it is voided (its payments deleted). `allowIds` are the
+  // payment rows that belong to the check being written.
+  const guardCheckNumber = (parentType, p, allowIds = []) => {
+    if (parentType !== "bill" || !isCheckPayment(p)) return;
+    if (checkNumberTaken(dbRef.current, p.ref, allowIds))
+      throw new Error(`Check #${normRef(p.ref)} has already been used. Void that check first, or use a different number.`);
+  };
 
   // Claim the next number for a doc type atomically; bumps the local counter.
   async function claimNumber(docType) {
@@ -561,10 +571,68 @@ export function useLedger(session, onError) {
     },
     async recordPayment(parentType, parentId, p) {
       try {
+        guardCheckNumber(parentType, p);
         th(await supabase.from("payments").insert(A.paymentToRow(p, parentType, parentId)));
         setDb(d => parentType === "invoice"
           ? { ...d, invoices: d.invoices.map(i => i.id === parentId ? { ...i, payments: [...(i.payments || []), p] } : i) }
           : { ...d, bills: d.bills.map(b => b.id === parentId ? { ...b, payments: [...(b.payments || []), p] } : b) });
+        return true;
+      } catch (e) { return fail(e); }
+    },
+
+    // Many payments in one write — a batch pay run. Several rows may share a
+    // check number (one check covering several bills); that is one check, so
+    // the duplicate guard runs once per distinct number against what's already
+    // on file. All-or-nothing: one insert, one state update.
+    async recordPayments(entries) {
+      try {
+        const list = (entries || []).filter(e => Math.abs(Number(e.payment.amount) || 0) > 0.005);
+        if (!list.length) throw new Error("Nothing to record — select at least one item with an amount.");
+        const refs = new Set();
+        list.filter(e => e.parentType === "bill" && isCheckPayment(e.payment)).forEach(e => refs.add(normRef(e.payment.ref)));
+        refs.forEach(ref => guardCheckNumber("bill", { method: "Check", ref }));
+        th(await supabase.from("payments").insert(list.map(e => A.paymentToRow(e.payment, e.parentType, e.parentId))));
+        setDb(d => {
+          const add = (doc, type) => {
+            const mine = list.filter(e => e.parentType === type && e.parentId === doc.id).map(e => e.payment);
+            return mine.length ? { ...doc, payments: [...(doc.payments || []), ...mine] } : doc;
+          };
+          return { ...d, bills: d.bills.map(b => add(b, "bill")), invoices: d.invoices.map(i => add(i, "invoice")) };
+        });
+        return list.map(e => e.payment);
+      } catch (e) { return fail(e); }
+    },
+
+    // Correct a recorded payment in place. Bills and invoices reopen on their
+    // own when an amount drops, because balances are derived (CLAUDE.md §6).
+    async updatePayment(parentType, parentId, p) {
+      try {
+        const prev = (parentType === "invoice" ? dbRef.current.invoices : dbRef.current.bills)
+          .find(x => x.id === parentId)?.payments?.find(x => x.id === p.id);
+        const payment = { ...p, amount: round2(Number(p.amount) || 0), ref: normRef(p.ref) };
+        // Keeping the same number on the same check is never a duplicate.
+        if (normRef(prev?.ref) !== payment.ref || prev?.method !== payment.method) guardCheckNumber(parentType, payment, [payment.id]);
+        th(await supabase.from("payments").update(A.paymentToRow(payment, parentType, parentId)).eq("id", payment.id));
+        const swap = doc => doc.id === parentId
+          ? { ...doc, payments: (doc.payments || []).map(x => x.id === payment.id ? payment : x) } : doc;
+        setDb(d => parentType === "invoice"
+          ? { ...d, invoices: d.invoices.map(swap) }
+          : { ...d, bills: d.bills.map(swap) });
+        return payment;
+      } catch (e) { return fail(e); }
+    },
+
+    // Void: drop a whole set of payments at once (every bill on one check, or
+    // every payment from a pay run that printed badly). The bills go back to
+    // open and the check number is free again.
+    async deletePayments(paymentIds) {
+      try {
+        const ids = [...new Set(paymentIds || [])];
+        if (!ids.length) return true;
+        th(await supabase.from("payments").delete().in("id", ids));
+        const strip = doc => (doc.payments || []).some(p => ids.includes(p.id))
+          ? { ...doc, payments: doc.payments.filter(p => !ids.includes(p.id)) } : doc;
+        setDb(d => ({ ...d, bills: d.bills.map(strip), invoices: d.invoices.map(strip) }));
         return true;
       } catch (e) { return fail(e); }
     },
@@ -587,17 +655,6 @@ export function useLedger(session, onError) {
             return mine.length ? { ...i, payments: [...(i.payments || []), ...mine] } : i;
           }),
         }));
-        return true;
-      } catch (e) { return fail(e); }
-    },
-
-    async deletePayment(parentType, parentId, paymentId) {
-      try {
-        th(await supabase.from("payments").delete().eq("id", paymentId));
-        const strip = doc => doc.id === parentId ? { ...doc, payments: (doc.payments || []).filter(p => p.id !== paymentId) } : doc;
-        setDb(d => parentType === "invoice"
-          ? { ...d, invoices: d.invoices.map(strip) }
-          : { ...d, bills: d.bills.map(strip) });
         return true;
       } catch (e) { return fail(e); }
     },

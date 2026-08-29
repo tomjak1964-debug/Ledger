@@ -12,7 +12,7 @@ export default function ContactsView({ db, actions, toast, readOnly }) {
     const rec = db.contacts.find(c => c.id === id);
     if (await actions.deleteContact(id)) toast("Deleted " + (rec?.name || "contact"), { actionLabel: "Undo", onAction: async () => { if (await actions.restoreRecord("contact", rec)) toast((rec.name || "Contact") + " restored"); } });
   };
-  const startNew = () => setEdit({ id: uid(), type: tab, name: "", contact: "", email: "", phone: "", address: "", code: "", lat: "", lng: "" });
+  const startNew = () => setEdit({ id: uid(), type: tab, name: "", contact: "", email: "", phone: "", address: "", code: "", lat: "", lng: "", remitName: "", remitPhone: "", remitEmail: "", remitAddress: "" });
   const { sorted: contactRows, sort, onSort } = useTableSort(list, {
     name: c => c.name, contact: c => c.contact || "", email: c => c.email || "", phone: c => c.phone || "",
   }, { key: "name", dir: "asc" });
@@ -65,6 +65,18 @@ export default function ContactsView({ db, actions, toast, readOnly }) {
             ? navigator.geolocation.getCurrentPosition(p => setEdit(x => ({ ...x, lat: p.coords.latitude.toFixed(6), lng: p.coords.longitude.toFixed(6) })), () => toast("⚠ Couldn't get location"))
             : toast("⚠ Location not available")}>Use current location</button>
         </div></Field>}
+      {edit.type === "vendor" && <>
+        <div className="divider"></div>
+        <div className="subtle" style={{ fontWeight: 700, marginBottom: 6 }}>Remittance Contact</div>
+        <p className="subtle" style={{ margin: "0 0 8px" }}>Where payment paperwork goes — the A/P desk, not the sales rep. The email here is the default recipient when you email a remittance, and can still be changed on the way out.</p>
+        <div className="row">
+          <Field label="Name"><input className="input" value={edit.remitName || ""} onChange={e => setEdit({ ...edit, remitName: e.target.value })} placeholder="Accounts Receivable" /></Field>
+          <Field label="Number"><input className="input" value={edit.remitPhone || ""} onChange={e => setEdit({ ...edit, remitPhone: e.target.value })} /></Field>
+        </div>
+        <Field label="Email" hint="Default recipient for remittance advice">
+          <input className="input" value={edit.remitEmail || ""} onChange={e => setEdit({ ...edit, remitEmail: e.target.value })} placeholder={edit.email || "ar@vendor.com"} /></Field>
+        <Field label="Address"><textarea className="input" value={edit.remitAddress || ""} onChange={e => setEdit({ ...edit, remitAddress: e.target.value })} placeholder="Remit-to address, if different from above" /></Field>
+      </>}
       {db.contacts.some(c => c.id === edit.id)
         ? <PeopleEditor contactId={edit.id} db={db} actions={actions} toast={toast} />
         : <p className="subtle">Save this {edit.type} first, then re-open it to add contact people.</p>}

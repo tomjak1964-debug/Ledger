@@ -116,7 +116,11 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
           </Field>)}
           <Field label="Font Size"><input className="input mono" type="number" value={checkLayout(s).fontSize}
             onChange={e => set("check", { ...s.check, fontSize: Number(e.target.value) })} /></Field>
+          <Field label="First Check #" hint="Where numbering starts before any check is written">
+            <input className="input mono" type="number" value={s.check?.start ?? 1001}
+              onChange={e => set("check", { ...s.check, start: Number(e.target.value) })} /></Field>
         </div>
+        <p className="subtle">After the first check, the next number is always one past the highest check on file. Void a check and its number comes straight back.</p>
         <div style={{ display: "flex", gap: 10 }}>
           <button className="btn" onClick={() => openCheckPdf({ test: true, settings: s })}>Print Test Pattern</button>
           <button className="btn" onClick={() => openCheckPdf({

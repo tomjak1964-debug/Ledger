@@ -12,6 +12,9 @@ export function defaultSettings() {
     invoiceNotes: "Payment due within terms. Make checks payable to the company above. Thank you for your business.",
     // Automated backup config (run by the scheduled-backup edge function).
     backup: { enabled: false, email: false, recipient: "", storage: true },
+    // Check printing: field positions (Settings → Check Printing) plus the
+    // number the check stack starts at.
+    check: { start: 1001 },
   };
 }
 

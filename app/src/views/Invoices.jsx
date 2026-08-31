@@ -122,10 +122,17 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
       onClose={() => setEmail(null)} toast={toast} />}
     {pay && <PaymentModal doc={pay} onClose={() => setPay(null)}
       onSave={async (p) => {
-        if (await actions.recordPayment("invoice", pay.id, p)) { setPay(null); toast("Payment recorded"); }
+        if (!await actions.recordPayment("invoice", pay.id, p)) return false;
+        toast("Payment recorded");
+        return true;
+      }}
+      onVoid={async (p) => {
+        if (!await actions.deletePayments([p.id])) return false;
+        toast("Payment reversed — " + pay.number + " is open again");
+        return true;
       }}
       onDelete={async (pid) => {
-        if (await actions.deletePayment("invoice", pay.id, pid)) {
+        if (await actions.deletePayments([pid])) {
           setPay(prev => ({ ...prev, payments: (prev.payments || []).filter(x => x.id !== pid) }));
           toast("Payment deleted");
         }

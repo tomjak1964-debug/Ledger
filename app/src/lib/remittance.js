@@ -33,7 +33,9 @@ function drawRemit(doc, { payment, vendor, lines, settings }) {
   });
   doc.setFont("helvetica", "bold").setFontSize(9).text("PAID TO", M, 130);
   doc.setFont("helvetica", "normal").setFontSize(10);
-  doc.text([vendor?.name, ...(vendor?.address || "").split("\n")].filter(Boolean), M, 144);
+  // Remit-to details win when the vendor has an A/P desk of its own.
+  const remitTo = (vendor?.remitAddress || "").trim() || vendor?.address || "";
+  doc.text([vendor?.name, vendor?.remitName ? "Attn: " + vendor.remitName : "", ...remitTo.split("\n")].filter(Boolean), M, 144);
 
   autoTable(doc, {
     startY: 210, margin: { left: M, right: M },

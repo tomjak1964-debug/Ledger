@@ -86,9 +86,11 @@ function drawCheck(doc, L, { payment, vendor, memo, stubLines }) {
   put("payee", vendor?.name || "");
   put("amount", "**" + amt.toLocaleString("en-US", { minimumFractionDigits: 2 }), L.fontSize + 1);
   put("words", (words + " ").padEnd(95, "*"), Math.min(L.fontSize, 9.5));
-  if (vendor?.address) {
+  // Mail the check to the remit-to address when the vendor gave one.
+  const mailTo = (vendor?.remitAddress || "").trim() || vendor?.address || "";
+  if (mailTo) {
     doc.setFontSize(L.fontSize);
-    doc.text([vendor.name, ...vendor.address.split("\n")].filter(Boolean), F.address.x, F.address.y);
+    doc.text([vendor.name, ...mailTo.split("\n")].filter(Boolean), F.address.x, F.address.y);
   }
   put("memo", memo || "");
 

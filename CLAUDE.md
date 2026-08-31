@@ -261,7 +261,15 @@ atomic document numbering · JSON backup import · **Reports** (cash-basis P&L, 
 invoiced/collected, sales by customer, expenses by category, printable customer statements, CSV
 export, date-range presets — `src/calc/reports.js` + `src/views/Reports.jsx`) · **standalone +
 editable invoices** with per-invoice notes (`invoices.notes`, migration 002) · payment
-delete/correction · installable PWA (manifest + icons + service worker; Supabase never cached).
+delete/correction · **check register** (`src/lib/checks.js` — next check number remembered and
+overridable, duplicate numbers refused, voiding a check reopens its bills and frees the number) ·
+**guided payment flow** (record → print → confirm the check printed → email/save → every dialog
+closes; a misprinted check is reversed in one click) · **payments & receipts register**
+(`src/components/PaymentRegister.jsx`, shown as Spend → Payments and Receivables → Receipts:
+search, date range, edit, delete, void a whole check) · vendor **remittance contact** (A/P name /
+number / email / remit-to address, migration 017 — the email default when sending a remittance,
+and the mail-to block on printed checks and remittances) · installable PWA (manifest + icons +
+service worker; Supabase never cached).
 
 **Not built (candidates for next work):** credit notes / refunds · partial invoicing of an SO ·
 recurring invoices · email sending · attachments / receipt photos · quote line-item reordering ·

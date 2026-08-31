@@ -9,8 +9,8 @@ const dateOrNull = v => (v ? v : null);
 const num = v => Number(v) || 0;
 
 /* ---- contacts ---- */
-export const contactToRow = c => ({ id: c.id, type: c.type, name: c.name ?? "", contact: c.contact ?? "", email: c.email ?? "", phone: c.phone ?? "", address: c.address ?? "", code: c.code ?? "", lat: c.lat === "" || c.lat == null ? null : Number(c.lat), lng: c.lng === "" || c.lng == null ? null : Number(c.lng) });
-export const contactFromRow = r => ({ id: r.id, type: r.type, name: r.name, contact: r.contact, email: r.email, phone: r.phone, address: r.address, code: r.code || "", lat: r.lat ?? null, lng: r.lng ?? null });
+export const contactToRow = c => ({ id: c.id, type: c.type, name: c.name ?? "", contact: c.contact ?? "", email: c.email ?? "", phone: c.phone ?? "", address: c.address ?? "", code: c.code ?? "", lat: c.lat === "" || c.lat == null ? null : Number(c.lat), lng: c.lng === "" || c.lng == null ? null : Number(c.lng), remit_name: c.remitName ?? "", remit_phone: c.remitPhone ?? "", remit_email: c.remitEmail ?? "", remit_address: c.remitAddress ?? "" });
+export const contactFromRow = r => ({ id: r.id, type: r.type, name: r.name, contact: r.contact, email: r.email, phone: r.phone, address: r.address, code: r.code || "", lat: r.lat ?? null, lng: r.lng ?? null, remitName: r.remit_name || "", remitPhone: r.remit_phone || "", remitEmail: r.remit_email || "", remitAddress: r.remit_address || "" });
 
 /* ---- catalog ---- */
 export const catalogToRow = c => ({ id: c.id, description: c.desc ?? "", unit: c.unit ?? "", unit_price: num(c.unitPrice) });

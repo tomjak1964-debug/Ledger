@@ -41,6 +41,7 @@ export const NAV_AREA = {
   receivables: "receivables",
   purchaseOrders: "payables",
   payables: "payables",
+  payments: "payables",
   expenses: "expenses",
   timeTracking: "timeTracking",
   field: "field",

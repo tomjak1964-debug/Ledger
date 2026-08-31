@@ -10,7 +10,7 @@ const blobToBase64 = blob => new Promise(res => {
 
 // Generic "email this document" dialog. buildAttachment is async and returns
 // { blob, filename } (or null for no attachment).
-export default function EmailModal({ title, defaultTo, defaultSubject, defaultBody, buildAttachment, onClose, toast }) {
+export default function EmailModal({ title, defaultTo, defaultSubject, defaultBody, buildAttachment, onClose, onSent, toast }) {
   const [to, setTo] = useState(defaultTo || "");
   const [subject, setSubject] = useState(defaultSubject || "");
   const [body, setBody] = useState(defaultBody || "");
@@ -28,6 +28,7 @@ export default function EmailModal({ title, defaultTo, defaultSubject, defaultBo
       if (error) throw error;
       if (data && data.ok === false) throw new Error(data.error);
       toast("Email sent to " + to.trim());
+      onSent?.();
       onClose();
     } catch (e) {
       toast("⚠ Email failed: " + (e.message || e));

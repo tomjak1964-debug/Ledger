@@ -50,6 +50,11 @@ create table if not exists contacts (
   email       text not null default '',
   phone       text not null default '',
   address     text not null default '',   -- multiline, \n separated
+  -- vendor remittance (A/P) contact — where payment paperwork and checks go
+  remit_name    text not null default '',
+  remit_phone   text not null default '',
+  remit_email   text not null default '',
+  remit_address text not null default '',
   created_at  timestamptz not null default now()
 );
 create index if not exists contacts_user_idx on contacts(user_id);

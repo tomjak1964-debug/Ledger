@@ -61,6 +61,11 @@ If you ran `schema.sql` before a migration existed, run the files in
   Settings → Team), org-wide security policies, machine-rate costing tables,
   proposals, contact people, and phased invoicing. Run it before (or right
   when) deploying that app version — the app can't load without it.
+- `017_remittance_contact.sql` — adds the vendor remittance contact
+  (`remit_name` / `remit_phone` / `remit_email` / `remit_address` on
+  `contacts`). Needed for the remittance contact in Contacts → Vendors and the
+  default recipient when emailing a remittance. Fresh installs of `schema.sql`
+  already include it.
 
 ## Email sending (invoices & proposals)
 

@@ -10,7 +10,7 @@
 //    states expect you to remit) and tax collected via payments in the range
 //    (cash), allocated proportionally when an invoice is partially paid.
 import { sum, daysBetween } from "../lib/helpers.js";
-import { lineTotals, paid, balance } from "./ledger.js";
+import { lineTotals, paid, balance, round2 } from "./ledger.js";
 
 const inRange = (d, from, to) => !!d && (!from || d >= from) && (!to || d <= to);
 
@@ -140,4 +140,32 @@ export function customerStatement(db, customerId) {
     .filter(i => i.customerId === customerId && balance(i) > 0.005)
     .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
   return { open, totalDue: sum(open, balance) };
+}
+
+/* ---- receipt / payment register, grouped by the actual check or transfer ----
+   One receipt = one check (or ACH) from one party on one date, which may cover
+   several invoices. Payments are grouped by party + date + method + reference
+   so the register lists what actually landed in the bank, with the documents it
+   was applied to underneath. Two same-day cash receipts from one customer with
+   no reference number collapse into one row — give them a reference to keep
+   them apart. */
+export function receiptGroups(db, { kind = "invoice", from, to, partyId } = {}) {
+  const parents = kind === "bill" ? db.bills : db.invoices;
+  const who = d => (kind === "bill" ? d.vendorId : d.customerId) || "";
+  const m = new Map();
+  parents.forEach(doc => (doc.payments || []).forEach(p => {
+    if (!inRange(p.date, from, to)) return;
+    if (partyId && who(doc) !== partyId) return;
+    const ref = String(p.ref ?? "").trim();
+    const key = [who(doc), p.date || "", p.method || "", ref.toLowerCase()].join("|");
+    let g = m.get(key);
+    if (!g) { g = { key, ref, partyId: who(doc), date: p.date || "", method: p.method || "", amount: 0, lines: [] }; m.set(key, g); }
+    const amount = Number(p.amount) || 0;
+    g.amount += amount;
+    g.lines.push({ paymentId: p.id, docId: doc.id, number: doc.number || "", docDate: doc.date || "", amount });
+  }));
+  const rows = [...m.values()].map(g => ({ ...g, amount: round2(g.amount), count: g.lines.length }));
+  rows.forEach(g => g.lines.sort((a, b) => (a.number || "").localeCompare(b.number || "", undefined, { numeric: true })));
+  rows.sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.ref || "").localeCompare(a.ref || ""));
+  return { rows, total: round2(sum(rows, r => r.amount)), count: rows.length };
 }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { money, fmtDate, todayISO, daysBetween, nameOf } from "../lib/helpers.js";
 import { lineTotals, balance, invoiceStatus, agingBuckets, round2 } from "../calc/ledger.js";
+import { useFilters } from "../components/useFilters.jsx";
 import { Ico, ICONS, Badge, Empty, SortTh, useTableSort } from "../components/ui.jsx";
 import PaymentModal from "../components/PaymentModal.jsx";
 import ReceiptModal from "../components/ReceiptModal.jsx";
@@ -15,7 +16,8 @@ export default function ReceivablesView({ db, actions, toast, openDoc, readOnly 
   const [remind, setRemind] = useState(null);
   // Every invoice with a non-zero balance: positive balances are owed to us,
   // negative balances are open credits waiting to be applied.
-  const open = db.invoices.filter(i => Math.abs(balance(i)) > 0.005);
+  const f = useFilters({ partyKind: "customer", contacts: db.contacts });
+  const open = db.invoices.filter(i => Math.abs(balance(i)) > 0.005 && f.keep(i.date, i.customerId));
   const b = agingBuckets(open, i => i.dueDate, balance);      // positive balances only
   const total = b.cur + b.d30 + b.d60 + b.d90 + b.d90p;
   const credits = open.filter(i => balance(i) < -0.005);
@@ -37,7 +39,7 @@ export default function ReceivablesView({ db, actions, toast, openDoc, readOnly 
       </button>}
     </div>
     {tab === "receipts" && <PaymentRegister db={db} actions={actions} toast={toast} readOnly={readOnly} kind="invoice" />}
-    {tab === "open" && <><div className="card" style={{ marginBottom: 16 }}>
+    {tab === "open" && <>{f.bar()}<div className="card" style={{ marginBottom: 16 }}>
       <div className="card-head"><h3>A/R Aging</h3><span className="mono" style={{ marginLeft: "auto", fontWeight: 600, fontSize: 16 }}>{money(total)}</span></div>
       <div className="card-body">
         <div className="aging">

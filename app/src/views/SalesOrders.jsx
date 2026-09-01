@@ -2,6 +2,7 @@ import { useState } from "react";
 import { uid, money, fmtDate, todayISO, nameOf } from "../lib/helpers.js";
 import { lineTotals } from "../calc/ledger.js";
 import { AUTO_NUMBER } from "../lib/store.js";
+import { useFilters } from "../components/useFilters.jsx";
 import { Ico, ICONS, Badge, Empty, Field, SortTh, useTableSort } from "../components/ui.jsx";
 import LineItemsEditor from "../components/LineItemsEditor.jsx";
 import Attachments from "../components/Attachments.jsx";
@@ -17,7 +18,8 @@ export default function SalesOrdersView({ db, actions, toast, openDoc, readOnly 
     const rec = db.salesOrders.find(s => s.id === id);
     if (await actions.deleteSO(id)) toast("Deleted " + (rec?.number || ""), { actionLabel: "Undo", onAction: async () => { if (await actions.restoreRecord("sales_order", rec)) toast(rec.number + " restored"); } });
   };
-  const { sorted: soRows, sort, onSort } = useTableSort(db.salesOrders.slice().reverse(), {
+  const f = useFilters({ partyKind: "customer", contacts: db.contacts });
+  const { sorted: soRows, sort, onSort } = useTableSort(db.salesOrders.filter(s => f.keep(s.date, s.customerId)).reverse(), {
     number: s => s.number, customer: s => nameOf(db, s.customerId), po: s => s.poNumber || "",
     quote: s => db.quotes.find(q => q.id === s.quoteId)?.number || "", date: s => s.date, status: s => s.status,
     total: s => lineTotals(s.lineItems, s.taxRate).total,
@@ -52,6 +54,7 @@ export default function SalesOrdersView({ db, actions, toast, openDoc, readOnly 
     {!readOnly && <div className="toolbar">
       <button className="btn primary" style={{ marginLeft: "auto" }} onClick={() => setEdit(blankSO())}><Ico d={ICONS.plus} size={15} />New Sales Order</button>
     </div>}
+    {f.bar()}
     <div className="card">
       {db.salesOrders.length === 0
         ? <Empty icon={ICONS.so} title="No sales orders" msg="Create one directly, or convert an accepted quote / won proposal. From an SO you pick which line items to invoice, so you can bill in phases."

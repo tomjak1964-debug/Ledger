@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { money, fmtDate, nameOf, sum } from "../lib/helpers.js";
 import { round2 } from "../calc/ledger.js";
-import { checkNumberTaken, normRef, isCheckPayment } from "../lib/checks.js";
-import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort } from "./ui.jsx";
+import { receiptGroups } from "../calc/reports.js";
+import { checkNumberTaken, normRef } from "../lib/checks.js";
+import { rangeFor, defaultCustom } from "../lib/dateRanges.js";
+import { Ico, ICONS, Empty, Modal, Field } from "./ui.jsx";
+import FilterBar from "./FilterBar.jsx";
 
 const METHODS = ["Check", "ACH / Wire", "Credit Card", "Cash", "Other"];
 
@@ -10,101 +13,132 @@ const METHODS = ["Check", "ACH / Wire", "Credit Card", "Cash", "Other"];
 // customer receipts) and money out (kind="bill", vendor payments) are the same
 // register with the labels swapped.
 //
+// Receipts are listed as RECEIPTS, not as payment rows: one check or transfer
+// from one customer is one line, expandable to the invoices it covered. Vendor
+// payments stay one row per bill, since a check there is already flagged with
+// the bills it spans.
+//
 // Nothing here needs to "reopen" a document: balances are derived from the
 // payments (CLAUDE.md §6), so trimming or deleting a payment puts the bill or
 // invoice back in the open list on its own.
 export default function PaymentRegister({ db, actions, toast, readOnly, kind }) {
   const isBill = kind === "bill";
   const [q, setQ] = useState("");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [preset, setPreset] = useState("all");
+  const [custom, setCustom] = useState(defaultCustom);
+  const [partyId, setPartyId] = useState("");
   const [edit, setEdit] = useState(null);   // { payment, doc }
+  const [from, to] = rangeFor(preset, custom);
   const parents = isBill ? db.bills : db.invoices;
   const docLabel = isBill ? "Bill" : "Invoice";
   const partyLabel = isBill ? "Vendor" : "Customer";
-  const partyId = (d) => isBill ? d.vendorId : d.customerId;
-
-  const all = parents.flatMap(d => (d.payments || []).map(p => ({ p, doc: d })));
   const needle = q.trim().toLowerCase();
-  const rows = all.filter(({ p, doc }) => {
-    if (from && (p.date || "") < from) return false;
-    if (to && (p.date || "") > to) return false;
-    if (!needle) return true;
-    return [doc.number, doc.ref, p.ref, p.method, nameOf(db, partyId(doc))]
-      .some(v => String(v || "").toLowerCase().includes(needle));
-  });
-  const total = round2(sum(rows, r => Number(r.p.amount) || 0));
-  // Rows sharing one check number for one party are one physical check (or one
-  // customer's check covering several invoices). Two parties may legitimately
-  // write checks with the same number, so the party has to match too.
-  const sameCheck = (row) => isCheckPayment(row.p)
-    ? all.filter(r => isCheckPayment(r.p)
-      && normRef(r.p.ref).toLowerCase() === normRef(row.p.ref).toLowerCase()
-      && partyId(r.doc) === partyId(row.doc))
-    : [];
 
-  const { sorted, sort, onSort } = useTableSort(rows, {
-    date: r => r.p.date || "", party: r => nameOf(db, partyId(r.doc)), doc: r => r.doc.number || "",
-    method: r => r.p.method || "", ref: r => r.p.ref || "", amount: r => Number(r.p.amount) || 0,
-  }, { key: "date", dir: "desc" });
+  const filters = <>
+    <div className="search" style={{ maxWidth: 250 }}><Ico d={ICONS.search} size={15} />
+      <input className="input" placeholder={`Search ${partyLabel.toLowerCase()}, ${docLabel.toLowerCase()} #, check #…`}
+        value={q} onChange={e => setQ(e.target.value)} /></div>
+    {(q || preset !== "all" || partyId) && <button className="btn sm"
+      onClick={() => { setQ(""); setPreset("all"); setPartyId(""); }}>Clear</button>}
+  </>;
+  const bar = <FilterBar preset={preset} onPreset={setPreset} custom={custom} onCustom={setCustom}
+    partyKind={isBill ? "vendor" : "customer"} partyId={partyId} onParty={setPartyId} contacts={db.contacts}>
+    {filters}
+  </FilterBar>;
 
-  const removeOne = async (row) => {
-    const { p, doc } = row;
-    const run = sameCheck(row);
-    if (run.length > 1) return voidCheck(row, run);
-    if (!confirm(`Delete this ${money(p.amount)} payment? ${doc.number} goes back to open for that amount.`)) return;
-    if (await actions.deletePayments([p.id])) toast("Payment deleted — " + doc.number + " reopened");
+  const editEntry = (paymentId, docId) => {
+    const doc = parents.find(d => d.id === docId);
+    const payment = doc?.payments?.find(p => p.id === paymentId);
+    if (payment) setEdit({ payment: { ...payment }, doc });
   };
-  const voidCheck = async ({ p }, run) => {
-    const ref = normRef(p.ref);
-    const docs = run.map(r => r.doc.number).join(", ");
-    const reusable = isBill ? ` and check #${ref} can be used again` : "";
-    if (!confirm(`Void check #${ref}? Its ${run.length} payments are deleted, ${docs} go back to open${reusable}.`)) return;
-    if (await actions.deletePayments(run.map(r => r.p.id)))
-      toast(`Check #${ref} voided — ${run.length} ${docLabel.toLowerCase()}s reopened`);
-  };
+  const editModal = edit && <EditPayment db={db} actions={actions} toast={toast} kind={kind} entry={edit} onClose={() => setEdit(null)} />;
 
   return <div>
-    <div className="toolbar">
-      <div className="search"><Ico d={ICONS.search} size={15} />
-        <input className="input" placeholder={`Search ${partyLabel.toLowerCase()}, ${docLabel.toLowerCase()} #, check #…`} value={q} onChange={e => setQ(e.target.value)} /></div>
-      <label className="subtle" style={{ display: "flex", alignItems: "center", gap: 6 }}>From
-        <input className="input" type="date" style={{ maxWidth: 150 }} value={from} onChange={e => setFrom(e.target.value)} /></label>
-      <label className="subtle" style={{ display: "flex", alignItems: "center", gap: 6 }}>To
-        <input className="input" type="date" style={{ maxWidth: 150 }} value={to} onChange={e => setTo(e.target.value)} /></label>
-      {(q || from || to) && <button className="btn sm" onClick={() => { setQ(""); setFrom(""); setTo(""); }}>Clear</button>}
-    </div>
-    <div className="card">
-      <div className="card-head"><h3>{isBill ? "Payments Made" : "Payments Received"}</h3>
-        <span className="mono" style={{ marginLeft: "auto", fontWeight: 600, fontSize: 16 }}>{money(total)}</span>
-        <span className="subtle">{rows.length} payment{rows.length === 1 ? "" : "s"}</span></div>
-      {sorted.length === 0
-        ? <Empty icon={ICONS.money} title={all.length ? "Nothing matches those filters" : "No payments yet"}
-          msg={all.length ? "Widen the date range or clear the search." : isBill ? "Payments you record against vendor bills show up here, ready to edit or void." : "Payments you receive against customer invoices show up here, ready to edit or delete."} />
-        : <table><thead><tr>
-          <SortTh label="Date" col="date" sort={sort} onSort={onSort} />
-          <SortTh label={partyLabel} col="party" sort={sort} onSort={onSort} />
-          <SortTh label={docLabel} col="doc" sort={sort} onSort={onSort} />
-          <SortTh label="Method" col="method" sort={sort} onSort={onSort} />
-          <SortTh label={isBill ? "Check / Ref #" : "Ref #"} col="ref" sort={sort} onSort={onSort} />
-          <SortTh label="Amount" col="amount" sort={sort} onSort={onSort} num /><th></th></tr></thead>
-          <tbody>{sorted.map(({ p, doc }) => {
-            const run = sameCheck({ p, doc });
-            return <tr key={p.id}>
-              <td className="subtle">{fmtDate(p.date)}</td>
-              <td style={{ fontWeight: 600 }}>{nameOf(db, partyId(doc))}</td>
-              <td className="doc-id">{doc.number}</td>
-              <td className="subtle">{p.method || "—"}</td>
-              <td className="mono subtle">{p.ref ? "#" + p.ref : "—"}{run.length > 1 && <span className="subtle"> · {run.length} {docLabel.toLowerCase()}s</span>}</td>
-              <td className="num" style={{ fontWeight: 600 }}>{money(Number(p.amount) || 0)}</td>
+    {bar}
+    <Register db={db} actions={actions} toast={toast} readOnly={readOnly} kind={kind}
+      from={from} to={to} partyId={partyId} needle={needle} onEdit={editEntry} />
+    {editModal}
+  </div>;
+}
+
+/* ---------- one row per receipt / per check ----------
+   A receipt (or a payment) is what actually moved: one check or transfer, from
+   or to one party, on one date. Several documents can sit under it, so the row
+   expands to show what it was applied to. */
+function Register({ db, actions, toast, readOnly, kind, from, to, partyId, needle, onEdit }) {
+  const [open, setOpen] = useState({});
+  const isBill = kind === "bill";
+  const L = isBill
+    ? { title: "Payments", one: "payment", ref: "Check / Ref #", party: "Vendor", when: "Date Paid", docs: "Bills", doc: "bill" }
+    : { title: "Receipts", one: "receipt", ref: "Reference #", party: "Customer", when: "Date Received", docs: "Invoices", doc: "invoice" };
+  const all = receiptGroups(db, { kind, from, to, partyId });
+  const rows = needle
+    ? all.rows.filter(g => [g.ref, g.method, nameOf(db, g.partyId), ...g.lines.map(l => l.number)]
+      .some(v => String(v || "").toLowerCase().includes(needle)))
+    : all.rows;
+  const total = round2(sum(rows, g => g.amount));
+  const anyPayments = (isBill ? db.bills : db.invoices).some(d => (d.payments || []).length);
+
+  const voidGroup = async (g) => {
+    const what = g.ref ? `${L.one} #${g.ref}` : `the ${money(g.amount)} ${L.one}`;
+    const docs = g.lines.map(l => l.number).join(", ");
+    const reusable = isBill && g.ref && g.method === "Check" ? ` and check #${g.ref} can be used again` : "";
+    if (!confirm(`Delete ${what}? Its ${g.count} payment${g.count > 1 ? "s are" : " is"} removed, ${docs} go back to open${reusable}.`)) return;
+    if (await actions.deletePayments(g.lines.map(l => l.paymentId)))
+      toast(`${L.title.slice(0, -1)} deleted — ${g.count} ${L.doc}${g.count > 1 ? "s" : ""} reopened`);
+  };
+  const deleteLine = async (g, l) => {
+    if (g.count === 1) return voidGroup(g);
+    if (!confirm(`Remove the ${money(l.amount)} applied to ${l.number}? That ${L.doc} goes back to open for the amount.`)) return;
+    if (await actions.deletePayments([l.paymentId])) toast("Removed — " + l.number + " reopened");
+  };
+
+  return <div className="card">
+    <div className="card-head"><h3>{L.title}</h3>
+      <span className="mono" style={{ marginLeft: "auto", fontWeight: 600, fontSize: 16 }}>{money(total)}</span>
+      <span className="subtle">{rows.length} {L.one}{rows.length === 1 ? "" : "s"}</span></div>
+    {rows.length === 0
+      ? <Empty icon={ICONS.money} title={anyPayments ? "Nothing matches those filters" : `No ${L.one}s yet`}
+        msg={anyPayments ? "Widen the date range or clear the search."
+          : `Payments you ${isBill ? "make against vendor bills" : "receive against customer invoices"} show up here, grouped by the check or transfer they went out on.`} />
+      : <table><thead><tr>
+        <th style={{ width: 34 }}></th><th>{L.ref}</th><th>{L.party}</th><th>{L.when}</th><th>Method</th>
+        <th className="num">{L.docs}</th><th className="num">Amount</th><th></th></tr></thead>
+        <tbody>{rows.map(g => {
+          const isOpen = !!open[g.key];
+          const toggle = () => setOpen(o => ({ ...o, [g.key]: !o[g.key] }));
+          return <Fragment key={g.key}>
+            <tr style={{ cursor: "pointer" }} onClick={toggle}>
+              <td><button className="btn ghost icon" title={isOpen ? "Collapse" : `Show ${L.docs.toLowerCase()}`}
+                style={{ transform: isOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }}
+                onClick={e => { e.stopPropagation(); toggle(); }}><Ico d={ICONS.arrow} size={15} /></button></td>
+              <td className="mono doc-id">{g.ref ? "#" + g.ref : "—"}</td>
+              <td style={{ fontWeight: 600 }}>{nameOf(db, g.partyId)}</td>
+              <td className="subtle">{fmtDate(g.date)}</td>
+              <td className="subtle">{g.method || "—"}</td>
+              <td className="num subtle">{g.count}</td>
+              <td className="num" style={{ fontWeight: 600 }}>{money(g.amount)}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                {!readOnly && <button className="btn ghost icon" title="Edit payment" onClick={() => setEdit({ payment: { ...p }, doc })}><Ico d={ICONS.edit} size={15} /></button>}
-                {!readOnly && <button className="btn ghost icon" title={run.length > 1 ? "Void this check" : "Delete payment"} onClick={() => removeOne({ p, doc })}><Ico d={ICONS.trash} size={15} /></button>}
+                {!readOnly && <button className="btn ghost icon" title={`Delete this whole ${L.one}`}
+                  onClick={e => { e.stopPropagation(); voidGroup(g); }}><Ico d={ICONS.trash} size={15} /></button>}
               </td>
-            </tr>;
-          })}</tbody></table>}
-    </div>
-    {edit && <EditPayment db={db} actions={actions} toast={toast} kind={kind} entry={edit} onClose={() => setEdit(null)} />}
+            </tr>
+            {isOpen && g.lines.map(l => <tr key={l.paymentId} className="sub-row">
+              <td></td><td className="subtle" style={{ paddingLeft: 8 }}>applied to</td>
+              <td className="doc-id">{l.number}</td>
+              <td className="subtle">{fmtDate(l.docDate)}</td>
+              <td colSpan={2}></td>
+              <td className="num">{money(l.amount)}</td>
+              <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                {!readOnly && <button className="btn ghost icon" title="Edit this line" onClick={() => onEdit(l.paymentId, l.docId)}><Ico d={ICONS.edit} size={14} /></button>}
+                {!readOnly && <button className="btn ghost icon" title="Remove this line" onClick={() => deleteLine(g, l)}><Ico d={ICONS.trash} size={14} /></button>}
+              </td>
+            </tr>)}
+          </Fragment>;
+        })}
+          <tr><td></td><td style={{ fontWeight: 700 }}>Total</td><td colSpan={4}></td>
+            <td className="num" style={{ fontWeight: 700 }}>{money(total)}</td><td></td></tr>
+        </tbody></table>}
   </div>;
 }
 
@@ -141,7 +175,8 @@ function EditPayment({ db, actions, toast, kind, entry, onClose }) {
     </div>
     {err && <p className="subtle" style={{ margin: "0 0 8px", color: "var(--neg)" }}>{err}</p>}
     <p className="subtle" style={{ marginBottom: 0 }}>
-      Lowering or removing this payment reopens {entry.doc.number} for the difference — it goes straight back into {kind === "bill" ? "Payables" : "Receivables"}.
+      Changing the date, method or reference moves this line onto a different receipt.
+      Lowering or removing it reopens {entry.doc.number} for the difference.
     </p>
   </Modal>;
 }

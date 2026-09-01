@@ -4,6 +4,7 @@ import { paid, billStatus, agingBuckets, round2 } from "../calc/ledger.js";
 import { checksPdf } from "../lib/checkPrint.js";
 import { remittancesPdf } from "../lib/remittance.js";
 import { nextCheckNumber, checkNumberTaken, remitEmail } from "../lib/checks.js";
+import { useFilters } from "../components/useFilters.jsx";
 import { Ico, ICONS, Badge, Empty, Modal, Field, SortTh, useTableSort } from "../components/ui.jsx";
 import PaymentModal from "../components/PaymentModal.jsx";
 import Attachments from "../components/Attachments.jsx";
@@ -40,7 +41,8 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
   const bk = agingBuckets(open, b => b.dueDate, b => (Number(b.amount) || 0) - paid(b));
   const totalOpen = bk.cur + bk.d30 + bk.d60 + bk.d90 + bk.d90p;
   const settled = db.bills.filter(b => billStatus(b) === "paid");
-  const listed = showPaid ? db.bills : db.bills.filter(b => billStatus(b) !== "paid");
+  const f = useFilters({ partyKind: "vendor", contacts: db.contacts });
+  const listed = db.bills.filter(b => (showPaid || billStatus(b) !== "paid") && f.keep(b.date, b.vendorId));
   const { sorted: billRows, sort, onSort } = useTableSort(listed.slice().reverse(), {
     number: b => b.number, vendor: b => nameOf(db, b.vendorId), ref: b => b.ref || "", date: b => b.date, due: b => b.dueDate,
     status: b => billStatus(b), paid: b => paidDate(b), amount: b => Number(b.amount) || 0, balance: b => (Number(b.amount) || 0) - paid(b),
@@ -70,6 +72,7 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
         <div className="bucket hot"><div className="b-lbl">90+ days</div><div className="b-val">{money(bk.d90p)}</div></div>
       </div></div>
     </div>
+    {f.bar()}
     <div className="card">
       <div className="card-head"><h3>Vendor Bills</h3>
         <label className="subtle" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontWeight: 500 }}>

@@ -354,3 +354,25 @@ table.doc-items td.mono{font-family:"IBM Plex Mono"}
 .auth-err{background:var(--neg-wash);color:var(--neg);border-radius:8px;padding:9px 12px;font-size:12.5px;margin-bottom:14px}
 .auth-note{background:var(--pos-wash);color:var(--pos);border-radius:8px;padding:9px 12px;font-size:12.5px;margin-bottom:14px}
 .auth-switch{margin-top:14px;font-size:12.5px;color:var(--muted);text-align:center}
+
+/* ===== reports: Sage-style category rail ===== */
+.rpt-layout{display:grid;grid-template-columns:236px 1fr;gap:16px;align-items:start}
+.rpt-rail{display:flex;flex-direction:column;gap:2px;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--radius);box-shadow:var(--shadow);padding:6px;position:sticky;top:16px}
+.rpt-rail-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;cursor:pointer;
+  border:0;background:transparent;font:inherit;color:var(--muted);font-weight:600;font-size:13px;
+  padding:9px 10px;border-radius:8px;transition:background .12s,color .12s}
+.rpt-rail-item:hover{background:var(--canvas);color:var(--ink)}
+.rpt-rail-item.on{background:var(--accent-wash);color:var(--accent-deep)}
+.rpt-rail-item > span:first-of-type{flex:1;min-width:0}
+.rpt-rail-n{flex:none;font-size:11px;font-weight:700;color:var(--muted-2);background:var(--canvas);
+  border-radius:20px;padding:1px 7px}
+.rpt-rail-item.on .rpt-rail-n{background:var(--surface);color:var(--accent)}
+.rpt-pane{min-width:0}
+tr.sub-row td{background:var(--canvas);font-size:12.5px}
+@media (max-width:900px){
+  .rpt-layout{grid-template-columns:1fr}
+  .rpt-rail{position:static;flex-direction:row;flex-wrap:wrap}
+  .rpt-rail-item{width:auto}
+}
+@media print{.rpt-layout{display:block}}

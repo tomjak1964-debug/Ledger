@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { uid, money, fmtDate, todayISO, sum, EXPENSE_CATS } from "../lib/helpers.js";
+import { useFilters } from "../components/useFilters.jsx";
 import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort } from "../components/ui.jsx";
 import Attachments from "../components/Attachments.jsx";
 
@@ -14,11 +15,13 @@ export default function ExpensesView({ db, actions, toast, readOnly }) {
   };
   const startNew = () => setEdit({ id: uid(), _new: true, date: todayISO(), category: "Materials", vendor: "", amount: 0, method: "Credit Card", notes: "", salesOrderId: "" });
   const openSOs = db.salesOrders.filter(s => s.status === "open");
+  const f = useFilters();
+  const shown = db.expenses.filter(e => f.keep(e.date));
   const byCat = {};
-  db.expenses.forEach(e => { byCat[e.category] = (byCat[e.category] || 0) + (Number(e.amount) || 0); });
+  shown.forEach(e => { byCat[e.category] = (byCat[e.category] || 0) + (Number(e.amount) || 0); });
   const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
-  const total = sum(db.expenses, e => Number(e.amount) || 0);
-  const { sorted: expRows, sort, onSort } = useTableSort(db.expenses, {
+  const total = sum(shown, e => Number(e.amount) || 0);
+  const { sorted: expRows, sort, onSort } = useTableSort(shown, {
     date: e => e.date, category: e => e.category, vendor: e => e.vendor || "", method: e => e.method || "", notes: e => e.notes || "", amount: e => Number(e.amount) || 0,
   }, { key: "date", dir: "desc" });
   return <div>
@@ -31,6 +34,7 @@ export default function ExpensesView({ db, actions, toast, readOnly }) {
       </div></div>
     </div>}
     {!readOnly && <div className="toolbar"><button className="btn primary" style={{ marginLeft: "auto" }} onClick={startNew}><Ico d={ICONS.plus} size={15} />New Expense</button></div>}
+    {f.bar()}
     <div className="card">
       {db.expenses.length === 0
         ? <Empty icon={ICONS.exp} title="No expenses" msg="Log business spend by category — materials, subs, tools, travel. Totals roll up above and into the dashboard."

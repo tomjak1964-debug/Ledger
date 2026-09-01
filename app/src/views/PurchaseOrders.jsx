@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { uid, money, fmtDate, todayISO, nameOf } from "../lib/helpers.js";
 import { lineTotals } from "../calc/ledger.js";
+import { useFilters } from "../components/useFilters.jsx";
 import { Ico, ICONS, Badge, Empty, Field, SortTh, useTableSort } from "../components/ui.jsx";
 import LineItemsEditor from "../components/LineItemsEditor.jsx";
 
@@ -24,7 +25,8 @@ export default function PurchaseOrdersView({ db, actions, toast, openDoc, readOn
       : [{ id: uid(), desc: "", qty: 1, unit: "", unitPrice: 0 }],
   });
 
-  const { sorted: poRows, sort, onSort } = useTableSort(db.purchaseOrders.slice().reverse(), {
+  const f = useFilters({ partyKind: "vendor", contacts: db.contacts });
+  const { sorted: poRows, sort, onSort } = useTableSort(db.purchaseOrders.filter(p => f.keep(p.date, p.vendorId)).reverse(), {
     number: p => p.number, vendor: p => nameOf(db, p.vendorId), job: p => db.salesOrders.find(s => s.id === p.salesOrderId)?.number || "",
     date: p => p.date, status: p => p.status, total: p => lineTotals(p.lineItems, p.taxRate).total,
   });
@@ -35,6 +37,7 @@ export default function PurchaseOrdersView({ db, actions, toast, openDoc, readOn
     {!readOnly && <div className="toolbar">
       <button className="btn primary" style={{ marginLeft: "auto" }} onClick={() => setEdit(blankPO())}><Ico d={ICONS.plus} size={15} />New Purchase Order</button>
     </div>}
+    {f.bar()}
     <div className="card">
       {db.purchaseOrders.length === 0
         ? <Empty icon={ICONS.ap} title="No purchase orders" msg="Issue POs to your vendors for parts and materials. Tie a PO to a job to feed job costing, then turn it into a bill when the invoice arrives."

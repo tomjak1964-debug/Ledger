@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { uid, money, fmtDate, todayISO, addDays, nameOf } from "../lib/helpers.js";
 import { lineTotals } from "../calc/ledger.js";
+import { useFilters } from "../components/useFilters.jsx";
 import { Ico, ICONS, Badge, Empty, Field, MenuItem, SortTh, useTableSort } from "../components/ui.jsx";
 import LineItemsEditor from "../components/LineItemsEditor.jsx";
 
@@ -8,7 +9,9 @@ export default function QuotesView({ db, actions, toast, openDoc, readOnly }) {
   const [edit, setEdit] = useState(null); // quote object being edited/created
   const [search, setSearch] = useState("");
   const customers = db.contacts.filter(c => c.type === "customer");
+  const f = useFilters({ partyKind: "customer", contacts: db.contacts });
   const filtered = db.quotes.filter(q => {
+    if (!f.keep(q.date, q.customerId)) return false;
     const s = search.toLowerCase(); if (!s) return true;
     return q.number.toLowerCase().includes(s) || nameOf(db, q.customerId).toLowerCase().includes(s) || (q.status || "").includes(s);
   });
@@ -51,6 +54,7 @@ export default function QuotesView({ db, actions, toast, openDoc, readOnly }) {
       <div className="search"><Ico d={ICONS.search} size={15} /><input className="input" placeholder="Search quotes…" value={search} onChange={e => setSearch(e.target.value)} /></div>
       {!readOnly && <button className="btn primary" style={{ marginLeft: "auto" }} onClick={startNew}><Ico d={ICONS.plus} size={15} />New Quote</button>}
     </div>
+    {f.bar()}
     <div className="card">
       {db.quotes.length === 0
         ? <Empty icon={ICONS.quote} title="No quotes yet" msg="Build a quote with the dynamic line-item form. Accepted quotes convert straight into sales orders."

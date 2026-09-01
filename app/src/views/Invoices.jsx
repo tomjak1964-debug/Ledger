@@ -2,6 +2,7 @@ import { useState } from "react";
 import { uid, money, fmtDate, todayISO, addDays, nameOf } from "../lib/helpers.js";
 import { lineTotals, balance, invoiceStatus } from "../calc/ledger.js";
 import { AUTO_NUMBER } from "../lib/store.js";
+import { useFilters } from "../components/useFilters.jsx";
 import { Ico, ICONS, Badge, Empty, Field, Modal, SortTh, useTableSort } from "../components/ui.jsx";
 import PaymentModal from "../components/PaymentModal.jsx";
 import LineItemsEditor from "../components/LineItemsEditor.jsx";
@@ -18,6 +19,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
   const [invoiceSO, setInvoiceSO] = useState(null);
   const [unprintedOnly, setUnprintedOnly] = useState(false);
   const customers = db.contacts.filter(c => c.type === "customer");
+  const f = useFilters({ partyKind: "customer", contacts: db.contacts });
   const openSOs = db.salesOrders.filter(s => s.status === "open");
   const del = async (id) => { if (!confirm("Delete this invoice?")) return; if (await actions.deleteInvoice(id)) toast("Deleted"); };
   const generateFromSO = async (so, ids, opts, print) => {
@@ -44,7 +46,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
   if (edit) return <InvoiceEditor invoice={edit} customers={customers} catalog={db.catalog} onCancel={() => setEdit(null)} onSave={save} db={db} actions={actions} toast={toast} readOnly={readOnly} />;
 
   const unprintedCount = db.invoices.filter(i => !i.printed).length;
-  const base = db.invoices.slice().reverse().filter(i => !unprintedOnly || !i.printed);
+  const base = db.invoices.slice().reverse().filter(i => (!unprintedOnly || !i.printed) && f.keep(i.date, i.customerId));
   const { sorted: rows, sort, onSort } = useTableSort(base, {
     number: i => i.number, customer: i => nameOf(db, i.customerId), date: i => i.date, due: i => i.dueDate,
     status: i => invoiceStatus(i), total: i => lineTotals(i.lineItems, i.taxRate).total, balance: i => balance(i),
@@ -62,6 +64,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
         <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Invoice</button>
       </>}
     </div>
+    {f.bar()}
     <div className="card">
       {db.invoices.length === 0
         ? <Empty icon={ICONS.inv} title="No invoices" msg="Generate an invoice from a sales order, or create a standalone one for service and T&M work. Record payments to update its status."

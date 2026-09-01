@@ -291,7 +291,14 @@ export function useLedger(session, onError) {
         // Optional: bill logged time as T&M lines (unbilled entries for this job).
         const timeIds = opts.timeEntryIds || [];
         const timeToBill = (d0.timeEntries || []).filter(te => timeIds.includes(te.id) && !te.invoiceId);
-        if (!toBill.length && !timeToBill.length) throw new Error("Select at least one line item or time entry to invoice.");
+        // Optional: extra lines typed on the invoice itself — freight, a change
+        // order, a one-off part. They belong to the invoice only, so nothing on
+        // the sales order is marked billed for them.
+        const extras = (opts.extraLines || [])
+          .filter(li => String(li.desc || "").trim() || Number(li.qty) || Number(li.unitPrice))
+          .map(li => ({ id: uid(), desc: String(li.desc || "").trim(), qty: Number(li.qty) || 0, unit: li.unit || "", unitPrice: Number(li.unitPrice) || 0 }));
+        if (!toBill.length && !timeToBill.length && !extras.length)
+          throw new Error("Select at least one line item, time entry, or added line to invoice.");
         const date = opts.date || todayISO();
         let number;
         const manual = (opts.number || "").trim();
@@ -314,6 +321,7 @@ export function useLedger(session, onError) {
           lineItems: [
             ...toBill.map(li => ({ id: uid(), desc: li.desc, qty: li.qty, unit: li.unit, unitPrice: li.unitPrice })),
             ...timeLines,
+            ...extras,
           ],
           taxRate: so.taxRate, payments: [],
         };

@@ -124,8 +124,10 @@ function ReportCard({ title, rangeLabel, right, children }) {
    Same shape both ways: one row per check or transfer, optionally expanded to
    the documents it was applied to. "Summary" shows just the money that moved;
    "Detail" shows it with every invoice or bill underneath. */
-const ReceiptsReport = (p) => <RegisterReport {...p} kind="invoice" />;
-const PaymentsReport = (p) => <RegisterReport {...p} kind="bill" />;
+// Declared as functions, not const arrows: REPORTS above is built at module
+// load and would hit the temporal dead zone on a const declared down here.
+function ReceiptsReport(p) { return <RegisterReport {...p} kind="invoice" />; }
+function PaymentsReport(p) { return <RegisterReport {...p} kind="bill" />; }
 
 function RegisterReport({ db, from, to, partyId, rangeLabel: label, kind }) {
   const [detail, setDetail] = useState(false);
@@ -194,8 +196,8 @@ function RegisterReport({ db, from, to, partyId, rangeLabel: label, kind }) {
 }
 
 /* ---------- Aged Receivables / Payables ---------- */
-const AgedReceivablesReport = (p) => <AgedReport {...p} kind="ar" />;
-const AgedPayablesReport = (p) => <AgedReport {...p} kind="ap" />;
+function AgedReceivablesReport(p) { return <AgedReport {...p} kind="ar" />; }
+function AgedPayablesReport(p) { return <AgedReport {...p} kind="ap" />; }
 
 function AgedReport({ db, asOf, partyId, kind }) {
   const isAR = kind === "ar";

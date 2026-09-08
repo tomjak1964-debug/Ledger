@@ -6,6 +6,7 @@ import { checkNumberTaken, normRef } from "../lib/checks.js";
 import { rangeFor, defaultCustom } from "../lib/dateRanges.js";
 import { Ico, ICONS, Empty, Modal, Field } from "./ui.jsx";
 import FilterBar from "./FilterBar.jsx";
+import ReceiptModal from "./ReceiptModal.jsx";
 
 const METHODS = ["Check", "ACH / Wire", "Credit Card", "Cash", "Other"];
 
@@ -27,7 +28,8 @@ export default function PaymentRegister({ db, actions, toast, readOnly, kind }) 
   const [preset, setPreset] = useState("all");
   const [custom, setCustom] = useState(defaultCustom);
   const [partyId, setPartyId] = useState("");
-  const [edit, setEdit] = useState(null);   // { payment, doc }
+  const [edit, setEdit] = useState(null);        // { payment, doc } — one line of a receipt
+  const [editGroup, setEditGroup] = useState(null);  // a whole receipt, re-allocated across invoices
   const [from, to] = rangeFor(preset, custom);
   const parents = isBill ? db.bills : db.invoices;
   const docLabel = isBill ? "Bill" : "Invoice";
@@ -53,11 +55,22 @@ export default function PaymentRegister({ db, actions, toast, readOnly, kind }) 
   };
   const editModal = edit && <EditPayment db={db} actions={actions} toast={toast} kind={kind} entry={edit} onClose={() => setEdit(null)} />;
 
+  // Receipts open whole: the same modal that records one, loaded with what it
+  // already covers, so invoices can be added to it or taken off it.
+  const groupModal = editGroup && <ReceiptModal db={db} receipt={editGroup} onClose={() => setEditGroup(null)}
+    onSave={async (allocations, meta) => {
+      const ok = await actions.updateReceipt(editGroup.lines.map(l => l.paymentId), allocations, meta);
+      if (ok) toast("Receipt updated");
+      return ok;
+    }} />;
+
   return <div>
     {bar}
     <Register db={db} actions={actions} toast={toast} readOnly={readOnly} kind={kind}
-      from={from} to={to} partyId={partyId} needle={needle} onEdit={editEntry} />
+      from={from} to={to} partyId={partyId} needle={needle} onEdit={editEntry}
+      onEditGroup={isBill ? null : setEditGroup} />
     {editModal}
+    {groupModal}
   </div>;
 }
 
@@ -65,7 +78,7 @@ export default function PaymentRegister({ db, actions, toast, readOnly, kind }) 
    A receipt (or a payment) is what actually moved: one check or transfer, from
    or to one party, on one date. Several documents can sit under it, so the row
    expands to show what it was applied to. */
-function Register({ db, actions, toast, readOnly, kind, from, to, partyId, needle, onEdit }) {
+function Register({ db, actions, toast, readOnly, kind, from, to, partyId, needle, onEdit, onEditGroup }) {
   const [open, setOpen] = useState({});
   const isBill = kind === "bill";
   const L = isBill
@@ -119,6 +132,8 @@ function Register({ db, actions, toast, readOnly, kind, from, to, partyId, needl
               <td className="num subtle">{g.count}</td>
               <td className="num" style={{ fontWeight: 600 }}>{money(g.amount)}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                {!readOnly && onEditGroup && <button className="btn ghost icon" title={`Open this ${L.one} — add or remove ${L.docs.toLowerCase()}`}
+                  onClick={e => { e.stopPropagation(); onEditGroup(g); }}><Ico d={ICONS.edit} size={15} /></button>}
                 {!readOnly && <button className="btn ghost icon" title={`Delete this whole ${L.one}`}
                   onClick={e => { e.stopPropagation(); voidGroup(g); }}><Ico d={ICONS.trash} size={15} /></button>}
               </td>

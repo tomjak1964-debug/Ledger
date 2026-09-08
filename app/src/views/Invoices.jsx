@@ -43,14 +43,14 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
     if (saved) { setEdit(null); toast(inv._new ? "Invoice created" : "Invoice saved"); }
   };
 
-  if (edit) return <InvoiceEditor invoice={edit} customers={customers} catalog={db.catalog} onCancel={() => setEdit(null)} onSave={save} db={db} actions={actions} toast={toast} readOnly={readOnly} />;
-
   const unprintedCount = db.invoices.filter(i => !i.printed).length;
   const base = db.invoices.slice().reverse().filter(i => (!unprintedOnly || !i.printed) && f.keep(i.date, i.customerId));
   const { sorted: rows, sort, onSort } = useTableSort(base, {
     number: i => i.number, customer: i => nameOf(db, i.customerId), date: i => i.date, due: i => i.dueDate,
     status: i => invoiceStatus(i), total: i => lineTotals(i.lineItems, i.taxRate).total, balance: i => balance(i),
   });
+
+  if (edit) return <InvoiceEditor invoice={edit} customers={customers} catalog={db.catalog} onCancel={() => setEdit(null)} onSave={save} db={db} actions={actions} toast={toast} readOnly={readOnly} />;
 
   return <div>
     <div className="toolbar">

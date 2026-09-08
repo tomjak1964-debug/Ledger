@@ -157,11 +157,29 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
       <div className="card-head"><h3>Account</h3></div>
       <div className="card-body">
         <div className="kv"><dt>Signed in as</dt><dd>{session.user.email}</dd></div>
+        <div className="kv"><dt>App build</dt><dd className="mono">{__BUILD__}</dd></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
+          <button className="btn" onClick={reloadLatest}>Load Latest Version</button>
+          <span className="subtle">Clears this device's cached copy of the app and reloads. Your data isn't touched.</span>
+        </div>
         <div className="divider"></div>
         <ChangePassword toast={toast} />
       </div>
     </div>}
   </div>;
+}
+
+// The app is a PWA, so a browser can keep serving the build it cached. This
+// throws that copy away and reloads, which is the difference between "the fix
+// isn't working" and "the fix hasn't arrived". Data lives in Supabase, so
+// nothing here is at risk.
+async function reloadLatest() {
+  try {
+    if ("serviceWorker" in navigator)
+      await Promise.all((await navigator.serviceWorker.getRegistrations()).map(r => r.unregister()));
+    if (window.caches) await Promise.all((await caches.keys()).map(k => caches.delete(k)));
+  } catch { /* private mode / storage blocked — the reload below still helps */ }
+  location.reload();
 }
 
 // Self-service password change for the signed-in user.

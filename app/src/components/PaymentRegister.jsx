@@ -168,11 +168,24 @@ function EditPayment({ db, actions, toast, kind, entry, onClose }) {
     : "";
   const err = amt === 0 ? "Enter an amount." : refErr;
 
+  // Money can land against the wrong document — a bad import, a mis-click. The
+  // whole ledger is offered here, not just this party's, because that is
+  // exactly the case that needs correcting: the payment belongs to someone
+  // else's bill. Moving it keeps its date, method and reference; deleting and
+  // re-recording would lose them.
+  const [docId, setDocId] = useState(entry.doc.id);
+  const choices = (kind === "bill" ? db.bills : db.invoices).slice().sort((a, b) =>
+    (nameOf(db, kind === "bill" ? a.vendorId : a.customerId) || "").localeCompare(nameOf(db, kind === "bill" ? b.vendorId : b.customerId) || "")
+    || (b.date || "").localeCompare(a.date || ""));
+  const label = (d) => `${nameOf(db, kind === "bill" ? d.vendorId : d.customerId)} · ${d.number}${d.ref ? " · " + d.ref : ""}`;
+  const moved = docId !== entry.doc.id;
+  const movedTo = moved ? choices.find(d => d.id === docId) : null;
+
   const save = async () => {
     setBusy(true);
-    const ok = await actions.updatePayment(kind, entry.doc.id, p);
+    const ok = await actions.updatePayment(kind, entry.doc.id, p, docId);
     setBusy(false);
-    if (ok) { toast("Payment updated"); onClose(); }
+    if (ok) { toast(moved ? `Payment moved to ${movedTo?.number || "the other document"}` : "Payment updated"); onClose(); }
   };
 
   return <Modal title={"Edit Payment · " + entry.doc.number} onClose={onClose}
@@ -187,9 +200,16 @@ function EditPayment({ db, actions, toast, kind, entry, onClose }) {
         <input className="input mono" value={p.ref || ""} onChange={e => setP({ ...p, ref: e.target.value })}
           style={refErr ? { borderColor: "var(--neg)" } : undefined} /></Field>
     </div>
-    {err && <p className="subtle" style={{ margin: "0 0 8px", color: "var(--neg)" }}>{err}</p>}
+    <Field label={"Applied to"} hint={`Move this payment onto a different ${kind === "bill" ? "bill" : "invoice"} if it landed on the wrong one`}>
+      <select className="select" value={docId} onChange={e => setDocId(e.target.value)}>
+        {choices.map(d => <option key={d.id} value={d.id}>{label(d)}</option>)}
+      </select></Field>
+    {err && <p className="subtle" style={{ margin: "8px 0", color: "var(--neg)" }}>{err}</p>}
+    {moved && <p className="subtle" style={{ margin: "8px 0", color: "var(--accent)" }}>
+      {money(amt)} moves off {entry.doc.number} onto {movedTo?.number} — {entry.doc.number} reopens for that amount and {movedTo?.number} is paid down by it.
+    </p>}
     <p className="subtle" style={{ marginBottom: 0 }}>
-      Changing the date, method or reference moves this line onto a different receipt.
+      Changing the date, method or reference moves this line onto a different {kind === "bill" ? "payment" : "receipt"}.
       Lowering or removing it reopens {entry.doc.number} for the difference.
     </p>
   </Modal>;

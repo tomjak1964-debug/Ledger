@@ -4,7 +4,7 @@ import { lineTotals, balance, invoiceStatus, agingBuckets, round2 } from "../cal
 import { useFilters } from "../components/useFilters.jsx";
 import { Ico, ICONS, Badge, Empty, SortTh, useTableSort } from "../components/ui.jsx";
 import PaymentModal from "../components/PaymentModal.jsx";
-import ReceiptModal from "../components/ReceiptModal.jsx";
+import PaymentGroupModal from "../components/PaymentGroupModal.jsx";
 import EmailModal from "../components/EmailModal.jsx";
 import PaymentRegister from "../components/PaymentRegister.jsx";
 import { invoicePdf } from "../lib/invoicePdf.js";
@@ -82,7 +82,7 @@ export default function ReceivablesView({ db, actions, toast, openDoc, readOnly 
             </tr>;
           })}</tbody></table>}
     </div></>}
-    {receipt && <ReceiptModal db={db} onClose={() => setReceipt(false)}
+    {receipt && <PaymentGroupModal db={db} kind="invoice" onClose={() => setReceipt(false)}
       onSave={async (allocations, meta) => {
         const ok = await actions.recordReceipt(allocations, meta);
         if (ok) toast("Receipt recorded");

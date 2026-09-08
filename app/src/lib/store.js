@@ -652,7 +652,7 @@ export function useLedger(session, onError) {
     async recordReceipt(allocations, meta) {
       try {
         const rows = allocations
-          .map(a => ({ invoiceId: a.invoiceId, payment: { id: uid(), amount: round2(Number(a.amount) || 0), date: meta.date, method: meta.method, ref: meta.ref || "" } }))
+          .map(a => ({ invoiceId: a.docId, payment: { id: uid(), amount: round2(Number(a.amount) || 0), date: meta.date, method: meta.method, ref: meta.ref || "" } }))
           .filter(r => Math.abs(r.payment.amount) > 0.005);
         if (!rows.length) throw new Error("Nothing to apply — select at least one item with an amount.");
         th(await supabase.from("payments").insert(rows.map(r => A.paymentToRow(r.payment, "invoice", r.invoiceId))));
@@ -667,44 +667,50 @@ export function useLedger(session, onError) {
       } catch (e) { return fail(e); }
     },
 
-    // Edit a receipt as a whole — not just one line of it. The receipt keeps its
-    // identity (same date / method / reference on every line, so it stays one
-    // group in the register); invoices added to it get new payment rows,
-    // invoices taken off it have theirs deleted, and amounts already applied are
-    // corrected in place. Nothing has to be "reopened": balances are derived
-    // from the payments (CLAUDE.md §6).
-    async updateReceipt(prevPaymentIds, allocations, meta) {
+    // Edit a whole receipt or vendor payment — not just one line of it. The
+    // payment keeps its identity (same date / method / reference on every line,
+    // so it stays one group in the register); documents added to it get new
+    // payment rows, documents taken off it have theirs deleted, and amounts
+    // already applied are corrected in place. Nothing has to be "reopened":
+    // balances are derived from the payments (CLAUDE.md §6). A check keeps its
+    // own number: every row in the group is allowed to hold it.
+    async updatePaymentGroup(parentType, prevPaymentIds, allocations, meta) {
       try {
         const keep = (allocations || [])
-          .map(a => ({ invoiceId: a.invoiceId, paymentId: a.paymentId, amount: round2(Number(a.amount) || 0) }))
+          .map(a => ({ docId: a.docId, paymentId: a.paymentId, amount: round2(Number(a.amount) || 0) }))
           .filter(a => Math.abs(a.amount) > 0.005);
-        if (!keep.length) throw new Error("Nothing to apply — keep at least one item on the receipt, or delete the receipt instead.");
+        if (!keep.length) throw new Error("Nothing to apply — keep at least one item on it, or delete it instead.");
         const stamp = { date: meta.date, method: meta.method, ref: meta.ref || "" };
+        const prev = [...new Set(prevPaymentIds || [])];
         const writes = keep.map(a => ({
-          invoiceId: a.invoiceId,
+          docId: a.docId,
           isNew: !a.paymentId,
           payment: { id: a.paymentId || uid(), amount: a.amount, ...stamp },
         }));
+        if (parentType === "bill" && stamp.method === "Check" && !normRef(stamp.ref))
+          throw new Error("A check payment needs a check number.");
+        // The check being edited may keep its number: its own rows, the ones
+        // it had and the ones it is gaining, are never a collision.
+        guardCheckNumber(parentType, { ...stamp, amount: 0 }, [...prev, ...writes.map(w => w.payment.id)]);
         const kept = new Set(writes.filter(w => !w.isNew).map(w => w.payment.id));
-        const removed = [...new Set(prevPaymentIds || [])].filter(id => !kept.has(id));
+        const removed = prev.filter(id => !kept.has(id));
 
         const inserts = writes.filter(w => w.isNew);
-        if (inserts.length) th(await supabase.from("payments").insert(inserts.map(w => A.paymentToRow(w.payment, "invoice", w.invoiceId))));
+        if (inserts.length) th(await supabase.from("payments").insert(inserts.map(w => A.paymentToRow(w.payment, parentType, w.docId))));
         for (const w of writes.filter(x => !x.isNew))
-          th(await supabase.from("payments").update(A.paymentToRow(w.payment, "invoice", w.invoiceId)).eq("id", w.payment.id));
+          th(await supabase.from("payments").update(A.paymentToRow(w.payment, parentType, w.docId)).eq("id", w.payment.id));
         if (removed.length) th(await supabase.from("payments").delete().in("id", removed));
 
         const written = new Set(writes.map(w => w.payment.id));
-        setDb(d => ({
-          ...d,
-          invoices: d.invoices.map(i => {
-            const mine = writes.filter(w => w.invoiceId === i.id).map(w => w.payment);
-            const had = i.payments || [];
-            if (!mine.length && !had.some(p => removed.includes(p.id) || written.has(p.id))) return i;
-            const rest = had.filter(p => !removed.includes(p.id) && !written.has(p.id));
-            return { ...i, payments: [...rest, ...mine] };
-          }),
-        }));
+        const apply = doc => {
+          const mine = writes.filter(w => w.docId === doc.id).map(w => w.payment);
+          const had = doc.payments || [];
+          if (!mine.length && !had.some(p => removed.includes(p.id) || written.has(p.id))) return doc;
+          return { ...doc, payments: [...had.filter(p => !removed.includes(p.id) && !written.has(p.id)), ...mine] };
+        };
+        setDb(d => parentType === "bill"
+          ? { ...d, bills: d.bills.map(apply) }
+          : { ...d, invoices: d.invoices.map(apply) });
         return true;
       } catch (e) { return fail(e); }
     },

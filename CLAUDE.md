@@ -273,7 +273,11 @@ closes; a misprinted check is reversed in one click) · **payments & receipts re
 (`src/components/PaymentRegister.jsx`, shown as Spend → Payments and Receivables → Receipts:
 search, date range, edit, delete, void a whole check; both sides list one row per
 check/transfer, expandable to the invoices or bills it covered — `receiptGroups()` in
-`src/calc/reports.js` does the grouping) · vendor **remittance contact** (A/P name /
+`src/calc/reports.js` does the grouping) · **whole receipts and payments are editable**
+(`src/components/PaymentGroupModal.jsx` + `updatePaymentGroup()` in `store.js`: open a
+receipt or check, add documents to it, untick to take them off, correct the applied
+amounts; nothing is ticked by default and Select all / Deselect all sit above the list —
+the same modal records a receipt) · vendor **remittance contact** (A/P name /
 number / email / remit-to address, migration 017 — the email default when sending a remittance,
 and the mail-to block on printed checks and remittances) · installable PWA (manifest + icons +
 service worker; Supabase never cached).

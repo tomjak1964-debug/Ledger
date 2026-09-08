@@ -2,7 +2,14 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// Stamped into the bundle so Settings → Account can say which build is running.
+// Two rounds have been lost to "is the fix live or is my browser cached?" — this
+// answers it at a glance. Vercel exports the commit sha; local builds get a date.
+const sha = (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 7);
+const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC' + (sha ? ' · ' + sha : '');
+
 export default defineConfig({
+  define: { __BUILD__: JSON.stringify(stamp) },
   plugins: [
     react(),
     VitePWA({

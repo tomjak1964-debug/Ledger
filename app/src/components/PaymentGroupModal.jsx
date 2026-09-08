@@ -49,7 +49,9 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
   }, [group]);
 
   const docBalance = (d) => isBill ? round2((Number(d.amount) || 0) - paid(d)) : balance(d);
-  const ownerOf = (d) => isBill ? d.vendorId : d.customerId;
+  // Normalised the same way the register groups them, so a document with no
+  // party on it still lines up with its group instead of vanishing from here.
+  const ownerOf = (d) => (isBill ? d.vendorId : d.customerId) || "";
   // A document already on this payment would be open again for its share if the
   // line came off, so that — not the current balance — is what's available here.
   const openBal = (d) => round2(docBalance(d) + (onGroup[d.id]?.amount || 0));
@@ -113,7 +115,7 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
 
     <div className="divider"></div>
 
-    {!partyId
+    {!partyId && !editing
       ? <p className="subtle" style={{ margin: "8px 0" }}>Choose a {L.party.toLowerCase()} to see their open {L.doc.toLowerCase()}s.</p>
       : items.length === 0
         ? <p className="subtle" style={{ margin: "8px 0" }}>Nothing open for this {L.party.toLowerCase()} — every {L.doc.toLowerCase()} is settled.</p>

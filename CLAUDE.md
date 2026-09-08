@@ -277,7 +277,10 @@ check/transfer, expandable to the invoices or bills it covered — `receiptGroup
 (`src/components/PaymentGroupModal.jsx` + `updatePaymentGroup()` in `store.js`: open a
 receipt or check, add documents to it, untick to take them off, correct the applied
 amounts; nothing is ticked by default and Select all / Deselect all sit above the list —
-the same modal records a receipt) · vendor **remittance contact** (A/P name /
+the same modal records a receipt) · **a payment can be moved to another
+document** (the "Applied to" selector in the single-line editor, `updatePayment`'s
+`toParentId`) — money landed on the wrong bill or invoice is re-pointed keeping its
+date, method and reference, and both documents re-settle themselves · vendor **remittance contact** (A/P name /
 number / email / remit-to address, migration 017 — the email default when sending a remittance,
 and the mail-to block on printed checks and remittances) · installable PWA (manifest + icons +
 service worker; Supabase never cached).

@@ -613,19 +613,33 @@ export function useLedger(session, onError) {
 
     // Correct a recorded payment in place. Bills and invoices reopen on their
     // own when an amount drops, because balances are derived (CLAUDE.md §6).
-    async updatePayment(parentType, parentId, p) {
+    // `toParentId` moves the payment onto a different document — the repair for
+    // money landed against the wrong bill or invoice. It keeps the payment's
+    // date, method and reference, which deleting and re-recording would lose,
+    // and both documents settle themselves: the one it left reopens, the one it
+    // joins is paid down (CLAUDE.md §6).
+    async updatePayment(parentType, parentId, p, toParentId) {
       try {
-        const prev = (parentType === "invoice" ? dbRef.current.invoices : dbRef.current.bills)
-          .find(x => x.id === parentId)?.payments?.find(x => x.id === p.id);
+        const docs = parentType === "invoice" ? dbRef.current.invoices : dbRef.current.bills;
+        const target = toParentId || parentId;
+        if (target !== parentId && !docs.some(d => d.id === target)) throw new Error("That document no longer exists.");
+        const prev = docs.find(x => x.id === parentId)?.payments?.find(x => x.id === p.id);
         const payment = { ...p, amount: round2(Number(p.amount) || 0), ref: normRef(p.ref) };
         // Keeping the same number on the same check is never a duplicate.
         if (normRef(prev?.ref) !== payment.ref || prev?.method !== payment.method) guardCheckNumber(parentType, payment, [payment.id]);
-        th(await supabase.from("payments").update(A.paymentToRow(payment, parentType, parentId)).eq("id", payment.id));
-        const swap = doc => doc.id === parentId
-          ? { ...doc, payments: (doc.payments || []).map(x => x.id === payment.id ? payment : x) } : doc;
+        th(await supabase.from("payments").update(A.paymentToRow(payment, parentType, target)).eq("id", payment.id));
+        const apply = doc => {
+          if (doc.id === parentId && parentId !== target)
+            return { ...doc, payments: (doc.payments || []).filter(x => x.id !== payment.id) };
+          if (doc.id !== target) return doc;
+          const had = doc.payments || [];
+          return had.some(x => x.id === payment.id)
+            ? { ...doc, payments: had.map(x => x.id === payment.id ? payment : x) }
+            : { ...doc, payments: [...had, payment] };
+        };
         setDb(d => parentType === "invoice"
-          ? { ...d, invoices: d.invoices.map(swap) }
-          : { ...d, bills: d.bills.map(swap) });
+          ? { ...d, invoices: d.invoices.map(apply) }
+          : { ...d, bills: d.bills.map(apply) });
         return payment;
       } catch (e) { return fail(e); }
     },

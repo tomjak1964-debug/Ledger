@@ -33,10 +33,18 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
   // in here uses the default below.
   const [alloc, setAlloc] = useState({});
 
-  // What this receipt / payment already covers: doc id -> { paymentId, amount }.
+  // What this receipt / payment already covers, per document. A group holds one
+  // line per payment ROW, and a document can carry several of them on the same
+  // check — two part-payments entered separately, say. This screen is
+  // document-first, so those fold into one row here: the amounts add up and
+  // every payment id comes along, so none is left behind on save.
   const onGroup = useMemo(() => {
     const m = {};
-    (group?.lines || []).forEach(l => { m[l.docId] = { paymentId: l.paymentId, amount: round2(l.amount) }; });
+    (group?.lines || []).forEach(l => {
+      const at = m[l.docId] || (m[l.docId] = { paymentIds: [], amount: 0 });
+      at.paymentIds.push(l.paymentId);
+      at.amount = round2(at.amount + (Number(l.amount) || 0));
+    });
     return m;
   }, [group]);
 
@@ -71,7 +79,9 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
 
   const submit = async () => {
     const allocations = items.filter(d => eff(d).checked)
-      .map(d => ({ docId: d.id, amount: eff(d).amount, paymentId: onGroup[d.id]?.paymentId }));
+      // Folded rows keep their first payment id and drop the rest: the store
+      // deletes any prior id not kept, so the merged amount lands on one row.
+      .map(d => ({ docId: d.id, amount: eff(d).amount, paymentId: onGroup[d.id]?.paymentIds[0] }));
     setSaving(true);
     const ok = await onSave(allocations, { date, method, ref });
     setSaving(false);
@@ -125,7 +135,10 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
                 <td className="doc-id">{isBill ? (d.ref || d.number) : d.number}</td>
                 <td className="subtle">{fmtDate(d.date)}</td>
                 <td className="subtle">{fmtDate(d.dueDate)}</td>
-                <td>{isCredit ? <Badge status="credit" /> : onGroup[d.id] ? <span className="subtle" style={{ fontSize: 12 }}>on this {L.one}</span> : null}</td>
+                <td>{isCredit ? <Badge status="credit" />
+                  : onGroup[d.id] ? <span className="subtle" style={{ fontSize: 12 }}>
+                    on this {L.one}{onGroup[d.id].paymentIds.length > 1 ? ` · ${onGroup[d.id].paymentIds.length} lines combined` : ""}</span>
+                    : null}</td>
                 <td className="num" style={{ fontWeight: 600, color: bal < 0 ? "var(--accent)" : undefined }}>{money(bal)}</td>
                 <td className="num"><input className="input mono" type="number" step="any" style={{ textAlign: "right" }}
                   value={a.amount} disabled={!a.checked} onChange={e => setLine(d, { amount: e.target.value })} /></td>

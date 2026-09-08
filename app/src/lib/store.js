@@ -667,6 +667,48 @@ export function useLedger(session, onError) {
       } catch (e) { return fail(e); }
     },
 
+    // Edit a receipt as a whole — not just one line of it. The receipt keeps its
+    // identity (same date / method / reference on every line, so it stays one
+    // group in the register); invoices added to it get new payment rows,
+    // invoices taken off it have theirs deleted, and amounts already applied are
+    // corrected in place. Nothing has to be "reopened": balances are derived
+    // from the payments (CLAUDE.md §6).
+    async updateReceipt(prevPaymentIds, allocations, meta) {
+      try {
+        const keep = (allocations || [])
+          .map(a => ({ invoiceId: a.invoiceId, paymentId: a.paymentId, amount: round2(Number(a.amount) || 0) }))
+          .filter(a => Math.abs(a.amount) > 0.005);
+        if (!keep.length) throw new Error("Nothing to apply — keep at least one item on the receipt, or delete the receipt instead.");
+        const stamp = { date: meta.date, method: meta.method, ref: meta.ref || "" };
+        const writes = keep.map(a => ({
+          invoiceId: a.invoiceId,
+          isNew: !a.paymentId,
+          payment: { id: a.paymentId || uid(), amount: a.amount, ...stamp },
+        }));
+        const kept = new Set(writes.filter(w => !w.isNew).map(w => w.payment.id));
+        const removed = [...new Set(prevPaymentIds || [])].filter(id => !kept.has(id));
+
+        const inserts = writes.filter(w => w.isNew);
+        if (inserts.length) th(await supabase.from("payments").insert(inserts.map(w => A.paymentToRow(w.payment, "invoice", w.invoiceId))));
+        for (const w of writes.filter(x => !x.isNew))
+          th(await supabase.from("payments").update(A.paymentToRow(w.payment, "invoice", w.invoiceId)).eq("id", w.payment.id));
+        if (removed.length) th(await supabase.from("payments").delete().in("id", removed));
+
+        const written = new Set(writes.map(w => w.payment.id));
+        setDb(d => ({
+          ...d,
+          invoices: d.invoices.map(i => {
+            const mine = writes.filter(w => w.invoiceId === i.id).map(w => w.payment);
+            const had = i.payments || [];
+            if (!mine.length && !had.some(p => removed.includes(p.id) || written.has(p.id))) return i;
+            const rest = had.filter(p => !removed.includes(p.id) && !written.has(p.id));
+            return { ...i, payments: [...rest, ...mine] };
+          }),
+        }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
+
     /* ---- bills ---- */
     async saveBill(b) {
       try {

@@ -193,6 +193,7 @@ function PayBillsModal({ db, actions, toast, onClose }) {
     bill: b, sel: false, amount: round2((Number(b.amount) || 0) - paid(b)), method: "Check",
   })));
   const upd = (i, patch) => setRows(rs => rs.map((r, x) => x === i ? { ...r, ...patch } : r));
+  const setAll = (s) => setRows(rs => rs.map(r => ({ ...r, sel: s })));
   const sel = rows.filter(r => r.sel && Number(r.amount) > 0);
   const total = sum(sel, r => Number(r.amount) || 0);
   const checkCount = new Set(sel.filter(r => r.method === "Check").map(r => r.bill.vendorId)).size;
@@ -281,6 +282,11 @@ function PayBillsModal({ db, actions, toast, onClose }) {
           style={err ? { borderColor: "var(--neg)" } : undefined} /></Field>
     </div>
     {err && <p className="subtle" style={{ margin: "0 0 8px", color: "var(--neg)" }}>{err}</p>}
+    <div className="toolbar" style={{ marginBottom: 8 }}>
+      <span className="subtle">Tick the bills this run pays.</span>
+      <button className="btn sm" style={{ marginLeft: "auto" }} disabled={rows.every(r => r.sel)} onClick={() => setAll(true)}>Select all</button>
+      <button className="btn sm" disabled={!rows.some(r => r.sel)} onClick={() => setAll(false)}>Deselect all</button>
+    </div>
     <table><thead><tr><th></th><th>Vendor</th><th>Bill / Ref</th><th>Due</th><th className="num">Balance</th><th className="num">Pay Amount</th><th>Method</th></tr></thead>
       <tbody>{rows.map((r, i) => {
         const bal = round2((Number(r.bill.amount) || 0) - paid(r.bill));

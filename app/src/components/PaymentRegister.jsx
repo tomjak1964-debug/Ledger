@@ -6,7 +6,7 @@ import { checkNumberTaken, normRef } from "../lib/checks.js";
 import { rangeFor, defaultCustom } from "../lib/dateRanges.js";
 import { Ico, ICONS, Empty, Modal, Field } from "./ui.jsx";
 import FilterBar from "./FilterBar.jsx";
-import ReceiptModal from "./ReceiptModal.jsx";
+import PaymentGroupModal from "./PaymentGroupModal.jsx";
 
 const METHODS = ["Check", "ACH / Wire", "Credit Card", "Cash", "Other"];
 
@@ -14,10 +14,9 @@ const METHODS = ["Check", "ACH / Wire", "Credit Card", "Cash", "Other"];
 // customer receipts) and money out (kind="bill", vendor payments) are the same
 // register with the labels swapped.
 //
-// Receipts are listed as RECEIPTS, not as payment rows: one check or transfer
-// from one customer is one line, expandable to the invoices it covered. Vendor
-// payments stay one row per bill, since a check there is already flagged with
-// the bills it spans.
+// Both sides list what actually moved, not raw payment rows: one check or
+// transfer, from or to one party, is one line — expandable to the invoices or
+// bills it covered, and openable as a whole to re-allocate it.
 //
 // Nothing here needs to "reopen" a document: balances are derived from the
 // payments (CLAUDE.md §6), so trimming or deleting a payment puts the bill or
@@ -55,12 +54,12 @@ export default function PaymentRegister({ db, actions, toast, readOnly, kind }) 
   };
   const editModal = edit && <EditPayment db={db} actions={actions} toast={toast} kind={kind} entry={edit} onClose={() => setEdit(null)} />;
 
-  // Receipts open whole: the same modal that records one, loaded with what it
-  // already covers, so invoices can be added to it or taken off it.
-  const groupModal = editGroup && <ReceiptModal db={db} receipt={editGroup} onClose={() => setEditGroup(null)}
+  // Receipts and payments open whole: the same modal that records one, loaded
+  // with what it already covers, so documents can be added to it or taken off.
+  const groupModal = editGroup && <PaymentGroupModal db={db} kind={kind} group={editGroup} onClose={() => setEditGroup(null)}
     onSave={async (allocations, meta) => {
-      const ok = await actions.updateReceipt(editGroup.lines.map(l => l.paymentId), allocations, meta);
-      if (ok) toast("Receipt updated");
+      const ok = await actions.updatePaymentGroup(kind, editGroup.lines.map(l => l.paymentId), allocations, meta);
+      if (ok) toast(isBill ? "Payment updated" : "Receipt updated");
       return ok;
     }} />;
 
@@ -68,7 +67,7 @@ export default function PaymentRegister({ db, actions, toast, readOnly, kind }) 
     {bar}
     <Register db={db} actions={actions} toast={toast} readOnly={readOnly} kind={kind}
       from={from} to={to} partyId={partyId} needle={needle} onEdit={editEntry}
-      onEditGroup={isBill ? null : setEditGroup} />
+      onEditGroup={setEditGroup} />
     {editModal}
     {groupModal}
   </div>;

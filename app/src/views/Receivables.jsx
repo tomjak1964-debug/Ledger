@@ -9,23 +9,34 @@ import EmailModal from "../components/EmailModal.jsx";
 import PaymentRegister from "../components/PaymentRegister.jsx";
 import { invoicePdf } from "../lib/invoicePdf.js";
 
+// The date an invoice was settled — the last payment on it.
+const paidDate = (i) => (i.payments || []).map(p => p.date).filter(Boolean).sort().pop() || "";
+
 export default function ReceivablesView({ db, actions, toast, openDoc, readOnly }) {
   const [pay, setPay] = useState(null);
   const [tab, setTab] = useState("open");
   const [receipt, setReceipt] = useState(false);
   const [remind, setRemind] = useState(null);
+  const [showPaid, setShowPaid] = useState(false);
   // Every invoice with a non-zero balance: positive balances are owed to us,
-  // negative balances are open credits waiting to be applied.
+  // negative balances are open credits waiting to be applied. Settled is judged
+  // on the balance rather than the status so an unapplied credit — which reads
+  // as "paid" against its own negative total — stays in the open list.
   const f = useFilters({ partyKind: "customer", contacts: db.contacts });
-  const open = db.invoices.filter(i => Math.abs(balance(i)) > 0.005 && f.keep(i.date, i.customerId));
+  const mine = db.invoices.filter(i => f.keep(i.date, i.customerId));
+  const isSettled = i => Math.abs(balance(i)) <= 0.005;
+  const open = mine.filter(i => !isSettled(i));
+  const settled = mine.filter(isSettled);
+  const listed = showPaid ? mine : open;
   const b = agingBuckets(open, i => i.dueDate, balance);      // positive balances only
   const total = b.cur + b.d30 + b.d60 + b.d90 + b.d90p;
   const credits = open.filter(i => balance(i) < -0.005);
   const creditTotal = round2(credits.reduce((s, i) => s + balance(i), 0));
   const isCredit = i => lineTotals(i.lineItems, i.taxRate).total < 0;
-  const { sorted: arRows, sort, onSort } = useTableSort(open, {
+  const { sorted: arRows, sort, onSort } = useTableSort(listed, {
     number: i => i.number, customer: i => nameOf(db, i.customerId), due: i => i.dueDate,
-    age: i => daysBetween(i.dueDate, todayISO()), status: i => invoiceStatus(i), balance: i => balance(i),
+    age: i => daysBetween(i.dueDate, todayISO()), status: i => invoiceStatus(i),
+    paid: i => paidDate(i), balance: i => balance(i),
   }, { key: "due", dir: "asc" });
 
   return <div>
@@ -55,28 +66,39 @@ export default function ReceivablesView({ db, actions, toast, openDoc, readOnly 
       </div>
     </div>
     <div className="card">
-      <div className="card-head"><h3>Open Invoices</h3></div>
-      {open.length === 0
-        ? <Empty icon={ICONS.ar} title="Nothing outstanding" msg="All invoices are paid. Receivables shows what customers still owe you, bucketed by age." />
-        : <table><thead><tr>
+      <div className="card-head"><h3>Customer Invoices</h3>
+        <label className="subtle" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontWeight: 500 }}>
+          <input type="checkbox" checked={showPaid} onChange={e => setShowPaid(e.target.checked)} />
+          Show paid invoices{settled.length > 0 ? ` (${settled.length})` : ""}
+        </label>
+      </div>
+      {mine.length === 0
+        ? <Empty icon={ICONS.ar} title="No invoices" msg="Receivables shows what customers still owe you, bucketed by age. Invoice a sales order, or raise a standalone invoice, and it lands here." />
+        : arRows.length === 0
+          ? <Empty icon={ICONS.ar} title="Nothing outstanding" msg="Every invoice is paid. Tick “Show paid invoices” to see the settled ones." />
+          : <table><thead><tr>
           <SortTh label="Invoice" col="number" sort={sort} onSort={onSort} />
           <SortTh label="Customer" col="customer" sort={sort} onSort={onSort} />
           <SortTh label="Due" col="due" sort={sort} onSort={onSort} />
           <SortTh label="Age" col="age" sort={sort} onSort={onSort} />
           <SortTh label="Status" col="status" sort={sort} onSort={onSort} />
+          <SortTh label="Paid" col="paid" sort={sort} onSort={onSort} />
           <SortTh label="Balance" col="balance" sort={sort} onSort={onSort} num /><th></th></tr></thead>
           <tbody>{arRows.map(inv => {
             const od = daysBetween(inv.dueDate, todayISO());
             const credit = isCredit(inv);
+            const done = isSettled(inv);
+            const late = od > 0 && !credit && !done;
             return <tr key={inv.id}>
               <td className="doc-id">{inv.number}</td><td>{nameOf(db, inv.customerId)}</td>
               <td className="subtle">{fmtDate(inv.dueDate)}</td>
-              <td className={od > 0 && !credit ? "" : "subtle"} style={od > 0 && !credit ? { color: "var(--neg)", fontWeight: 600 } : {}}>{credit ? "—" : od > 0 ? od + "d late" : "current"}</td>
-              <td><Badge status={credit ? "credit" : invoiceStatus(inv)} /></td>
+              <td className={late ? "" : "subtle"} style={late ? { color: "var(--neg)", fontWeight: 600 } : {}}>{credit || done ? "—" : od > 0 ? od + "d late" : "current"}</td>
+              <td><Badge status={credit && !done ? "credit" : invoiceStatus(inv)} /></td>
+              <td className="subtle">{done && paidDate(inv) ? fmtDate(paidDate(inv)) : "—"}</td>
               <td className="num" style={{ fontWeight: 600, color: balance(inv) < 0 ? "var(--accent)" : undefined }}>{money(balance(inv))}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                {!readOnly && !credit && <button className="btn sm primary" onClick={() => setPay(inv)}>Record Payment</button>}
-                {!readOnly && !credit && od > 0 && <button className="btn ghost icon" title="Email payment reminder" onClick={() => setRemind(inv)}><Ico d={ICONS.mail} size={16} /></button>}
+                {!readOnly && !credit && !done && <button className="btn sm primary" onClick={() => setPay(inv)}>Record Payment</button>}
+                {!readOnly && !credit && !done && od > 0 && <button className="btn ghost icon" title="Email payment reminder" onClick={() => setRemind(inv)}><Ico d={ICONS.mail} size={16} /></button>}
                 <button className="btn ghost icon" title="Print" onClick={() => openDoc("invoice", inv)}><Ico d={ICONS.print} size={16} /></button>
               </td>
             </tr>;

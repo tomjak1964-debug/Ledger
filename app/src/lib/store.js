@@ -524,17 +524,20 @@ export function useLedger(session, onError) {
       try {
         const isNew = !!i._new;
         const inv = { ...i }; delete inv._new;
-        if (isNew) {
-          const manual = (inv.number || "").trim();
-          if (!isAutoNumber(manual)) {
-            if (dbRef.current.invoices.some(x => (x.number || "").toLowerCase() === manual.toLowerCase()))
-              throw new Error(`Invoice number "${manual}" is already used.`);
-            inv.number = manual;
-          } else {
-            inv.number = await claimInvoiceNumber(inv.customerId, inv.date);
-          }
-          inv.payments = inv.payments || [];
+        const manual = (inv.number || "").trim();
+        // No two invoices may carry the same number, whether it was typed on a new
+        // one or edited on an existing one. Only a new invoice can be auto-numbered:
+        // re-generating a number for one already issued would burn a sequence number
+        // and rename a document the customer has already seen.
+        if (isNew && isAutoNumber(manual)) {
+          inv.number = await claimInvoiceNumber(inv.customerId, inv.date);
+        } else {
+          if (!manual) throw new Error("An invoice number is required.");
+          if (dbRef.current.invoices.some(x => x.id !== inv.id && (x.number || "").trim().toLowerCase() === manual.toLowerCase()))
+            throw new Error(`Invoice number "${manual}" is already used.`);
+          inv.number = manual;
         }
+        if (isNew) inv.payments = inv.payments || [];
         th(await supabase.from("invoices").upsert(A.invoiceToRow(inv)));
         await replaceLineItems("invoice_line_items", "invoice_id", inv.id, inv.lineItems);
         setDb(d => ({ ...d, invoices: upsertList(d.invoices, inv) }));

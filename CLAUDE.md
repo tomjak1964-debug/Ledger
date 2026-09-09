@@ -285,6 +285,13 @@ number / email / remit-to address, migration 017 — the email default when send
 and the mail-to block on printed checks and remittances) · installable PWA (manifest + icons +
 service worker; Supabase never cached).
 
+**Show/hide settled documents:** Payables → Vendor Bills and Receivables → Customer Invoices each
+carry a "Show paid" tick with a count, and a Paid column giving the settlement date. Receivables
+judges settled on the balance rather than the status, so an unapplied credit — which reads as
+"paid" against its own negative total — stays in the open list. **Invoice numbers are editable**
+after issue (imports and typos happen); blanks and duplicates are refused in the editor and again
+in `saveInvoice`, and only a new invoice can be auto-numbered.
+
 **Tooling:** `tools/reconcile.mjs` checks a JSON backup against a Sage journal export
 (Cash Disbursements or Cash Receipts, `.xlsx` or `.csv`, no dependencies) and reports
 anything that doesn't match on party, amount, date or reference — including one payment

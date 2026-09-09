@@ -147,6 +147,16 @@ function InvoiceEditor({ invoice, customers, catalog, onCancel, onSave, db, acti
   const [inv, setInv] = useState(invoice);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setInv(p => ({ ...p, [k]: v }));
+  // The number is editable on an issued invoice too — imports and typos happen.
+  // Only a new one may be left on (auto); anything else has to be filled in and
+  // must not collide with an invoice that already carries it. The store checks
+  // this again on save, so no path around this screen can write a duplicate.
+  const numTrim = (inv.number || "").trim();
+  const autoNum = inv._new && (!numTrim || numTrim.startsWith("("));
+  const numErr = autoNum ? ""
+    : !numTrim ? "An invoice number is required."
+      : db.invoices.some(x => x.id !== inv.id && (x.number || "").trim().toLowerCase() === numTrim.toLowerCase())
+        ? `Invoice number "${numTrim}" is already used.` : "";
   const save = async () => { setSaving(true); await onSave(inv); setSaving(false); };
   return <div>
     <div className="toolbar">
@@ -154,7 +164,7 @@ function InvoiceEditor({ invoice, customers, catalog, onCancel, onSave, db, acti
       <h2 style={{ fontSize: 18, marginLeft: 4 }}>{inv._new ? "New Invoice" : "Edit " + inv.number} <span className="mono subtle" style={{ fontSize: 14 }}>{inv.number}</span></h2>
       <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
         <button className="btn" onClick={onCancel}>Cancel</button>
-        <button className="btn primary" disabled={saving} onClick={save}><Ico d={ICONS.check} size={15} />{saving ? "Saving…" : "Save Invoice"}</button>
+        <button className="btn primary" disabled={saving || !!numErr} onClick={save}><Ico d={ICONS.check} size={15} />{saving ? "Saving…" : "Save Invoice"}</button>
       </div>
     </div>
     <div className="card"><div className="card-body">
@@ -162,13 +172,14 @@ function InvoiceEditor({ invoice, customers, catalog, onCancel, onSave, db, acti
         <Field label="Customer"><select className="select" value={inv.customerId} onChange={e => set("customerId", e.target.value)}>
           <option value="">Select customer…</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select></Field>
-        {inv._new
-          ? <Field label="Invoice #" hint="Leave as (auto) to use the generated number"><input className="input mono" value={inv.number} onChange={e => set("number", e.target.value)} /></Field>
-          : <Field label="Invoice #"><input className="input mono" value={inv.number} disabled /></Field>}
+        <Field label="Invoice #" hint={inv._new ? "Leave as (auto) to use the generated number" : "Renaming affects this invoice only"}>
+          <input className="input mono" value={inv.number} onChange={e => set("number", e.target.value)}
+            style={numErr ? { borderColor: "var(--neg)" } : undefined} /></Field>
         <Field label="Invoice Date"><input className="input" type="date" value={inv.date} onChange={e => set("date", e.target.value)} /></Field>
         <Field label="Due Date"><input className="input" type="date" value={inv.dueDate} onChange={e => set("dueDate", e.target.value)} /></Field>
         <Field label="Customer PO #"><input className="input mono" value={inv.poNumber || ""} onChange={e => set("poNumber", e.target.value)} /></Field>
       </div>
+      {numErr && <p className="subtle" style={{ margin: "0 0 8px", color: "var(--neg)" }}>{numErr}</p>}
       <div className="divider"></div>
       <LineItemsEditor items={inv.lineItems} setItems={v => set("lineItems", v)} taxRate={inv.taxRate} setTaxRate={v => set("taxRate", v)} catalog={catalog} />
       <div className="divider"></div>

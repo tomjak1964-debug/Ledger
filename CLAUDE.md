@@ -285,6 +285,12 @@ number / email / remit-to address, migration 017 — the email default when send
 and the mail-to block on printed checks and remittances) · installable PWA (manifest + icons +
 service worker; Supabase never cached).
 
+**Tooling:** `tools/reconcile.mjs` checks a JSON backup against a Sage journal export
+(Cash Disbursements or Cash Receipts, `.xlsx` or `.csv`, no dependencies) and reports
+anything that doesn't match on party, amount, date or reference — including one payment
+applied twice to the same document, which is how the original import mis-filed five
+payments. See `tools/README.md`.
+
 **Not built (candidates for next work):** credit notes / refunds · partial invoicing of an SO ·
 recurring invoices · email sending · attachments / receipt photos · quote line-item reordering ·
 multi-user roles · bank import / reconciliation · double-entry GL · undo · automated tests ·

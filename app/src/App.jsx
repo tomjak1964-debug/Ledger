@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { supabase } from "./lib/supabaseClient.js";
 import { useLedger } from "./lib/store.js";
 import { cls } from "./lib/helpers.js";
-import { invoiceStatus, paid } from "./calc/ledger.js";
+import { invoiceStatus, paid, billBalance } from "./calc/ledger.js";
 import { NAV_AREA, currentMember, canRead, canWrite, isAdminRole } from "./lib/permissions.js";
 import { Ico, ICONS } from "./components/ui.jsx";
 import DocumentView from "./components/DocumentView.jsx";
@@ -112,7 +112,7 @@ export default function App({ session }) {
     quotes: db.quotes.filter(q => q.status === "draft" || q.status === "sent").length,
     salesOrders: db.salesOrders.filter(s => s.status === "open").length,
     invoices: db.invoices.filter(i => ["unpaid", "partial", "overdue"].includes(invoiceStatus(i))).length,
-    payables: db.bills.filter(b => ((Number(b.amount) || 0) - paid(b)) > 0.005).length,
+    payables: db.bills.filter(b => (billBalance(b)) > 0.005).length,
     tasks: (db.tasks || []).filter(t => t.status === "open").length,
   };
 

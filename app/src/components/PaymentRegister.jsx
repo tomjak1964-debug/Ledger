@@ -191,12 +191,13 @@ function EditPayment({ db, actions, toast, kind, entry, onClose }) {
   const [p, setP] = useState({ ...original });
   const [busy, setBusy] = useState(false);
   const amt = round2(Number(p.amount) || 0);
+  const disc = round2(Number(p.discount) || 0);
   const changedRef = normRef(p.ref) !== normRef(original.ref) || p.method !== original.method;
   const refErr = kind === "bill" && p.method === "Check"
     ? !normRef(p.ref) ? "A check payment needs a check number."
       : changedRef && checkNumberTaken(db, p.ref, [p.id]) ? `Check #${normRef(p.ref)} is already used by another check.` : ""
     : "";
-  const err = amt === 0 ? "Enter an amount." : refErr;
+  const err = amt === 0 && disc === 0 ? "Enter an amount." : refErr;
 
   // Money can land against the wrong document — a bad import, a mis-click. The
   // whole ledger is offered here, not just this party's, because that is
@@ -223,6 +224,7 @@ function EditPayment({ db, actions, toast, kind, entry, onClose }) {
       <button className="btn primary" disabled={busy || !!err} onClick={save}>{busy ? "Saving…" : "Save Payment"}</button></>}>
     <div className="row">
       <Field label="Amount"><input className="input mono" type="number" step="any" value={p.amount} onChange={e => setP({ ...p, amount: e.target.value })} /></Field>
+      <Field label="Discount taken"><input className="input mono" type="number" step="any" value={p.discount || 0} onChange={e => setP({ ...p, discount: e.target.value })} /></Field>
       <Field label="Date"><input className="input" type="date" value={p.date || ""} onChange={e => setP({ ...p, date: e.target.value })} /></Field>
       <Field label="Method"><select className="select" value={p.method || "Other"} onChange={e => setP({ ...p, method: e.target.value })}>
         {METHODS.map(m => <option key={m}>{m}</option>)}</select></Field>

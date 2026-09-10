@@ -197,10 +197,21 @@ document, increment the matching `settings.counters` field. `startNew` reads the
 so counters must be updated inside the same `setDb` call that adds the doc.
 
 ### Derived status (never stored for invoices/bills)
-- `invoiceStatus(inv)`: `paid` if `paid(inv) >= total`; else `overdue` if `dueDate < today` and
-  not fully paid; else `partial` if any payment; else `unpaid`.
+- `invoiceStatus(inv)`: `paid` if `settled(inv) >= total`; else `overdue` if `dueDate < today` and
+  not fully settled; else `partial` if anything settled; else `unpaid`.
 - `billStatus(bill)`: same logic against `bill.amount`.
 - Comparisons use small epsilons (`- 0.005`) to dodge float error. Keep that.
+
+### Cash vs. settled (discounts)
+- `paid(doc)` is **cash** — what moved through the bank. Every cash figure (P&L, the registers,
+  collected-to-date, the Sage reconciliation) reads it, so it must never absorb a discount.
+- `discounts(doc)` sums `payments[].discount` — an early-payment term taken on a vendor bill, or
+  one a customer took on an invoice. Migration 018; the shared `payments` table covers both sides.
+- `settled(doc) = paid + discounts` is what **closes** a document: $980 cash plus a $20 discount
+  settles a $1,000 bill.
+- `balance(inv)` and `billBalance(bill)` both subtract `settled`. Use `billBalance` — the bill
+  balance used to be hand-rolled at ten call sites, which is exactly how a discount gets missed
+  in one of them.
 
 ### Money helpers
 - `lineTotals(items, taxRate)` → `{ sub, tax, total }`. `sub = Σ qty*unitPrice`, `tax = sub*rate/100`.
@@ -284,6 +295,11 @@ date, method and reference, and both documents re-settle themselves · vendor **
 number / email / remit-to address, migration 017 — the email default when sending a remittance,
 and the mail-to block on printed checks and remittances) · installable PWA (manifest + icons +
 service worker; Supabase never cached).
+
+**Discounts taken:** enterable wherever a payment is created or corrected — the single Pay /
+Receive dialog, the Pay Bills run (a Discount column; typing one drops the cash by the same
+amount and ticks the row), the whole-receipt/payment editor, and the register's line editor.
+A discount-only line is legitimate and settles its document with no cash.
 
 **Emailing a remittance:** from the pay-run confirmation (one Email per electronic group,
 vendor by vendor) and from any non-check row in Spend → Payments, as well as the single-bill

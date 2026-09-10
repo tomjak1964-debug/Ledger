@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { uid, money, fmtDate, todayISO, addDays, nameOf, sum } from "../lib/helpers.js";
-import { paid, billStatus, agingBuckets, round2 } from "../calc/ledger.js";
+import { paid, billStatus, agingBuckets, round2, billBalance } from "../calc/ledger.js";
 import { checksPdf } from "../lib/checkPrint.js";
 import { remittancesPdf } from "../lib/remittance.js";
 import { nextCheckNumber, checkNumberTaken, remitEmail } from "../lib/checks.js";
@@ -37,15 +37,15 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
   const [pay, setPay] = useState(null);
   const vendors = db.contacts.filter(c => c.type === "vendor");
   const openSOs = db.salesOrders.filter(s => s.status === "open");
-  const open = db.bills.filter(b => ((Number(b.amount) || 0) - paid(b)) > 0.005);
-  const bk = agingBuckets(open, b => b.dueDate, b => (Number(b.amount) || 0) - paid(b));
+  const open = db.bills.filter(b => (billBalance(b)) > 0.005);
+  const bk = agingBuckets(open, b => b.dueDate, b => billBalance(b));
   const totalOpen = bk.cur + bk.d30 + bk.d60 + bk.d90 + bk.d90p;
   const settled = db.bills.filter(b => billStatus(b) === "paid");
   const f = useFilters({ partyKind: "vendor", contacts: db.contacts });
   const listed = db.bills.filter(b => (showPaid || billStatus(b) !== "paid") && f.keep(b.date, b.vendorId));
   const { sorted: billRows, sort, onSort } = useTableSort(listed.slice().reverse(), {
     number: b => b.number, vendor: b => nameOf(db, b.vendorId), ref: b => b.ref || "", date: b => b.date, due: b => b.dueDate,
-    status: b => billStatus(b), paid: b => paidDate(b), amount: b => Number(b.amount) || 0, balance: b => (Number(b.amount) || 0) - paid(b),
+    status: b => billStatus(b), paid: b => paidDate(b), amount: b => Number(b.amount) || 0, balance: b => billBalance(b),
   });
 
   const save = async (bill) => { if (await actions.saveBill(bill)) { setEdit(null); toast("Bill saved"); } };
@@ -96,7 +96,7 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
           <SortTh label="Amount" col="amount" sort={sort} onSort={onSort} num />
           <SortTh label="Balance" col="balance" sort={sort} onSort={onSort} num /><th></th></tr></thead>
           <tbody>{billRows.map(b => {
-            const bal = (Number(b.amount) || 0) - paid(b);
+            const bal = billBalance(b);
             const done = billStatus(b) === "paid";
             return <tr key={b.id}>
               <td className="doc-id">{b.number}</td><td>{nameOf(db, b.vendorId)}</td><td className="mono subtle">{b.ref || "—"}</td>
@@ -197,13 +197,13 @@ function groupSel(rows) {
 }
 
 function PayBillsModal({ db, actions, toast, onClose }) {
-  const openBills = db.bills.filter(b => ((Number(b.amount) || 0) - paid(b)) > 0.005);
+  const openBills = db.bills.filter(b => (billBalance(b)) > 0.005);
   const [date, setDate] = useState(todayISO());
   const [startChk, setStartChk] = useState(() => nextCheckNumber(db, db.settings));
   const [busy, setBusy] = useState(false);
   const [docs, setDocs] = useState(null); // after recording: {checkRuns, remitRuns, checkPaymentIds}
   const [rows, setRows] = useState(() => openBills.map(b => ({
-    bill: b, sel: false, amount: round2((Number(b.amount) || 0) - paid(b)), method: "Check",
+    bill: b, sel: false, amount: round2(billBalance(b)), discount: 0, method: "Check",
   })));
   // Confirmation / trace numbers for the electronic groups, keyed the same way
   // the groups are. Kept across selection changes so re-ticking a row doesn't
@@ -211,8 +211,12 @@ function PayBillsModal({ db, actions, toast, onClose }) {
   const [eRefs, setERefs] = useState({});
   const [emailRun, setEmailRun] = useState(null);   // a remittance group being emailed
   const upd = (i, patch) => setRows(rs => rs.map((r, x) => x === i ? { ...r, ...patch } : r));
+  // Taking a term drops the cash by the discount: the bill still closes because
+  // amount + discount settles it.
+  const updDiscount = (i, v) => setRows(rs => rs.map((r, x) => x === i
+    ? { ...r, discount: v, amount: round2(Math.max(0, billBalance(r.bill) - (Number(v) || 0))), sel: true } : r));
   const setAll = (s) => setRows(rs => rs.map(r => ({ ...r, sel: s })));
-  const sel = rows.filter(r => r.sel && Number(r.amount) > 0);
+  const sel = rows.filter(r => r.sel && (Number(r.amount) > 0 || Number(r.discount) > 0));
   const total = sum(sel, r => Number(r.amount) || 0);
   const groups = groupSel(sel);
   const eGroups = groups.filter(g => g.method !== "Check");
@@ -236,14 +240,15 @@ function PayBillsModal({ db, actions, toast, onClose }) {
     });
     const entries = groups.flatMap(g => g.rows.map(r => ({
       parentType: "bill", parentId: r.bill.id,
-      payment: { id: uid(), amount: Number(r.amount) || 0, date, method: g.method, ref: g.ref },
+      payment: { id: uid(), amount: Number(r.amount) || 0, discount: Number(r.discount) || 0, date, method: g.method, ref: g.ref },
     })));
     const written = await actions.recordPayments(entries);
     setBusy(false);
     if (!written) return;
     toast(`${sel.length} payment${sel.length > 1 ? "s" : ""} recorded — ${money(total)}`);
     const vend = id => db.contacts.find(c => c.id === id);
-    const lines = g => g.rows.map(r => ({ ref: r.bill.ref || r.bill.number, date: r.bill.date, desc: r.bill.notes, amount: Number(r.amount) || 0 }));
+    const lines = g => g.rows.map(r => ({ ref: r.bill.ref || r.bill.number, date: r.bill.date, desc: r.bill.notes,
+      invoiceAmount: Number(r.bill.amount) || 0, discount: Number(r.discount) || 0, amount: Number(r.amount) || 0 }));
     const checkGroups = groups.filter(g => g.method === "Check");
     setDocs({
       checkRuns: checkGroups.map(g => ({
@@ -327,15 +332,17 @@ function PayBillsModal({ db, actions, toast, onClose }) {
       <button className="btn sm" style={{ marginLeft: "auto" }} disabled={rows.every(r => r.sel)} onClick={() => setAll(true)}>Select all</button>
       <button className="btn sm" disabled={!rows.some(r => r.sel)} onClick={() => setAll(false)}>Deselect all</button>
     </div>
-    <table><thead><tr><th></th><th>Vendor</th><th>Bill / Ref</th><th>Due</th><th className="num">Balance</th><th className="num">Pay Amount</th><th>Method</th></tr></thead>
+    <table><thead><tr><th></th><th>Vendor</th><th>Bill / Ref</th><th>Due</th><th className="num">Balance</th><th className="num">Discount</th><th className="num">Pay Amount</th><th>Method</th></tr></thead>
       <tbody>{rows.map((r, i) => {
-        const bal = round2((Number(r.bill.amount) || 0) - paid(r.bill));
+        const bal = billBalance(r.bill);
         return <tr key={r.bill.id}>
           <td><input type="checkbox" checked={r.sel} onChange={e => upd(i, { sel: e.target.checked })} /></td>
           <td style={{ fontWeight: 600 }}>{nameOf(db, r.bill.vendorId)}</td>
           <td className="mono subtle">{r.bill.ref || r.bill.number}</td>
           <td className="subtle">{fmtDate(r.bill.dueDate)}</td>
           <td className="num">{money(bal)}</td>
+          <td className="num"><input className="input mono" style={{ maxWidth: 100, textAlign: "right" }} type="number" step="any" value={r.discount}
+            title="Early-payment discount taken — the bill still closes" onChange={e => updDiscount(i, e.target.value)} /></td>
           <td className="num"><input className="input mono" style={{ maxWidth: 110, textAlign: "right" }} type="number" step="any" value={r.amount}
             onChange={e => upd(i, { amount: e.target.value, sel: true })} /></td>
           <td><select className="select" style={{ minWidth: 110 }} value={r.method} onChange={e => upd(i, { method: e.target.value, sel: true })}>

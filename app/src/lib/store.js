@@ -597,7 +597,8 @@ export function useLedger(session, onError) {
     // on file. All-or-nothing: one insert, one state update.
     async recordPayments(entries) {
       try {
-        const list = (entries || []).filter(e => Math.abs(Number(e.payment.amount) || 0) > 0.005);
+        const list = (entries || []).filter(e => Math.abs(Number(e.payment.amount) || 0) > 0.005
+          || Math.abs(Number(e.payment.discount) || 0) > 0.005);
         if (!list.length) throw new Error("Nothing to record — select at least one item with an amount.");
         const refs = new Set();
         list.filter(e => e.parentType === "bill" && isCheckPayment(e.payment)).forEach(e => refs.add(normRef(e.payment.ref)));
@@ -627,7 +628,7 @@ export function useLedger(session, onError) {
         const target = toParentId || parentId;
         if (target !== parentId && !docs.some(d => d.id === target)) throw new Error("That document no longer exists.");
         const prev = docs.find(x => x.id === parentId)?.payments?.find(x => x.id === p.id);
-        const payment = { ...p, amount: round2(Number(p.amount) || 0), ref: normRef(p.ref) };
+        const payment = { ...p, amount: round2(Number(p.amount) || 0), discount: round2(Number(p.discount) || 0), ref: normRef(p.ref) };
         // Keeping the same number on the same check is never a duplicate.
         if (normRef(prev?.ref) !== payment.ref || prev?.method !== payment.method) guardCheckNumber(parentType, payment, [payment.id]);
         th(await supabase.from("payments").update(A.paymentToRow(payment, parentType, target)).eq("id", payment.id));
@@ -669,8 +670,8 @@ export function useLedger(session, onError) {
     async recordReceipt(allocations, meta) {
       try {
         const rows = allocations
-          .map(a => ({ invoiceId: a.docId, payment: { id: uid(), amount: round2(Number(a.amount) || 0), date: meta.date, method: meta.method, ref: meta.ref || "" } }))
-          .filter(r => Math.abs(r.payment.amount) > 0.005);
+          .map(a => ({ invoiceId: a.docId, payment: { id: uid(), amount: round2(Number(a.amount) || 0), discount: round2(Number(a.discount) || 0), date: meta.date, method: meta.method, ref: meta.ref || "" } }))
+          .filter(r => Math.abs(r.payment.amount) > 0.005 || Math.abs(r.payment.discount) > 0.005);
         if (!rows.length) throw new Error("Nothing to apply — select at least one item with an amount.");
         th(await supabase.from("payments").insert(rows.map(r => A.paymentToRow(r.payment, "invoice", r.invoiceId))));
         setDb(d => ({
@@ -694,15 +695,15 @@ export function useLedger(session, onError) {
     async updatePaymentGroup(parentType, prevPaymentIds, allocations, meta) {
       try {
         const keep = (allocations || [])
-          .map(a => ({ docId: a.docId, paymentId: a.paymentId, amount: round2(Number(a.amount) || 0) }))
-          .filter(a => Math.abs(a.amount) > 0.005);
+          .map(a => ({ docId: a.docId, paymentId: a.paymentId, amount: round2(Number(a.amount) || 0), discount: round2(Number(a.discount) || 0) }))
+          .filter(a => Math.abs(a.amount) > 0.005 || Math.abs(a.discount) > 0.005);
         if (!keep.length) throw new Error("Nothing to apply — keep at least one item on it, or delete it instead.");
         const stamp = { date: meta.date, method: meta.method, ref: meta.ref || "" };
         const prev = [...new Set(prevPaymentIds || [])];
         const writes = keep.map(a => ({
           docId: a.docId,
           isNew: !a.paymentId,
-          payment: { id: a.paymentId || uid(), amount: a.amount, ...stamp },
+          payment: { id: a.paymentId || uid(), amount: a.amount, discount: a.discount, ...stamp },
         }));
         if (parentType === "bill" && stamp.method === "Check" && !normRef(stamp.ref))
           throw new Error("A check payment needs a check number.");

@@ -285,6 +285,12 @@ number / email / remit-to address, migration 017 — the email default when send
 and the mail-to block on printed checks and remittances) · installable PWA (manifest + icons +
 service worker; Supabase never cached).
 
+**Emailing a remittance:** from the pay-run confirmation (one Email per electronic group,
+vendor by vendor) and from any non-check row in Spend → Payments, as well as the single-bill
+Pay dialog it was already in. The advice covers the whole payment — every bill the transfer
+settled — and goes to the vendor's A/P remittance contact. Checks are excluded: they carry
+their own printed stub.
+
 **Pay Bills references:** a pay run groups one payment document per vendor + method
 (`groupSel()` in `Payables.jsx`, shared by the dialog and the write). Check groups take
 consecutive numbers from the Starting Check #; each electronic group gets its own optional

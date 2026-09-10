@@ -209,6 +209,7 @@ function PayBillsModal({ db, actions, toast, onClose }) {
   // the groups are. Kept across selection changes so re-ticking a row doesn't
   // lose a number already typed.
   const [eRefs, setERefs] = useState({});
+  const [emailRun, setEmailRun] = useState(null);   // a remittance group being emailed
   const upd = (i, patch) => setRows(rs => rs.map((r, x) => x === i ? { ...r, ...patch } : r));
   const setAll = (s) => setRows(rs => rs.map(r => ({ ...r, sel: s })));
   const sel = rows.filter(r => r.sel && Number(r.amount) > 0);
@@ -269,7 +270,7 @@ function PayBillsModal({ db, actions, toast, onClose }) {
     onClose();
   };
 
-  if (docs) return <Modal title="Payments Recorded" onClose={onClose}
+  if (docs) return <><Modal title="Payments Recorded" onClose={onClose}
     foot={<>
       {docs.checkPaymentIds.length > 0 && <button className="btn danger" disabled={busy} style={{ marginRight: "auto" }} onClick={voidChecks}>
         <Ico d={ICONS.trash} size={15} />Checks Didn't Print — Void</button>}
@@ -283,10 +284,32 @@ function PayBillsModal({ db, actions, toast, onClose }) {
       {docs.remitRuns.length > 0 && <button className="btn" onClick={() => window.open(URL.createObjectURL(remittancesPdf(docs.remitRuns)), "_blank")}>
         <Ico d={ICONS.print} size={15} />Print {docs.remitRuns.length} Remittance{docs.remitRuns.length > 1 ? "s" : ""}</button>}
     </div>
+    {docs.remitRuns.length > 0 && <>
+      <div className="divider"></div>
+      <div className="subtle" style={{ fontWeight: 600, marginBottom: 8 }}>Email a remittance
+        <span style={{ fontWeight: 400 }}> · goes to the vendor's A/P contact, with the advice attached</span></div>
+      <table><thead><tr><th>Vendor</th><th>Method</th><th className="num">Amount</th><th></th></tr></thead>
+        <tbody>{docs.remitRuns.map((r, i) => <tr key={i}>
+          <td style={{ fontWeight: 600 }}>{r.vendor?.name || "—"}</td>
+          <td className="subtle">{r.payment.method}{r.payment.ref ? " · " + r.payment.ref : ""}</td>
+          <td className="num">{money(r.payment.amount)}</td>
+          <td style={{ textAlign: "right" }}>
+            <button className="btn sm" onClick={() => setEmailRun(r)}><Ico d={ICONS.mail} size={14} />Email</button>
+          </td>
+        </tr>)}</tbody></table>
+    </>}
     {docs.checkRefs.length > 0 && <p className="subtle" style={{ marginBottom: 0 }}>
       Checks used: <span className="mono">{docs.checkRefs.map(r => "#" + r).join(", ")}</span>. If any of them misfeeds, void the run and re-run it — the bills reopen and those numbers become available again.
     </p>}
-  </Modal>;
+  </Modal>
+  {emailRun && <EmailModal
+    title={"Email Remittance · " + (emailRun.vendor?.name || "")}
+    defaultTo={remitEmail(emailRun.vendor)}
+    defaultSubject={`Remittance advice — ${money(emailRun.payment.amount)} from ${db.settings.company}`}
+    defaultBody={`Please find attached remittance advice for our payment of ${money(emailRun.payment.amount)} dated ${fmtDate(emailRun.payment.date)}${emailRun.payment.ref ? ` (reference ${emailRun.payment.ref})` : ""}.\n\n${db.settings.company}`}
+    buildAttachment={() => Promise.resolve(remittancePdf(emailRun))}
+    onClose={() => setEmailRun(null)} toast={toast} />}
+  </>;
 
   return <Modal wide title="Pay Bills" onClose={onClose}
     foot={<><button className="btn" onClick={onClose}>Cancel</button>

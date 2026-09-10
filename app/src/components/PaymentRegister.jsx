@@ -2,11 +2,13 @@ import { Fragment, useState } from "react";
 import { money, fmtDate, nameOf, sum } from "../lib/helpers.js";
 import { round2 } from "../calc/ledger.js";
 import { receiptGroups } from "../calc/reports.js";
-import { checkNumberTaken, normRef } from "../lib/checks.js";
+import { checkNumberTaken, normRef, remitEmail } from "../lib/checks.js";
 import { rangeFor, defaultCustom } from "../lib/dateRanges.js";
 import { Ico, ICONS, Empty, Modal, Field } from "./ui.jsx";
 import FilterBar from "./FilterBar.jsx";
 import PaymentGroupModal from "./PaymentGroupModal.jsx";
+import EmailModal from "./EmailModal.jsx";
+import { remittancePdf } from "../lib/remittance.js";
 
 const METHODS = ["Check", "ACH / Wire", "Credit Card", "Cash", "Other"];
 
@@ -29,6 +31,7 @@ export default function PaymentRegister({ db, actions, toast, readOnly, kind }) 
   const [partyId, setPartyId] = useState("");
   const [edit, setEdit] = useState(null);        // { payment, doc } — one line of a receipt
   const [editGroup, setEditGroup] = useState(null);  // a whole receipt, re-allocated across invoices
+  const [emailGroup, setEmailGroup] = useState(null);  // a vendor payment being sent as a remittance
   const [from, to] = rangeFor(preset, custom);
   const parents = isBill ? db.bills : db.invoices;
   const docLabel = isBill ? "Bill" : "Invoice";
@@ -63,13 +66,38 @@ export default function PaymentRegister({ db, actions, toast, readOnly, kind }) 
       return ok;
     }} />;
 
+  // A remittance covers the whole payment, so it is built from the group's lines
+  // rather than one bill — the vendor gets one advice listing everything the
+  // transfer settled. Checks carry their own printed stub, so this is money out
+  // by any other method.
+  const remitArgs = (g) => ({
+    payment: { amount: g.amount, date: g.date, ref: g.ref, method: g.method },
+    vendor: db.contacts.find(c => c.id === g.partyId),
+    lines: g.lines.map(l => {
+      const b = db.bills.find(x => x.id === l.docId);
+      return { ref: b?.ref || l.number, date: l.docDate, desc: b?.notes || "", amount: l.amount };
+    }),
+    settings: db.settings,
+  });
+  const emailModal = emailGroup && (() => {
+    const args = remitArgs(emailGroup);
+    return <EmailModal
+      title={"Email Remittance · " + (args.vendor?.name || "")}
+      defaultTo={remitEmail(args.vendor)}
+      defaultSubject={`Remittance advice — ${money(args.payment.amount)} from ${db.settings.company}`}
+      defaultBody={`Please find attached remittance advice for our payment of ${money(args.payment.amount)} dated ${fmtDate(args.payment.date)}${args.payment.ref ? ` (reference ${args.payment.ref})` : ""}.\n\n${db.settings.company}`}
+      buildAttachment={() => Promise.resolve(remittancePdf(args))}
+      onClose={() => setEmailGroup(null)} toast={toast} />;
+  })();
+
   return <div>
     {bar}
     <Register db={db} actions={actions} toast={toast} readOnly={readOnly} kind={kind}
       from={from} to={to} partyId={partyId} needle={needle} onEdit={editEntry}
-      onEditGroup={setEditGroup} />
+      onEditGroup={setEditGroup} onEmailGroup={isBill ? setEmailGroup : null} />
     {editModal}
     {groupModal}
+    {emailModal}
   </div>;
 }
 
@@ -77,7 +105,7 @@ export default function PaymentRegister({ db, actions, toast, readOnly, kind }) 
    A receipt (or a payment) is what actually moved: one check or transfer, from
    or to one party, on one date. Several documents can sit under it, so the row
    expands to show what it was applied to. */
-function Register({ db, actions, toast, readOnly, kind, from, to, partyId, needle, onEdit, onEditGroup }) {
+function Register({ db, actions, toast, readOnly, kind, from, to, partyId, needle, onEdit, onEditGroup, onEmailGroup }) {
   const [open, setOpen] = useState({});
   const isBill = kind === "bill";
   const L = isBill
@@ -131,6 +159,8 @@ function Register({ db, actions, toast, readOnly, kind, from, to, partyId, needl
               <td className="num subtle">{g.count}</td>
               <td className="num" style={{ fontWeight: 600 }}>{money(g.amount)}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                {onEmailGroup && g.method !== "Check" && <button className="btn ghost icon" title="Email remittance advice to the vendor"
+                  onClick={e => { e.stopPropagation(); onEmailGroup(g); }}><Ico d={ICONS.mail} size={15} /></button>}
                 {!readOnly && onEditGroup && <button className="btn ghost icon" title={`Open this ${L.one} — add or remove ${L.docs.toLowerCase()}`}
                   onClick={e => { e.stopPropagation(); onEditGroup(g); }}><Ico d={ICONS.edit} size={15} /></button>}
                 {!readOnly && <button className="btn ghost icon" title={`Delete this whole ${L.one}`}

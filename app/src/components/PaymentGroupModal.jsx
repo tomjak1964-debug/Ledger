@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { money, fmtDate, todayISO } from "../lib/helpers.js";
-import { lineTotals, balance, paid, round2 } from "../calc/ledger.js";
+import { lineTotals, balance, paid, round2, billBalance } from "../calc/ledger.js";
 import { checkNumberTaken, normRef } from "../lib/checks.js";
 import { Modal, Field, Badge } from "./ui.jsx";
 
@@ -41,28 +41,29 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
   const onGroup = useMemo(() => {
     const m = {};
     (group?.lines || []).forEach(l => {
-      const at = m[l.docId] || (m[l.docId] = { paymentIds: [], amount: 0 });
+      const at = m[l.docId] || (m[l.docId] = { paymentIds: [], amount: 0, discount: 0 });
       at.paymentIds.push(l.paymentId);
       at.amount = round2(at.amount + (Number(l.amount) || 0));
+      at.discount = round2((at.discount || 0) + (Number(l.discount) || 0));
     });
     return m;
   }, [group]);
 
-  const docBalance = (d) => isBill ? round2((Number(d.amount) || 0) - paid(d)) : balance(d);
+  const docBalance = (d) => isBill ? billBalance(d) : balance(d);
   // Normalised the same way the register groups them, so a document with no
   // party on it still lines up with its group instead of vanishing from here.
   const ownerOf = (d) => (isBill ? d.vendorId : d.customerId) || "";
   // A document already on this payment would be open again for its share if the
   // line came off, so that — not the current balance — is what's available here.
-  const openBal = (d) => round2(docBalance(d) + (onGroup[d.id]?.amount || 0));
+  const openBal = (d) => round2(docBalance(d) + (onGroup[d.id]?.amount || 0) + (onGroup[d.id]?.discount || 0));
 
   const items = useMemo(() => (isBill ? db.bills : db.invoices)
     .filter(d => ownerOf(d) === partyId && (Math.abs(docBalance(d)) > 0.005 || onGroup[d.id]))
     .sort((a, b) => (a.date || "").localeCompare(b.date || "")), [db.bills, db.invoices, partyId, onGroup]);
 
   const dflt = (d) => onGroup[d.id]
-    ? { checked: true, amount: onGroup[d.id].amount }
-    : { checked: false, amount: openBal(d) };
+    ? { checked: true, amount: onGroup[d.id].amount, discount: onGroup[d.id].discount || 0 }
+    : { checked: false, amount: openBal(d), discount: 0 };
   const eff = (d) => alloc[d.id] || dflt(d);
   const net = round2(items.reduce((s, d) => { const a = eff(d); return s + (a.checked ? (Number(a.amount) || 0) : 0); }, 0));
   const selectedCount = items.filter(d => eff(d).checked && Math.abs(Number(eff(d).amount) || 0) > 0.005).length;
@@ -83,7 +84,7 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
     const allocations = items.filter(d => eff(d).checked)
       // Folded rows keep their first payment id and drop the rest: the store
       // deletes any prior id not kept, so the merged amount lands on one row.
-      .map(d => ({ docId: d.id, amount: eff(d).amount, paymentId: onGroup[d.id]?.paymentIds[0] }));
+      .map(d => ({ docId: d.id, amount: eff(d).amount, discount: eff(d).discount || 0, paymentId: onGroup[d.id]?.paymentIds[0] }));
     setSaving(true);
     const ok = await onSave(allocations, { date, method, ref });
     setSaving(false);
@@ -127,7 +128,7 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
           </div>
           <table><thead><tr>
             <th style={{ width: 34 }}></th><th>{L.doc}</th><th>Date</th><th>Due</th><th></th>
-            <th className="num">Balance</th><th className="num" style={{ width: 150 }}>Applied</th>
+            <th className="num">Balance</th><th className="num" style={{ width: 120 }}>Discount</th><th className="num" style={{ width: 150 }}>Applied</th>
           </tr></thead>
             <tbody>{items.map(d => {
               const a = eff(d); const bal = openBal(d);
@@ -142,6 +143,9 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
                     on this {L.one}{onGroup[d.id].paymentIds.length > 1 ? ` · ${onGroup[d.id].paymentIds.length} lines combined` : ""}</span>
                     : null}</td>
                 <td className="num" style={{ fontWeight: 600, color: bal < 0 ? "var(--accent)" : undefined }}>{money(bal)}</td>
+                <td className="num"><input className="input mono" type="number" step="any" style={{ textAlign: "right" }}
+                  title="Discount taken — settles the document without cash"
+                  value={a.discount || 0} disabled={!a.checked} onChange={e => setLine(d, { discount: e.target.value })} /></td>
                 <td className="num"><input className="input mono" type="number" step="any" style={{ textAlign: "right" }}
                   value={a.amount} disabled={!a.checked} onChange={e => setLine(d, { amount: e.target.value })} /></td>
               </tr>;

@@ -45,8 +45,8 @@ export const timeEntryFromRow = r => ({ id: r.id, userEmail: r.user_email || "",
 export const timeEntryToRow = e => ({ id: e.id, user_email: e.userEmail ?? "", sales_order_id: idOrNull(e.salesOrderId), category_id: idOrNull(e.categoryId), date: dateOrNull(e.date), hours: num(e.hours), rate: num(e.rate), cost: num(e.cost), description: e.description ?? "", invoice_id: idOrNull(e.invoiceId), approved: !!e.approved, approved_by: e.approvedBy ?? "" });
 
 /* ---- payments ---- */
-export const paymentToRow = (p, parentType, parentId) => ({ id: p.id, parent_type: parentType, parent_id: parentId, amount: num(p.amount), date: dateOrNull(p.date), method: p.method ?? "", ref: p.ref ?? "" });
-export const paymentFromRow = r => ({ id: r.id, amount: num(r.amount), date: r.date || "", method: r.method, ref: r.ref || "" });
+export const paymentToRow = (p, parentType, parentId) => ({ id: p.id, parent_type: parentType, parent_id: parentId, amount: num(p.amount), discount: num(p.discount), date: dateOrNull(p.date), method: p.method ?? "", ref: p.ref ?? "" });
+export const paymentFromRow = r => ({ id: r.id, amount: num(r.amount), discount: num(r.discount), date: r.date || "", method: r.method, ref: r.ref || "" });
 
 /* ---- quotes ---- */
 export const quoteToRow = q => ({

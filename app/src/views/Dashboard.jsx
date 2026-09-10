@@ -1,5 +1,5 @@
 import { money, fmtDate, todayISO, daysBetween, sum, nameOf } from "../lib/helpers.js";
-import { lineTotals, paid, balance, invoiceStatus } from "../calc/ledger.js";
+import { lineTotals, paid, balance, invoiceStatus, billBalance } from "../calc/ledger.js";
 import { canRead } from "../lib/permissions.js";
 import { Ico, ICONS, Badge, Stat, Empty } from "../components/ui.jsx";
 
@@ -22,7 +22,7 @@ export default function Dashboard({ db, go, member }) {
   const valI = sum(openInv, i => balance(i));
   const collected30 = sum(db.invoices, inv => sum((inv.payments || []).filter(p => daysBetween(p.date, todayISO()) <= 30 && daysBetween(p.date, todayISO()) >= 0), p => Number(p.amount) || 0));
   const arOut = sum(db.invoices, i => balance(i) > 0 ? balance(i) : 0);
-  const apOut = sum(db.bills, b => { const bal = (Number(b.amount) || 0) - paid(b); return bal > 0 ? bal : 0; });
+  const apOut = sum(db.bills, b => { const bal = billBalance(b); return bal > 0 ? bal : 0; });
   const exp30 = sum(db.expenses.filter(e => daysBetween(e.date, todayISO()) <= 30 && daysBetween(e.date, todayISO()) >= 0), e => Number(e.amount) || 0);
   const overdue = db.invoices.filter(i => invoiceStatus(i) === "overdue");
 

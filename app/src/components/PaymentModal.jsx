@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { uid, money, fmtDate, todayISO } from "../lib/helpers.js";
-import { paid, balance, round2 } from "../calc/ledger.js";
+import { paid, balance, round2, billBalance } from "../calc/ledger.js";
 import { Modal, Field, Ico, ICONS } from "./ui.jsx";
 
 // One payment, start to finish:
@@ -14,8 +14,9 @@ import { Modal, Field, Ico, ICONS } from "./ui.jsx";
 // There is no way back to the Record button after a payment lands, so the same
 // payment can't be applied twice.
 export default function PaymentModal({ doc, onClose, onSave, onVoid, onDelete, onPrintCheck, onEmailDoc, isBill, nextCheckRef, isRefTaken }) {
-  const bal = isBill ? ((Number(doc.amount) || 0) - paid(doc)) : balance(doc);
+  const bal = isBill ? billBalance(doc) : balance(doc);
   const [amount, setAmount] = useState(round2(bal));
+  const [discount, setDiscount] = useState(0);
   const [date, setDate] = useState(todayISO());
   const [method, setMethod] = useState("Check");
   const [ref, setRef] = useState(isBill && nextCheckRef ? nextCheckRef : "");
@@ -25,6 +26,15 @@ export default function PaymentModal({ doc, onClose, onSave, onVoid, onDelete, o
 
   const isCheck = isBill && method === "Check";
   const amt = round2(Number(amount) || 0);
+  // A discount settles the rest of the document without cash moving, so amount
+  // plus discount is what closes it. Typing one drops the cash by the same
+  // amount, which is what taking a term actually does.
+  const disc = round2(Number(discount) || 0);
+  const takeDiscount = (v) => {
+    const d = round2(Number(v) || 0);
+    setDiscount(v);
+    setAmount(round2(Math.max(0, round2(bal) - d)));
+  };
   // Switching to Check pulls the next number off the stack; switching away
   // clears it so an ACH doesn't quietly consume a check number.
   const pickMethod = (m) => {
@@ -35,11 +45,11 @@ export default function PaymentModal({ doc, onClose, onSave, onVoid, onDelete, o
   const refErr = isCheck
     ? !ref.trim() ? "Enter the check number." : isRefTaken?.(ref) ? `Check #${ref.trim()} has already been used.` : ""
     : "";
-  const err = amt === 0 ? "Enter an amount." : refErr;
+  const err = amt === 0 && disc === 0 ? "Enter an amount." : refErr;
 
   const record = async () => {
     setBusy(true);
-    const p = { id: uid(), amount: amt, date, method, ref: ref.trim() };
+    const p = { id: uid(), amount: amt, discount: disc, date, method, ref: ref.trim() };
     const ok = await onSave(p);
     setBusy(false);
     if (!ok) return;
@@ -95,6 +105,8 @@ export default function PaymentModal({ doc, onClose, onSave, onVoid, onDelete, o
     </div>
     <div className="row">
       <Field label="Amount"><input className="input mono" type="number" step="any" value={amount} onChange={e => setAmount(e.target.value)} /></Field>
+      <Field label="Discount taken" hint={disc > 0 ? `Settles ${money(round2(amt + disc))} of the balance` : "Early-payment terms"}>
+        <input className="input mono" type="number" step="any" value={discount} onChange={e => takeDiscount(e.target.value)} /></Field>
       <Field label="Date"><input className="input" type="date" value={date} onChange={e => setDate(e.target.value)} /></Field>
       <Field label="Method"><select className="select" value={method} onChange={e => pickMethod(e.target.value)}>
         {["Check", "ACH / Wire", "Credit Card", "Cash", "Other"].map(m => <option key={m}>{m}</option>)}

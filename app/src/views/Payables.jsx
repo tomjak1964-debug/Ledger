@@ -183,6 +183,19 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
 // Batch payment run: select bills, per-item Check vs Electronic, record all,
 // then print checks (one per vendor, stubs list every bill) and remittances,
 // and confirm the checks came out of the printer clean.
+// One payment document per vendor + method: several bills to one vendor paid the
+// same way are one check or one remittance. The dialog and the write both group
+// through here, so what you see listed is exactly what gets recorded.
+function groupSel(rows) {
+  const out = []; const m = new Map();
+  rows.forEach(r => {
+    const k = r.bill.vendorId + "|" + r.method;
+    if (!m.has(k)) { m.set(k, { key: k, vendorId: r.bill.vendorId, method: r.method, rows: [] }); out.push(m.get(k)); }
+    m.get(k).rows.push(r);
+  });
+  return out;
+}
+
 function PayBillsModal({ db, actions, toast, onClose }) {
   const openBills = db.bills.filter(b => ((Number(b.amount) || 0) - paid(b)) > 0.005);
   const [date, setDate] = useState(todayISO());
@@ -192,10 +205,16 @@ function PayBillsModal({ db, actions, toast, onClose }) {
   const [rows, setRows] = useState(() => openBills.map(b => ({
     bill: b, sel: false, amount: round2((Number(b.amount) || 0) - paid(b)), method: "Check",
   })));
+  // Confirmation / trace numbers for the electronic groups, keyed the same way
+  // the groups are. Kept across selection changes so re-ticking a row doesn't
+  // lose a number already typed.
+  const [eRefs, setERefs] = useState({});
   const upd = (i, patch) => setRows(rs => rs.map((r, x) => x === i ? { ...r, ...patch } : r));
   const setAll = (s) => setRows(rs => rs.map(r => ({ ...r, sel: s })));
   const sel = rows.filter(r => r.sel && Number(r.amount) > 0);
   const total = sum(sel, r => Number(r.amount) || 0);
+  const groups = groupSel(sel);
+  const eGroups = groups.filter(g => g.method !== "Check");
   const checkCount = new Set(sel.filter(r => r.method === "Check").map(r => r.bill.vendorId)).size;
   // Every number this run will consume, checked against the register up front.
   const runRefs = checkCount ? Array.from({ length: checkCount }, (_, i) => String((parseInt(startChk, 10) || 0) + i)) : [];
@@ -206,16 +225,14 @@ function PayBillsModal({ db, actions, toast, onClose }) {
 
   const record = async () => {
     setBusy(true);
-    // one payment document per vendor+method; checks numbered from Starting Check #
-    const groups = [];
-    const map = new Map();
-    sel.forEach(r => {
-      const k = r.bill.vendorId + "|" + r.method;
-      if (!map.has(k)) { map.set(k, { vendorId: r.bill.vendorId, method: r.method, rows: [] }); groups.push(map.get(k)); }
-      map.get(k).rows.push(r);
-    });
+    // Checks are numbered from Starting Check #; an electronic group carries the
+    // reference typed for it, so the payment can be traced back to the bank.
     let chk = parseInt(startChk, 10);
-    groups.forEach(g => { g.ref = g.method === "Check" && !isNaN(chk) ? String(chk++) : ""; });
+    groups.forEach(g => {
+      g.ref = g.method === "Check"
+        ? (isNaN(chk) ? "" : String(chk++))
+        : (eRefs[g.key] || "").trim();
+    });
     const entries = groups.flatMap(g => g.rows.map(r => ({
       parentType: "bill", parentId: r.bill.id,
       payment: { id: uid(), amount: Number(r.amount) || 0, date, method: g.method, ref: g.ref },
@@ -303,6 +320,21 @@ function PayBillsModal({ db, actions, toast, onClose }) {
           </select></td>
         </tr>;
       })}</tbody></table>
+    {eGroups.length > 0 && <>
+      <div className="divider"></div>
+      <div className="subtle" style={{ fontWeight: 600, marginBottom: 8 }}>
+        Electronic payments — reference #
+        <span style={{ fontWeight: 400 }}> · optional; the bank's confirmation or trace number. It prints on the remittance and identifies the payment in the register.</span>
+      </div>
+      <table><thead><tr><th>Vendor</th><th>Method</th><th className="num">Amount</th><th style={{ width: 220 }}>Reference #</th></tr></thead>
+        <tbody>{eGroups.map(g => <tr key={g.key}>
+          <td style={{ fontWeight: 600 }}>{nameOf(db, g.vendorId)}</td>
+          <td className="subtle">{g.method}</td>
+          <td className="num">{money(sum(g.rows, r => Number(r.amount) || 0))}</td>
+          <td><input className="input mono" value={eRefs[g.key] || ""} placeholder="e.g. E260910-01"
+            onChange={e => setERefs(p => ({ ...p, [g.key]: e.target.value }))} /></td>
+        </tr>)}</tbody></table>
+    </>}
     <p className="subtle" style={{ marginBottom: 0 }}>Multiple bills for the same vendor and method combine into one check or one remittance, with every bill listed on the stub.{checkCount > 0 ? ` This run uses ${checkCount} check${checkCount > 1 ? "s" : ""}: ${runRefs.map(r => "#" + r).join(", ")}.` : ""}</p>
   </Modal>;
 }

@@ -285,6 +285,13 @@ number / email / remit-to address, migration 017 — the email default when send
 and the mail-to block on printed checks and remittances) · installable PWA (manifest + icons +
 service worker; Supabase never cached).
 
+**Pay Bills references:** a pay run groups one payment document per vendor + method
+(`groupSel()` in `Payables.jsx`, shared by the dialog and the write). Check groups take
+consecutive numbers from the Starting Check #; each electronic group gets its own optional
+Reference # field, listed with its vendor, method and subtotal before you record. The reference
+prints on the remittance advice and identifies the payment in the register — without one,
+two electronic runs to the same vendor on the same day collapse into a single register row.
+
 **Show/hide settled documents:** Payables → Vendor Bills and Receivables → Customer Invoices each
 carry a "Show paid" tick with a count, and a Paid column giving the settlement date. Receivables
 judges settled on the balance rather than the status, so an unapplied credit — which reads as

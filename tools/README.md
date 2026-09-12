@@ -61,17 +61,27 @@ run it again.
 
 ```
 pip install pdfplumber
+python3 tools/so-report-sql.py --preview "Import/Sales Order Report 09122026.pdf" \
+  > app/supabase/data-fixes/2026-09-12_sales_order_report_preview.sql
 python3 tools/so-report-sql.py "Import/Sales Order Report 09122026.pdf" \
-  > app/supabase/data-fixes/2026-09-12_sales_order_report.sql
+  > app/supabase/data-fixes/2026-09-12_sales_order_report_apply.sql
 ```
 
 The input is Sage's **Sales Order Report** printed to PDF, ordered by sales
 order number with shortened descriptions — one block per open order, one row
-per line with Qty Ordered / Shipped / Remaining. The output is a SQL script to
-run in the Supabase SQL editor (Dashboard → SQL). Generated scripts are kept in
+per line with Qty Ordered / Shipped / Remaining. The output is SQL to paste
+into the Supabase SQL editor (Dashboard → SQL). Generated scripts are kept in
 `app/supabase/data-fixes/` so the change is on record.
 
-### What the script does
+Each output is **one statement** — a single `WITH` chain ending in a `SELECT` —
+because the Supabase SQL editor runs every statement on its own connection, so
+temp tables, `BEGIN` and `COMMIT` don't carry from one to the next. One
+statement is also atomic on its own: it applies completely or not at all.
+
+Run the **preview** first: it reads only and returns the same review table the
+apply script does, showing exactly what would change. Then run **apply**.
+
+### What the apply script does
 
 Sage is the book of record, so every sales order on the report is made to match it:
 
@@ -91,20 +101,17 @@ Report lines match Ledger lines by the shortened description as a prefix of the
 full one (case, spacing and punctuation ignored); if the text differs — Sage's
 `2743F Panel Build Compl` on TMJ892, for instance — the line at the same
 position is used, provided nothing else claimed it. Sales orders not on the
-report are untouched. Running the script twice changes nothing the second time.
+report are untouched. Running apply twice changes nothing the second time.
 
 ### Reading the result
 
-The script ends with one row per report line: the Sage line, the Ledger line it
+Both scripts return one row per report line: the Sage line, the Ledger line it
 matched, what it was, what it is now, the linked invoice, and a note. Look for:
 
 - **NO LEDGER LINE MATCHED** — the sales order in Ledger is missing that line;
   add it and rerun.
 - **invoiced in Sage, no Ledger invoice found** — the line is marked invoiced so
   it will not be billed twice, but there is no invoice in Ledger to link. Enter
-  or import the invoice, then rerun to link it.
+  or import the invoice, then rerun apply to link it.
 - **unlinked invoice …** — Sage still shows the line open, but Ledger had an
-  invoice on it. Check which side is right before committing.
-
-The whole script is one transaction. To dry-run, change the final `commit;` to
-`rollback;`: the review table still prints, and nothing is saved.
+  invoice on it. Check which side is right before applying.

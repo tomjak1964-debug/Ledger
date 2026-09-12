@@ -56,3 +56,55 @@ If it stops with *"had no party line after them"*, a name in the journal isn't
 in Contacts under the expected type — a vendor for a disbursements journal, a
 customer for a receipts journal. Add the contact, or correct the spelling, and
 run it again.
+
+## so-report-sql.py — bring sales orders into line with a Sage Sales Order Report
+
+```
+pip install pdfplumber
+python3 tools/so-report-sql.py "Import/Sales Order Report 09122026.pdf" \
+  > app/supabase/data-fixes/2026-09-12_sales_order_report.sql
+```
+
+The input is Sage's **Sales Order Report** printed to PDF, ordered by sales
+order number with shortened descriptions — one block per open order, one row
+per line with Qty Ordered / Shipped / Remaining. The output is a SQL script to
+run in the Supabase SQL editor (Dashboard → SQL). Generated scripts are kept in
+`app/supabase/data-fixes/` so the change is on record.
+
+### What the script does
+
+Sage is the book of record, so every sales order on the report is made to match it:
+
+- **PO numbers** — a blank `po_number` is filled from the job number that
+  prefixes each line (`4763 Initial PO` → PO `4763`). A PO already entered is
+  never overwritten.
+- **Invoiced lines** — a line Sage has shipped is marked `invoiced` and linked
+  to the Ledger invoice that billed it: an invoice on the same sales order with
+  a line of the same text (earliest wins). Lines closed by hand to hide them
+  from "to invoice" are un-closed and marked invoiced instead.
+- **Open lines** — a line Sage still has remaining is reopened (`invoiced` off,
+  `closed` off, `invoice_id` cleared) so it is available to bill again.
+- **Status** — each sales order's `status` / `invoice_id` is recomputed from its
+  lines, the same rule the app uses.
+
+Report lines match Ledger lines by the shortened description as a prefix of the
+full one (case, spacing and punctuation ignored); if the text differs — Sage's
+`2743F Panel Build Compl` on TMJ892, for instance — the line at the same
+position is used, provided nothing else claimed it. Sales orders not on the
+report are untouched. Running the script twice changes nothing the second time.
+
+### Reading the result
+
+The script ends with one row per report line: the Sage line, the Ledger line it
+matched, what it was, what it is now, the linked invoice, and a note. Look for:
+
+- **NO LEDGER LINE MATCHED** — the sales order in Ledger is missing that line;
+  add it and rerun.
+- **invoiced in Sage, no Ledger invoice found** — the line is marked invoiced so
+  it will not be billed twice, but there is no invoice in Ledger to link. Enter
+  or import the invoice, then rerun to link it.
+- **unlinked invoice …** — Sage still shows the line open, but Ledger had an
+  invoice on it. Check which side is right before committing.
+
+The whole script is one transaction. To dry-run, change the final `commit;` to
+`rollback;`: the review table still prints, and nothing is saved.

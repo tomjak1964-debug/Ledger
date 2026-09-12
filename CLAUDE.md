@@ -338,7 +338,9 @@ in `saveInvoice`, and only a new invoice can be auto-numbered.
 (Cash Disbursements or Cash Receipts, `.xlsx` or `.csv`, no dependencies) and reports
 anything that doesn't match on party, amount, date or reference — including one payment
 applied twice to the same document, which is how the original import mis-filed five
-payments. See `tools/README.md`.
+payments. `tools/so-report-sql.py` turns a Sage Sales Order Report PDF into a SQL data fix
+(kept in `app/supabase/data-fixes/`) that fills blank PO numbers and brings each SO line's
+invoiced / closed state into line with Sage's shipped / remaining quantities. See `tools/README.md`.
 
 **Not built (candidates for next work):** credit notes / refunds · partial invoicing of an SO ·
 recurring invoices · email sending · attachments / receipt photos · quote line-item reordering ·

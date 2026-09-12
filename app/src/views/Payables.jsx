@@ -30,7 +30,8 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
     payment: p,
     vendor: db.contacts.find(c => c.id === bill.vendorId),
     memo: bill.ref ? "Inv " + bill.ref : bill.number,
-    stubLines: [{ ref: bill.ref || bill.number, date: bill.date, desc: bill.notes, amount: p.amount }],
+    stubLines: [{ ref: bill.ref || bill.number, date: bill.date, desc: bill.notes,
+      invoiceAmount: Number(bill.amount) || 0, discount: Number(p.discount) || 0, amount: p.amount }],
     settings: db.settings,
   });
   const [edit, setEdit] = useState(null);

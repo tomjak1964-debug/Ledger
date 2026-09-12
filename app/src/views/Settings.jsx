@@ -3,7 +3,7 @@ import { uid, money, todayISO, fmtDate } from "../lib/helpers.js";
 import { Ico, ICONS, Field, PasswordInput } from "../components/ui.jsx";
 import { AREAS, isAdminRole } from "../lib/permissions.js";
 import { supabase } from "../lib/supabaseClient.js";
-import { checkLayout, openCheckPdf } from "../lib/checkPrint.js";
+import FormsTab from "../components/FormsEditor.jsx";
 
 export default function SettingsView({ db, actions, toast, session, readOnly, isAdmin }) {
   const [s, setS] = useState(db.settings);
@@ -13,7 +13,7 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
   const TABS = [
     ["company", "Company"],
     ["data", "Data"],
-    ["checks", "Check Printing"],
+    ["forms", "Forms"],
     ...(isAdmin ? [["users", "Users & Access"], ["time", "Time Categories"], ["backups", "Backups"]] : []),
     ["activity", "Activity"],
     ["account", "Account"],
@@ -100,38 +100,7 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
       </div>
     </div>}
 
-    {tab === "checks" && <div className="card" style={{ marginBottom: 16 }}>
-      <div className="card-head"><h3>Check Printing</h3></div>
-      <div className="card-body">
-        <p className="subtle" style={{ marginTop: 0 }}>Positions are inches from the top-left of the page, for pre-printed voucher stock (check on top).
-          Print the test pattern on plain paper, hold it over a check, and nudge the numbers. Always print at 100% scale.</p>
-        <div className="row">
-          {Object.entries(checkLayout(s).fields).map(([k, f]) => <Field key={k} label={f.label}>
-            <div style={{ display: "flex", gap: 6 }}>
-              <input className="input mono" type="number" step="0.05" value={f.x} title="X (in)"
-                onChange={e => set("check", { ...s.check, fields: { ...(s.check?.fields || {}), [k]: { ...(s.check?.fields?.[k] || {}), x: Number(e.target.value) } } })} />
-              <input className="input mono" type="number" step="0.05" value={f.y} title="Y (in)"
-                onChange={e => set("check", { ...s.check, fields: { ...(s.check?.fields || {}), [k]: { ...(s.check?.fields?.[k] || {}), y: Number(e.target.value) } } })} />
-            </div>
-          </Field>)}
-          <Field label="Font Size"><input className="input mono" type="number" value={checkLayout(s).fontSize}
-            onChange={e => set("check", { ...s.check, fontSize: Number(e.target.value) })} /></Field>
-          <Field label="First Check #" hint="Where numbering starts before any check is written">
-            <input className="input mono" type="number" value={s.check?.start ?? 1001}
-              onChange={e => set("check", { ...s.check, start: Number(e.target.value) })} /></Field>
-        </div>
-        <p className="subtle">After the first check, the next number is always one past the highest check on file. Void a check and its number comes straight back.</p>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button className="btn" onClick={() => openCheckPdf({ test: true, settings: s })}>Print Test Pattern</button>
-          <button className="btn" onClick={() => openCheckPdf({
-            payment: { amount: 12345.67, date: todayISO(), ref: "1001" },
-            vendor: { name: "Sample Vendor, Inc.", address: "123 Main St\nAnytown, MI 48000" },
-            memo: "Inv 9999", stubLines: [{ ref: "9999", desc: "Sample bill", amount: 12345.67 }], settings: s,
-          })}>Print Sample Check</button>
-          <button className="btn primary" disabled={readOnly} onClick={saveAll}><Ico d={ICONS.check} size={15} />Save Positions</button>
-        </div>
-      </div>
-    </div>}
+    {tab === "forms" && <FormsTab s={s} set={set} readOnly={readOnly} saveAll={saveAll} />}
 
     {tab === "users" && isAdmin && <UsersCard db={db} actions={actions} toast={toast} session={session} />}
     {tab === "time" && isAdmin && <TimeCategoriesCard db={db} actions={actions} toast={toast} />}

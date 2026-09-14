@@ -47,7 +47,7 @@ export default function JobsView({ db, actions, toast, readOnly }) {
                         onChange={e => toggleReady(so, li, e.target.checked)} />
                       {li.ready ? "Ready" : ""}
                     </label></td>
-                    <td>{li.desc}</td>
+                    <td style={{ whiteSpace: "pre-line" }}>{li.desc}</td>
                     <td className="num mono">{li.qty} {li.unit}</td>
                     <td>{li.invoiced ? <Badge status="invoiced" /> : li.closed ? <Badge status="closed" /> : li.ready ? <Badge status="ready" /> : <span className="subtle">in progress</span>}</td>
                   </tr>)}</tbody></table>

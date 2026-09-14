@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { uid, money, fmtDate, todayISO, nameOf } from "../lib/helpers.js";
 import { AUTO_NUMBER } from "../lib/store.js";
-import { Modal, Field, Badge, Ico, ICONS } from "./ui.jsx";
+import { Modal, Field, Badge, Ico, ICONS, AutoTextarea } from "./ui.jsx";
 
 // Bill selected line items of a sales order onto one invoice, optionally with
 // logged time as T&M lines. Un-invoiced lines are selectable; already-billed
@@ -78,7 +78,7 @@ export default function InvoiceFromSOModal({ so, db, onClose, onGenerate, onlyRe
           <td>{done ? <span title="Already invoiced">✓</span>
             : closed ? <span title="Closed">—</span>
               : <input type="checkbox" checked={!!sel[li.id]} onChange={e => setSel(p => ({ ...p, [li.id]: e.target.checked }))} />}</td>
-          <td>{li.desc}</td>
+          <td style={{ whiteSpace: "pre-line" }}>{li.desc}</td>
           <td className="num mono">{li.qty}</td>
           <td className="subtle">{li.unit}</td>
           <td className="num mono">{money(li.unitPrice)}</td>
@@ -128,7 +128,7 @@ export default function InvoiceFromSOModal({ so, db, onClose, onGenerate, onlyRe
         {extras.map((li, i) => {
           const upd = (k, v) => setExtras(x => x.map((e, j) => j === i ? { ...e, [k]: v } : e));
           return <tr key={li.id}>
-            <td><input className="input" value={li.desc} placeholder="Item or service…" onChange={e => upd("desc", e.target.value)} /></td>
+            <td><AutoTextarea value={li.desc} placeholder="Item or service…" onChange={e => upd("desc", e.target.value)} /></td>
             <td><input className="input mono" type="number" step="any" value={li.qty} onChange={e => upd("qty", e.target.value)} /></td>
             <td><input className="input" value={li.unit} placeholder="ea" onChange={e => upd("unit", e.target.value)} /></td>
             <td><input className="input mono" type="number" step="any" value={li.unitPrice} style={{ textAlign: "right" }} onChange={e => upd("unitPrice", e.target.value)} /></td>

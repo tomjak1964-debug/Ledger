@@ -296,6 +296,22 @@ number / email / remit-to address, migration 017 — the email default when send
 and the mail-to block on printed checks and remittances) · installable PWA (manifest + icons +
 service worker; Supabase never cached).
 
+**Line-item descriptions are multi-line.** Enter starts a new line in the description field
+(`AutoTextarea` in `src/components/ui.jsx`, used by `LineItemsEditor` and the ad-hoc lines in
+`InvoiceFromSOModal`); the field grows as you type and the breaks print. Displays that show a
+description use `white-space: pre-line`. " — " used to be the way to fake a second line, so it still
+breaks — but only in a description that has no real line break of its own, leaving em dashes alone
+in anything typed since.
+
+**Invoices print as full pages.** `src/lib/invoiceLayout.js` owns pagination — description wrapping
+(52 chars, the Description column at 9pt), how many lines a page holds (13 single-line rows on the
+page carrying the totals, 19 on a "continued" page) and the split into pages. Both renderers read it,
+so the printable invoice (`DocumentView`) and the PDF (`invoicePdf`, emailed and downloaded) break in
+the same places. Each page carries the full frame — company block, Bill To / Ship To, info grid,
+"Page: n of m" — the items box is ruled down to the bottom however few lines it holds, and the totals
+box sits on the last page only. Changing the frame's height means re-measuring `PAGE_LINES` /
+`PAGE_LINES_FULL` against the printable invoice, which is the tighter of the two renderers.
+
 **Print forms:** Settings → Forms holds the named layouts Ledger prints from (`src/lib/forms.js`,
 `src/components/FormsEditor.jsx`). Each document type — checks, remittances, invoices — names the form
 that prints it. A check form is a field catalogue with per-field *print on/off*, X/Y in inches, and

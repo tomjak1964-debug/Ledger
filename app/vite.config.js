@@ -31,8 +31,17 @@ export default defineConfig({
         ],
       },
       // Precache only the built app shell. Supabase requests are NOT cached,
-      // so the books are always live.
-      workbox: { globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'] },
+      // so the books are always live. /reset is deliberately left out of both
+      // the precache and the SPA fallback: it is the page that throws this
+      // cache away, so it must always come from the server.
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globIgnores: ['reset.html'],
+        navigateFallbackDenylist: [/^\/reset/],
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
+      },
     }),
   ],
   server: { host: true, port: 5173 }, // host:true exposes it on the LAN for phone testing

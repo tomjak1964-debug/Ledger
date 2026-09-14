@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -10,6 +11,17 @@ const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC' +
 
 export default defineConfig({
   define: { __BUILD__: JSON.stringify(stamp) },
+  // Two pages: a public landing page at / that says what this site is (reputation
+  // scanners kept flagging a bare credential form on a new domain), and the app
+  // itself at /app.
+  build: {
+    rollupOptions: {
+      input: {
+        landing: resolve(__dirname, 'index.html'),
+        app: resolve(__dirname, 'app/index.html'),
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({
@@ -22,7 +34,7 @@ export default defineConfig({
         theme_color: '#13233B',
         background_color: '#EDF0F4',
         display: 'standalone',
-        start_url: '/',
+        start_url: '/app',
         icons: [
           { src: 'pwa-64x64.png', sizes: '64x64', type: 'image/png' },
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
@@ -37,7 +49,10 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         globIgnores: ['reset.html'],
-        navigateFallbackDenylist: [/^\/reset/],
+        // The app shell answers for /app...; the landing page and /reset are
+        // served as themselves.
+        navigateFallback: '/app/index.html',
+        navigateFallbackDenylist: [/^\/reset/, /^\/$/],
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,

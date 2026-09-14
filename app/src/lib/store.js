@@ -11,6 +11,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabaseClient.js";
 import * as A from "./adapters.js";
+import { dueDateFor } from "./terms.js";
 import { uid, todayISO, addDays, pad4 } from "./helpers.js";
 import { defaultSettings, sampleData } from "./seed.js";
 import { proposalConfig, phaseAmount } from "../calc/proposals.js";
@@ -317,7 +318,7 @@ export function useLedger(session, onError) {
         const inv = {
           id: uid(), number,
           salesOrderId: so.id, quoteId: so.quoteId, customerId: so.customerId, poNumber: so.poNumber,
-          date, dueDate: addDays(date, d0.settings.terms),
+          date, dueDate: dueDateFor(d0, so.customerId, date),
           lineItems: [
             ...toBill.map(li => ({ id: uid(), desc: li.desc, qty: li.qty, unit: li.unit, unitPrice: li.unitPrice })),
             ...timeLines,
@@ -797,7 +798,7 @@ export function useLedger(session, onError) {
         if (d0.bills.some(b => b.purchaseOrderId === po.id)) throw new Error(`A bill was already created from ${po.number}.`);
         const bill = {
           id: uid(), number: (d0.settings.billPrefix || "BILL") + "-" + pad4(await claimNumber("bill")),
-          vendorId: po.vendorId, date: todayISO(), dueDate: addDays(todayISO(), d0.settings.terms),
+          vendorId: po.vendorId, date: todayISO(), dueDate: dueDateFor(d0, po.vendorId, todayISO()),
           amount: round2(lineTotals(po.lineItems, po.taxRate).total), ref: po.number, notes: `From PO ${po.number}`,
           salesOrderId: po.salesOrderId || "", purchaseOrderId: po.id, payments: [],
         };
@@ -1095,7 +1096,7 @@ export function useLedger(session, onError) {
           id: uid(), number: await claimInvoiceNumber(p.customerId, todayISO()),
           salesOrderId: p.salesOrderId || "", quoteId: "", customerId: p.customerId,
           contactPersonId: p.contactPersonId || "", proposalId: p.id, poNumber: p.poNumber,
-          date: todayISO(), dueDate: addDays(todayISO(), d0.settings.terms),
+          date: todayISO(), dueDate: dueDateFor(d0, p.customerId, todayISO()),
           taxRate: 0, notes: "", payments: [],
           // Billed phases carry qty 1 + amount; remaining unbilled phases print
           // as qty-0 reference lines (Sage-style, per the Invoice Example PDF)

@@ -13,7 +13,7 @@ import { Modal, Field, Ico, ICONS } from "./ui.jsx";
 //
 // There is no way back to the Record button after a payment lands, so the same
 // payment can't be applied twice.
-export default function PaymentModal({ doc, onClose, onSave, onVoid, onDelete, onPrintCheck, onEmailDoc, isBill, nextCheckRef, isRefTaken }) {
+export default function PaymentModal({ doc, onClose, onSave, onVoid, onDelete, onPrintCheck, onEmailDoc, isBill, nextCheckRef, isRefTaken, offerFor }) {
   const bal = isBill ? billBalance(doc) : balance(doc);
   const [amount, setAmount] = useState(round2(bal));
   const [discount, setDiscount] = useState(0);
@@ -42,6 +42,12 @@ export default function PaymentModal({ doc, onClose, onSave, onVoid, onDelete, o
     if (isBill && m === "Check" && !ref.trim()) setRef(nextCheckRef || "");
     if (m !== "Check" && ref.trim() && ref.trim() === (nextCheckRef || "")) setRef("");
   };
+  // Early-payment terms, judged against the payment date in the dialog — move
+  // the date past the window and the offer withdraws itself. Never more than
+  // the balance: a discount can't settle more than the document owes.
+  const offer = offerFor?.(date) || null;
+  const offerAmt = offer ? round2(Math.min(offer.amount, round2(bal))) : 0;
+
   const refErr = isCheck
     ? !ref.trim() ? "Enter the check number." : isRefTaken?.(ref) ? `Check #${ref.trim()} has already been used.` : ""
     : "";
@@ -115,8 +121,16 @@ export default function PaymentModal({ doc, onClose, onSave, onVoid, onDelete, o
         <input className="input mono" value={ref} onChange={e => setRef(e.target.value)}
           style={refErr ? { borderColor: "var(--neg)" } : undefined} /></Field>
     </div>
+    {offer && (offer.expired
+      ? <p className="subtle" style={{ margin: "0 0 8px" }}>
+          {offer.label} — the window closed {fmtDate(offer.until)}, so there is no discount on this one.</p>
+      : <div style={{ margin: "0 0 10px", padding: "10px 12px", background: "var(--pos-wash)", borderRadius: 9, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span><strong>{offer.label}</strong> — {isBill ? "pay" : "paid"} by {fmtDate(offer.until)} and {money(offerAmt)} comes off.</span>
+          <button className="btn sm" style={{ marginLeft: "auto" }} disabled={disc === offerAmt}
+            onClick={() => takeDiscount(offerAmt)}>{disc === offerAmt ? "Discount taken" : "Take " + money(offerAmt)}</button>
+        </div>)}
     {refErr && <p className="subtle" style={{ margin: "0 0 8px", color: "var(--neg)" }}>{refErr}</p>}
-    {isCheck && <p className="subtle" style={{ margin: "0 0 8px" }}>Recording prints the check on your stock (alignment in Settings → Check Printing), then asks you to confirm it printed.</p>}
+    {isCheck && <p className="subtle" style={{ margin: "0 0 8px" }}>Recording prints the check on your stock (alignment in Settings → Forms), then asks you to confirm it printed.</p>}
     {(doc.payments || []).length > 0 && <><div className="divider"></div><div className="subtle" style={{ marginBottom: 8, fontWeight: 600 }}>Payment history</div>
       {doc.payments.map(p => <div key={p.id} className="cat-row"><span className="mono">{money(p.amount)}</span><span className="subtle">{p.method}{p.ref ? " #" + p.ref : ""}</span><span className="subtle" style={{ marginLeft: "auto" }}>{fmtDate(p.date)}</span>
         {onPrintCheck && <button className="btn ghost icon" title={p.method === "Check" ? "Print / save check" : "Print / save remittance"} onClick={() => onPrintCheck(p)}><Ico d={ICONS.print} size={14} /></button>}

@@ -11,6 +11,7 @@ import autoTable from "jspdf-autotable";
 import { fmtDate } from "./helpers.js";
 import { lineTotals, paid, balance } from "../calc/ledger.js";
 import { invoicePages } from "./invoiceLayout.js";
+import { termsLabel } from "./terms.js";
 
 const GRAY = [217, 217, 217];
 const fmt2 = n => (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -100,7 +101,7 @@ function drawFrame(doc, { inv, s, customer, person, W, page, of }) {
   autoTable(doc, {
     startY: BOX_Y + BOX_H + 12, margin: { left: M, right: M }, theme: "grid",
     head: [["Customer ID", "Customer PO", "Payment Terms"]],
-    body: [["", inv.poNumber || "", `Net ${s.terms} Days`]],
+    body: [["", inv.poNumber || "", termsLabel(customer, s)]],
     styles: gridStyles, headStyles: { fillColor: GRAY, fontStyle: "bold" },
   });
   autoTable(doc, {

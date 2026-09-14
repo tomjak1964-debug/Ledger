@@ -296,6 +296,23 @@ number / email / remit-to address, migration 017 — the email default when send
 and the mail-to block on printed checks and remittances) · installable PWA (manifest + icons +
 service worker; Supabase never cached).
 
+**Payment terms live on the contact** (`src/lib/terms.js`, migration 019). Each customer and vendor
+carries `terms` (days), `discountPct` and `discountDays`; `terms` blank means "use the company default"
+in Settings, so nothing changes for a contact nobody has set up. `termsLabel()` renders them the way the
+trade writes them — *2/10 Net 30*, *Net 30*, *Due on receipt* — and that string prints in the invoice's
+Payment Terms box, on screen and in the PDF. **Re-dating a document re-dates it:** changing the date or
+the party on a bill or an invoice recomputes the due date through `dueDateFor()`, and so does every
+place the store creates one (SO → invoice, PO → bill, proposal phases). A due date typed by hand stays
+put until the date or the party changes again.
+
+**Early-payment discounts are offered, never taken automatically.** `discountOffer(db, doc, partyId,
+onDate)` answers what the term is worth *on that payment date* — a percentage of the document total,
+capped at what is still outstanding — and says `expired` once the window has closed. The Pay / Receive
+dialog shows the offer with a **Take $X** button and withdraws it if you move the payment date past the
+window; the Pay Bills run offers **Take N available discounts** plus a per-row button. Taking one fills
+the Discount column, which drops the cash by the same amount — `settled = paid + discounts` still closes
+the document (§6).
+
 **Line-item descriptions are multi-line.** Enter starts a new line in the description field
 (`AutoTextarea` in `src/components/ui.jsx`, used by `LineItemsEditor` and the ad-hoc lines in
 `InvoiceFromSOModal`); the field grows as you type and the breaks print. Displays that show a

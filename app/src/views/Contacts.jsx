@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { uid, cls } from "../lib/helpers.js";
 import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort } from "../components/ui.jsx";
+import { termsLabel } from "../lib/terms.js";
 
 export default function ContactsView({ db, actions, toast, readOnly }) {
   const [tab, setTab] = useState("customer");
@@ -12,7 +13,7 @@ export default function ContactsView({ db, actions, toast, readOnly }) {
     const rec = db.contacts.find(c => c.id === id);
     if (await actions.deleteContact(id)) toast("Deleted " + (rec?.name || "contact"), { actionLabel: "Undo", onAction: async () => { if (await actions.restoreRecord("contact", rec)) toast((rec.name || "Contact") + " restored"); } });
   };
-  const startNew = () => setEdit({ id: uid(), type: tab, name: "", contact: "", email: "", phone: "", address: "", code: "", lat: "", lng: "", remitName: "", remitPhone: "", remitEmail: "", remitAddress: "" });
+  const startNew = () => setEdit({ id: uid(), type: tab, name: "", contact: "", email: "", phone: "", address: "", code: "", lat: "", lng: "", terms: "", discountPct: 0, discountDays: 0, remitName: "", remitPhone: "", remitEmail: "", remitAddress: "" });
   const { sorted: contactRows, sort, onSort } = useTableSort(list, {
     name: c => c.name, contact: c => c.contact || "", email: c => c.email || "", phone: c => c.phone || "",
   }, { key: "name", dir: "asc" });
@@ -57,6 +58,20 @@ export default function ContactsView({ db, actions, toast, readOnly }) {
         <Field label="Phone"><input className="input" value={edit.phone} onChange={e => setEdit({ ...edit, phone: e.target.value })} /></Field>
       </div>
       <Field label="Address"><textarea className="input" value={edit.address} onChange={e => setEdit({ ...edit, address: e.target.value })} /></Field>
+      <div className="divider"></div>
+      <div className="subtle" style={{ fontWeight: 600, marginBottom: 8 }}>Payment terms
+        <span style={{ fontWeight: 400 }}> · {termsLabel(edit, db.settings)} — {edit.type === "customer" ? "sets the due date on this customer's invoices" : "sets the due date on this vendor's bills"}</span></div>
+      <div className="row">
+        <Field label="Terms (days)" hint={`Blank uses the company default of ${db.settings.terms}`}>
+          <input className="input mono" type="number" min="0" placeholder={String(db.settings.terms)} value={edit.terms ?? ""}
+            onChange={e => setEdit({ ...edit, terms: e.target.value })} /></Field>
+        <Field label="Early-payment discount %" hint="0 for none">
+          <input className="input mono" type="number" step="any" min="0" value={edit.discountPct ?? 0}
+            onChange={e => setEdit({ ...edit, discountPct: e.target.value })} /></Field>
+        <Field label="…if paid within (days)" hint="Counted from the document date">
+          <input className="input mono" type="number" min="0" value={edit.discountDays ?? 0}
+            onChange={e => setEdit({ ...edit, discountDays: e.target.value })} /></Field>
+      </div>
       {edit.type === "customer" && <Field label="Site Location" hint="Used by the Field app to sort jobs by distance">
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
           <input className="input mono" style={{ maxWidth: 130 }} placeholder="latitude" value={edit.lat ?? ""} onChange={e => setEdit({ ...edit, lat: e.target.value })} />

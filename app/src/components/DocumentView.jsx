@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { money, fmtDate } from "../lib/helpers.js";
 import { lineTotals, paid, balance } from "../calc/ledger.js";
 import { invoicePages } from "../lib/invoiceLayout.js";
+import { termsLabel } from "../lib/terms.js";
 import { Ico, ICONS } from "./ui.jsx";
 
 export default function DocumentView({ kind, doc, contact, settings, onClose, onPrinted }) {
@@ -106,7 +107,7 @@ function InvoiceDoc({ inv, contact, settings, onClose, print }) {
         </div>
         <table className="inv-grid"><tbody>
           <tr className="h"><td>Customer ID</td><td>Customer PO</td><td colSpan={2}>Payment Terms</td></tr>
-          <tr><td>&nbsp;</td><td>{inv.poNumber || " "}</td><td colSpan={2}>Net {settings.terms} Days</td></tr>
+          <tr><td>&nbsp;</td><td>{inv.poNumber || " "}</td><td colSpan={2}>{termsLabel(contact, settings)}</td></tr>
           <tr className="h"><td>Sales Rep ID</td><td>Shipping Method</td><td>Ship Date</td><td>Due Date</td></tr>
           <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>{fmtDate(inv.dueDate)}</td></tr>
         </tbody></table>

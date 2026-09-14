@@ -14,7 +14,18 @@
   to = "/reset.html"
   status = 200
 
-# SPA fallback: every other path serves index.html (the app has no server routes).
+# The app itself lives under /app; everything there serves its shell.
+[[redirects]]
+  from = "/app"
+  to = "/app/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/app/*"
+  to = "/app/index.html"
+  status = 200
+
+# Anything else serves the public landing page.
 [[redirects]]
   from = "/*"
   to = "/index.html"

@@ -312,6 +312,20 @@ the same places. Each page carries the full frame — company block, Bill To / S
 box sits on the last page only. Changing the frame's height means re-measuring `PAGE_LINES` /
 `PAGE_LINES_FULL` against the printable invoice, which is the tighter of the two renderers.
 
+**Public landing page:** `/` is a static page (`app/index.html`) that says whose site this is and what
+the software does; the app itself lives at **`/app`** (`app/app/index.html`, the Vite entry that loads
+`src/main.jsx`). Two reputation services blocked the domain — a bare credential form on a new domain
+with "ledger" in the name reads as wallet phishing — so the root now presents a real business page with
+no login form on it, and the sign-in page sits one click away. The build is a Vite multi-page build
+(`build.rollupOptions.input` in `vite.config.js`); `vercel.json` and `netlify.toml` route `/app` and
+`/app/*` to the app shell and everything else to the landing page. The service worker's
+`navigateFallback` is `/app/index.html` and its denylist covers `/` and `/reset`, so the app shell never
+answers for the landing page. The PWA's `start_url` is `/app`; installs made before this keep
+`start_url: '/'`, so the landing page forwards anything opened in standalone mode (or carrying an auth
+token in the URL) straight to `/app`. **The footer has a marked placeholder for a real phone number and
+address** — fill it in; a contactable business is the single strongest signal against a false-positive
+listing.
+
 **Unsticking a cached copy:** the app is a PWA, so a browser can keep serving the build it cached.
 Settings → Account shows the running build (`__BUILD__`, the commit sha) and *Load Latest Version*
 unregisters the service worker and clears the caches. For a device too stuck to reach that button,

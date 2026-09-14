@@ -129,7 +129,8 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
         <div className="kv"><dt>App build</dt><dd className="mono">{__BUILD__}</dd></div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
           <button className="btn" onClick={reloadLatest}>Load Latest Version</button>
-          <span className="subtle">Clears this device's cached copy of the app and reloads. Your data isn't touched.</span>
+          <span className="subtle">Clears this device's cached copy of the app and reloads. Your data isn't touched.<br />
+            On a device too stuck to get this far, open <span className="mono">/reset</span> on this site instead.</span>
         </div>
         <div className="divider"></div>
         <ChangePassword toast={toast} />

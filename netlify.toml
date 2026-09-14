@@ -7,7 +7,14 @@
   command = "npm --prefix app install && npm --prefix app run build"
   publish = "app/dist"
 
-# SPA fallback: every path serves index.html (the app has no server routes).
+# /reset is a real page — the one that clears a stuck cached copy of the app —
+# so it has to win over the SPA fallback below.
+[[redirects]]
+  from = "/reset"
+  to = "/reset.html"
+  status = 200
+
+# SPA fallback: every other path serves index.html (the app has no server routes).
 [[redirects]]
   from = "/*"
   to = "/index.html"

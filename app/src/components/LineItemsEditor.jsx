@@ -1,6 +1,6 @@
 import { uid, money } from "../lib/helpers.js";
 import { lineTotals } from "../calc/ledger.js";
-import { Ico, ICONS } from "./ui.jsx";
+import { Ico, ICONS, AutoTextarea } from "./ui.jsx";
 
 export default function LineItemsEditor({ items, setItems, taxRate, setTaxRate, catalog }) {
   const upd = (i, k, v) => { const c = items.slice(); c[i] = { ...c[i], [k]: v }; setItems(c); };
@@ -14,7 +14,7 @@ export default function LineItemsEditor({ items, setItems, taxRate, setTaxRate, 
     </tr></thead><tbody>
       {items.map((it, i) => (
         <tr key={it.id || i}>
-          <td><input className="input" value={it.desc} placeholder="Item or service…" onChange={e => upd(i, "desc", e.target.value)} /></td>
+          <td><AutoTextarea value={it.desc} placeholder="Item or service…" onChange={e => upd(i, "desc", e.target.value)} /></td>
           <td><input className="input mono" type="number" step="any" value={it.qty} onChange={e => upd(i, "qty", e.target.value)} /></td>
           <td><input className="input" value={it.unit || ""} placeholder="ea" onChange={e => upd(i, "unit", e.target.value)} /></td>
           <td><input className="input mono" type="number" step="any" value={it.unitPrice} onChange={e => upd(i, "unitPrice", e.target.value)} style={{ textAlign: "right" }} /></td>

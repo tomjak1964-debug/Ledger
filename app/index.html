@@ -53,8 +53,12 @@
       .note{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--accent);
         border-radius:10px;padding:16px 18px;margin:22px 0 0;max-width:70ch}
       .note strong{font-weight:600}
-      footer{margin-top:46px;border-top:1px solid var(--line);padding:22px 0 40px;color:var(--muted);font-size:14px}
-      footer .row{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+      footer{margin-top:46px;border-top:1px solid var(--line);padding:26px 0 40px;color:var(--muted);font-size:14px}
+      footer .row{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-top:22px}
+      footer .contact{display:flex;gap:56px;flex-wrap:wrap}
+      footer .ch{font-family:"Space Grotesk",sans-serif;font-weight:600;color:var(--ink);font-size:14px;margin-bottom:4px}
+      footer address{font-style:normal;line-height:1.6}
+      footer p{margin:0}
       @media (max-width:760px){
         .cards{grid-template-columns:1fr;margin-top:-20px}
         .hero{padding:34px 0 46px}
@@ -117,23 +121,52 @@
           <strong>Security researchers and reputation services:</strong> if this site has been flagged,
           it is a false positive — it is an internal accounting application for a single industrial-controls
           business, not a consumer financial service or a cryptocurrency product, and it holds no
-          accounts for the public. We are happy to answer questions about it.
+          accounts for the public. We are happy to answer questions — the company's address and
+          telephone number are at the foot of this page.
         </div>
       </section>
 
       <footer>
+        <div class="contact">
+          <div>
+            <div class="ch">TMJ Engineering, INC.</div>
+            <address>
+              43800 Van Dyke Ave<br />
+              Sterling Heights, MI 48314<br />
+              United States
+            </address>
+          </div>
+          <div>
+            <div class="ch">Contact</div>
+            <p><a href="tel:+15862026273">586.202.6273</a></p>
+          </div>
+        </div>
         <div class="row">
-          <span>© <span id="year">2026</span> TMJ Engineering, INC.</span>
+          <span>© <span id="year">2026</span> TMJ Engineering, INC. · Sterling Heights, Michigan</span>
           <span class="spacer"></span>
-          <!-- ADD YOUR BUSINESS CONTACT HERE, e.g.
-               <span>Sterling Heights, MI · (586) 555-0100 · <a href="mailto:info@tmjledger.com">info@tmjledger.com</a></span>
-               A real phone number and address do more to clear a reputation flag than anything
-               else on this page — scanners weigh a contactable business heavily. -->
           <a href="/app">Sign in</a>
         </div>
       </footer>
     </div>
 
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "TMJ Engineering, INC.",
+        "url": "https://www.tmjledger.com/",
+        "description": "Industrial controls engineering. This site hosts Ledger, the company's private quote-to-cash business system, for staff use only.",
+        "telephone": "+1-586-202-6273",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "43800 Van Dyke Ave",
+          "addressLocality": "Sterling Heights",
+          "addressRegion": "MI",
+          "postalCode": "48314",
+          "addressCountry": "US"
+        }
+      }
+    </script>
     <script>
       document.getElementById("year").textContent = new Date().getFullYear();
       // Anyone who installed Ledger to a home screen before this page existed

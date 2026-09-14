@@ -322,9 +322,9 @@ no login form on it, and the sign-in page sits one click away. The build is a Vi
 `navigateFallback` is `/app/index.html` and its denylist covers `/` and `/reset`, so the app shell never
 answers for the landing page. The PWA's `start_url` is `/app`; installs made before this keep
 `start_url: '/'`, so the landing page forwards anything opened in standalone mode (or carrying an auth
-token in the URL) straight to `/app`. **The footer has a marked placeholder for a real phone number and
-address** — fill it in; a contactable business is the single strongest signal against a false-positive
-listing.
+token in the URL) straight to `/app`. The footer carries the shop's real address and phone number, and
+the same details go out as schema.org `Organization` JSON-LD — a contactable business is the single
+strongest signal against a false-positive listing, so keep both in step if they ever change.
 
 **Unsticking a cached copy:** the app is a PWA, so a browser can keep serving the build it cached.
 Settings → Account shows the running build (`__BUILD__`, the commit sha) and *Load Latest Version*

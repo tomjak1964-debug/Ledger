@@ -75,6 +75,7 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
           <Field label="Quote Prefix"><input className="input" value={s.quotePrefix} onChange={e => set("quotePrefix", e.target.value)} /></Field>
           <Field label="SO Prefix"><input className="input" value={s.soPrefix} onChange={e => set("soPrefix", e.target.value)} /></Field>
           <Field label="Invoice Prefix"><input className="input" value={s.invPrefix} onChange={e => set("invPrefix", e.target.value)} /></Field>
+          <Field label="Credit Note Prefix" hint="Credit notes run in their own series"><input className="input" value={s.creditPrefix || "CM"} onChange={e => set("creditPrefix", e.target.value)} /></Field>
           <Field label="Bill Prefix"><input className="input" value={s.billPrefix} onChange={e => set("billPrefix", e.target.value)} /></Field>
         </div>
         <Field label="Default Quote Notes"><textarea className="input" value={s.quoteNotes} onChange={e => set("quoteNotes", e.target.value)} /></Field>

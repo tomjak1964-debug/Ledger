@@ -532,7 +532,11 @@ export function useLedger(session, onError) {
         // re-generating a number for one already issued would burn a sequence number
         // and rename a document the customer has already seen.
         if (isNew && isAutoNumber(manual)) {
-          inv.number = await claimInvoiceNumber(inv.customerId, inv.date);
+          // Credit notes are numbered in their own series (CM-0001); invoices
+          // keep the customer-code-and-date scheme.
+          inv.number = inv.kind === "credit"
+            ? (dbRef.current.settings.creditPrefix || "CM") + "-" + pad4(await claimNumber("credit"))
+            : await claimInvoiceNumber(inv.customerId, inv.date);
         } else {
           if (!manual) throw new Error("An invoice number is required.");
           if (dbRef.current.invoices.some(x => x.id !== inv.id && (x.number || "").trim().toLowerCase() === manual.toLowerCase()))

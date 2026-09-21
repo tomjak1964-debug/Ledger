@@ -9,7 +9,10 @@ import { lineTotals, balance, round2 } from "../calc/ledger.js";
 
 export const CREDIT_METHOD = "Credit";
 
-export const isCreditMemo = inv => lineTotals(inv?.lineItems, inv?.taxRate).total < -0.005;
+// kind is the document's own answer (migration 020). The negative-total rule
+// stays for credits typed as negative invoices before credit notes existed.
+export const isCreditMemo = inv =>
+  inv?.kind === "credit" || lineTotals(inv?.lineItems, inv?.taxRate).total < -0.005;
 
 // What a credit still has to give. A credit's balance is negative, so the
 // remaining amount is its balance flipped.

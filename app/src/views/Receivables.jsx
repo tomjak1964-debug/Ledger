@@ -9,6 +9,7 @@ import PaymentGroupModal from "../components/PaymentGroupModal.jsx";
 import EmailModal from "../components/EmailModal.jsx";
 import PaymentRegister from "../components/PaymentRegister.jsx";
 import ApplyCreditModal from "../components/ApplyCreditModal.jsx";
+import CreditNoteModal from "../components/CreditNoteModal.jsx";
 import { creditAvailable, creditRemaining } from "../lib/credits.js";
 import { invoicePdf } from "../lib/invoicePdf.js";
 
@@ -22,6 +23,7 @@ export default function ReceivablesView({ db, actions, toast, openDoc, readOnly 
   const [remind, setRemind] = useState(null);
   const [showPaid, setShowPaid] = useState(false);
   const [applyTo, setApplyTo] = useState(null);   // { customerId, creditId?, focusInvoiceId? }
+  const [creditNote, setCreditNote] = useState(null);   // the credit note being written or edited
   // Every invoice with a non-zero balance: positive balances are owed to us,
   // negative balances are open credits waiting to be applied. Settled is judged
   // on the balance rather than the status so an unapplied credit — which reads
@@ -49,7 +51,10 @@ export default function ReceivablesView({ db, actions, toast, openDoc, readOnly 
         <button className={tab === "open" ? "on" : ""} onClick={() => setTab("open")}>Open Invoices</button>
         <button className={tab === "receipts" ? "on" : ""} onClick={() => setTab("receipts")}>Receipts</button>
       </div>
-      {!readOnly && <button className="btn primary" style={{ marginLeft: "auto" }} onClick={() => setReceipt(true)}>
+      {!readOnly && <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setCreditNote({})}>
+        <Ico d={ICONS.plus} size={15} />New Credit Note
+      </button>}
+      {!readOnly && <button className="btn primary" onClick={() => setReceipt(true)}>
         <Ico d={ICONS.money} size={15} />Receive Payment
       </button>}
     </div>
@@ -108,11 +113,18 @@ export default function ReceivablesView({ db, actions, toast, openDoc, readOnly 
                   <button className="btn sm" title={`${money(creditAvailable(db, inv.customerId))} in open credits for this customer`}
                     onClick={() => setApplyTo({ customerId: inv.customerId, focusInvoiceId: inv.id })}>Apply Credit</button>}
                 {!readOnly && !credit && !done && od > 0 && <button className="btn ghost icon" title="Email payment reminder" onClick={() => setRemind(inv)}><Ico d={ICONS.mail} size={16} /></button>}
+                {!readOnly && credit && <button className="btn ghost icon" title="Edit credit note" onClick={() => setCreditNote(inv)}><Ico d={ICONS.edit} size={16} /></button>}
                 <button className="btn ghost icon" title="Print" onClick={() => openDoc("invoice", inv)}><Ico d={ICONS.print} size={16} /></button>
               </td>
             </tr>;
           })}</tbody></table>}
     </div></>}
+    {creditNote && <CreditNoteModal db={db} credit={creditNote.id ? creditNote : null} onClose={() => setCreditNote(null)}
+      onSave={async (cn) => {
+        const saved = await actions.saveInvoice(cn);
+        if (saved) toast(cn._new ? "Credit note " + saved.number + " issued" : "Credit note saved");
+        return !!saved;
+      }} />}
     {applyTo && <ApplyCreditModal db={db} customerId={applyTo.customerId} creditId={applyTo.creditId} focusInvoiceId={applyTo.focusInvoiceId}
       onClose={() => setApplyTo(null)}
       onApply={async (creditId, allocations, meta) => {

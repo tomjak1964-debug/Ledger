@@ -12,6 +12,7 @@ import { fmtDate } from "./helpers.js";
 import { lineTotals, paid, balance } from "../calc/ledger.js";
 import { invoicePages } from "./invoiceLayout.js";
 import { termsLabel } from "./terms.js";
+import { isCreditMemo } from "./credits.js";
 
 const GRAY = [217, 217, 217];
 const fmt2 = n => (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -28,14 +29,20 @@ export async function invoicePdf(inv, db) {
   const s = db.settings;
   const customer = db.contacts.find(c => c.id === inv.customerId);
   const person = db.contactPeople.find(p => p.id === inv.contactPersonId);
-  const t = lineTotals(inv.lineItems, inv.taxRate);
+  // Credit notes are stored negative and printed positive under a CREDIT MEMO
+  // heading — the same document, read the way a credit reads.
+  const isCredit = isCreditMemo(inv);
+  const doc0 = isCredit
+    ? { ...inv, lineItems: (inv.lineItems || []).map(li => ({ ...li, unitPrice: -(Number(li.unitPrice) || 0) })) }
+    : inv;
+  const t = lineTotals(doc0.lineItems, doc0.taxRate);
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const W = doc.internal.pageSize.getWidth();
-  const pages = invoicePages(inv.lineItems);
+  const pages = invoicePages(doc0.lineItems);
 
   pages.forEach((rows, pi) => {
     if (pi) doc.addPage();
-    const itemsTop = drawFrame(doc, { inv, s, customer, person, W, page: pi + 1, of: pages.length });
+    const itemsTop = drawFrame(doc, { inv, s, customer, person, W, page: pi + 1, of: pages.length, isCredit });
 
     autoTable(doc, {
       startY: itemsTop, margin: { left: M, right: M }, theme: "grid", rowPageBreak: "avoid",
@@ -67,7 +74,7 @@ export async function invoicePdf(inv, db) {
         .text(`Continued on page ${pi + 2}`, W - M, bottom + 16, { align: "right" });
       doc.setTextColor(0);
     } else {
-      drawTotals(doc, { inv, s, t, W });
+      drawTotals(doc, { inv, s, t, W, isCredit });
     }
   });
 
@@ -75,14 +82,15 @@ export async function invoicePdf(inv, db) {
 }
 
 // Everything above the items table. Returns the y the items table starts at.
-function drawFrame(doc, { inv, s, customer, person, W, page, of }) {
+function drawFrame(doc, { inv, s, customer, person, W, page, of, isCredit }) {
   doc.setFont("helvetica", "bold").setFontSize(14).setTextColor(0).text(s.company || "", M, 56);
   doc.setFont("helvetica", "normal").setFontSize(9);
   doc.text((s.companyAddress || "").split("\n").filter(Boolean), M, 70);
   if (s.companyPhone) doc.text("Voice:  " + s.companyPhone, M, 114);
-  doc.setFont("helvetica", "bold").setFontSize(30).setTextColor(80).text("INVOICE", W - M, 62, { align: "right" });
+  doc.setFont("helvetica", "bold").setFontSize(isCredit ? 24 : 30).setTextColor(80).text(isCredit ? "CREDIT MEMO" : "INVOICE", W - M, 62, { align: "right" });
   doc.setTextColor(0).setFontSize(9);
-  const hdr = [["Invoice Number:", inv.number], ["Invoice Date:", fmtDate(inv.date)], ["Page:", of > 1 ? `${page} of ${of}` : "1"]];
+  const hdr = [[isCredit ? "Credit Note #:" : "Invoice Number:", inv.number],
+    [isCredit ? "Credit Date:" : "Invoice Date:", fmtDate(inv.date)], ["Page:", of > 1 ? `${page} of ${of}` : "1"]];
   hdr.forEach(([k, v], i) => {
     doc.setFont("helvetica", "normal").text(k, W - 210, 82 + i * 13);
     doc.text(String(v), W - 130, 82 + i * 13);
@@ -101,30 +109,32 @@ function drawFrame(doc, { inv, s, customer, person, W, page, of }) {
   autoTable(doc, {
     startY: BOX_Y + BOX_H + 12, margin: { left: M, right: M }, theme: "grid",
     head: [["Customer ID", "Customer PO", "Payment Terms"]],
-    body: [["", inv.poNumber || "", termsLabel(customer, s)]],
+    body: [["", inv.poNumber || "", isCredit ? "Credit memo" : termsLabel(customer, s)]],
     styles: gridStyles, headStyles: { fillColor: GRAY, fontStyle: "bold" },
   });
   autoTable(doc, {
     startY: doc.lastAutoTable.finalY, margin: { left: M, right: M }, theme: "grid",
-    head: [["Sales Rep ID", "Shipping Method", "Ship Date", "Due Date"]],
-    body: [["", "", "", fmtDate(inv.dueDate)]],
+    head: [["Sales Rep ID", "Shipping Method", "Ship Date", isCredit ? "Credit Date" : "Due Date"]],
+    body: [["", "", "", fmtDate(isCredit ? inv.date : inv.dueDate)]],
     styles: gridStyles, headStyles: { fillColor: GRAY, fontStyle: "bold" },
   });
   return doc.lastAutoTable.finalY + 10;
 }
 
 // Memo line, boxed totals and the invoice notes — last page only.
-function drawTotals(doc, { inv, s, t, W }) {
+function drawTotals(doc, { inv, s, t, W, isCredit }) {
+  const flip = isCredit ? -1 : 1;
+  const applied = paid(inv) * flip;
   const rows = [
     ["Subtotal", fmt2(t.sub)],
     ["Sales Tax", t.tax ? fmt2(t.tax) : ""],
-    ["Total Invoice Amount", fmt2(t.total)],
-    ["Payment/Credit Applied", paid(inv) ? fmt2(paid(inv)) : ""],
-    ["TOTAL", fmt2(paid(inv) ? balance(inv) : t.total)],
+    [isCredit ? "Total Credit" : "Total Invoice Amount", fmt2(t.total)],
+    [isCredit ? "Applied to invoices" : "Payment/Credit Applied", applied ? fmt2(applied) : ""],
+    [isCredit ? "CREDIT REMAINING" : "TOTAL", fmt2(applied ? balance(inv) * flip : t.total)],
   ];
   const tx = W - M - 300;
   doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(0)
-    .text("Check/Credit Memo No:", M, TOTALS_Y + 28);
+    .text(isCredit ? "Apply this credit to any open invoice." : "Check/Credit Memo No:", M, TOTALS_Y + 28);
   doc.setDrawColor(0).setLineWidth(0.5);
   rows.forEach(([k, v], i) => {
     const ry = TOTALS_Y + i * ROW_H;

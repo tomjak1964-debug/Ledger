@@ -138,6 +138,7 @@ create table if not exists invoices (
   id             uuid primary key default gen_random_uuid(),
   user_id        uuid not null default auth.uid(),
   number         text not null,
+  kind           text not null default 'invoice' check (kind in ('invoice','credit')),  -- credit notes are A/R documents too (migration 020)
   sales_order_id uuid,
   quote_id       uuid,
   customer_id    uuid,

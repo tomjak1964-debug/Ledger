@@ -305,8 +305,20 @@ number / email / remit-to address, migration 017 — the email default when send
 and the mail-to block on printed checks and remittances) · installable PWA (manifest + icons +
 service worker; Supabase never cached).
 
+**Issuing a credit note** (`src/components/CreditNoteModal.jsx`, migration 020): a credit note is an
+A/R document of its own — **New Credit Note** in Receivables writes one, and the pencil on a credit row
+edits it. Amounts are typed **positive** (what you are crediting) and stored negative, so the document
+carries a negative total and lands in Receivables as an open credit; the due date is the credit date,
+because a credit is not owed. Credit notes number from their own series — `settings.creditPrefix`
+(default `CM`) plus `next_doc_number('credit')`, so they never consume an invoice number. What makes a
+document a credit is now `invoices.kind` (`'invoice'` | `'credit'`, migration 020 — the migration
+backfills existing negative invoices); `isCreditMemo()` still falls back to the negative-total rule for
+anything typed before the column existed. Editing refuses to cut a credit below what has already been
+applied to invoices. Printed and PDF'd it reads **CREDIT MEMO** — positive amounts, "Credit Note #",
+"Credit memo" in the terms box, and Total Credit / Applied to invoices / **CREDIT REMAINING**.
+
 **Applying a credit** (`src/lib/credits.js`, `src/components/ApplyCreditModal.jsx`, `applyCredit()` in
-`store.js`): a credit memo is an invoice with a negative total, so it already sits in Receivables with a
+`store.js`): a credit note carries a negative total, so it already sits in Receivables with a
 negative balance. **Apply Credit** — on the credit's own row, or on any open invoice for a customer who
 has one — opens a dialog listing that customer's open invoices oldest first, with **Oldest first** to
 spend the credit down the list in a click. Nothing is applied until an amount is typed, what is left
@@ -436,8 +448,7 @@ Purchase Orders, Expenses, Contacts, Catalog, Jobs, Tasks, Proposals, Machine Ra
 Time Tracking, the Payments/Receipts register, and the report tables — sorts on any column heading,
 ascending then descending. See §7 for the convention new pages follow.
 
-**Not built (candidates for next work):** issuing a credit note as its own document (today a credit is
-an invoice typed with negative amounts — applying one is built, see above) · refunds · partial invoicing of an SO ·
+**Not built (candidates for next work):** refunds (returning cash rather than crediting) · partial invoicing of an SO ·
 recurring invoices · email sending · attachments / receipt photos · quote line-item reordering ·
 multi-user roles · bank import / reconciliation · double-entry GL · undo · automated tests ·
 Capacitor store apps (PWA covers home-screen install today).

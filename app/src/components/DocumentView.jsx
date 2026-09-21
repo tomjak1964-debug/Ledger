@@ -3,6 +3,7 @@ import { money, fmtDate } from "../lib/helpers.js";
 import { lineTotals, paid, balance } from "../calc/ledger.js";
 import { invoicePages } from "../lib/invoiceLayout.js";
 import { termsLabel } from "../lib/terms.js";
+import { isCreditMemo } from "../lib/credits.js";
 import { Ico, ICONS } from "./ui.jsx";
 
 export default function DocumentView({ kind, doc, contact, settings, onClose, onPrinted }) {
@@ -72,11 +73,21 @@ export default function DocumentView({ kind, doc, contact, settings, onClose, on
 // lines there are, and lines that don't fit carry onto an identically framed
 // page. qty-0 lines are unbilled-phase reference lines: unit price, no amount.
 function InvoiceDoc({ inv, contact, settings, onClose, print }) {
-  const t = lineTotals(inv.lineItems, inv.taxRate);
-  const p = paid(inv);
+  // A credit note is stored negative so the ledger maths work; it prints the
+  // way a credit memo reads — positive amounts under a CREDIT MEMO heading.
+  const isCredit = isCreditMemo(inv);
+  const flip = isCredit ? -1 : 1;
+  const doc = isCredit
+    ? { ...inv, lineItems: (inv.lineItems || []).map(li => ({ ...li, unitPrice: -(Number(li.unitPrice) || 0) })) }
+    : inv;
+  const t = lineTotals(doc.lineItems, doc.taxRate);
+  const p = paid(inv) * flip;   // what has been applied off the credit
+  const L = isCredit
+    ? { title: "CREDIT MEMO", number: "Credit Note #:", total: "Total Credit", applied: "Applied to invoices", grand: "CREDIT REMAINING" }
+    : { title: "INVOICE", number: "Invoice Number:", total: "Total Invoice Amount", applied: "Payment/Credit Applied", grand: "TOTAL" };
   const addr = [contact?.name, ...(contact?.address || "").split("\n")].filter(Boolean).join("\n");
   const fmt2 = n => (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const pages = invoicePages(inv.lineItems);
+  const pages = invoicePages(doc.lineItems);
   const notes = inv.notes || settings.invoiceNotes;
   return <div className="doc-screen">
     <div className="doc-bar">
@@ -93,10 +104,10 @@ function InvoiceDoc({ inv, contact, settings, onClose, print }) {
             {settings.companyPhone && <div className="co" style={{ marginTop: 14 }}>Voice:  {settings.companyPhone}</div>}
           </div>
           <div className="inv-title">
-            <div className="t">INVOICE</div>
+            <div className="t">{L.title}</div>
             <table className="hdr"><tbody>
-              <tr><td>Invoice Number:</td><td>{inv.number}</td></tr>
-              <tr><td>Invoice Date:</td><td>{fmtDate(inv.date)}</td></tr>
+              <tr><td>{L.number}</td><td>{inv.number}</td></tr>
+              <tr><td>{isCredit ? "Credit Date:" : "Invoice Date:"}</td><td>{fmtDate(inv.date)}</td></tr>
               <tr><td>Page:</td><td>{pages.length > 1 ? `${pi + 1} of ${pages.length}` : "1"}</td></tr>
             </tbody></table>
           </div>
@@ -107,9 +118,9 @@ function InvoiceDoc({ inv, contact, settings, onClose, print }) {
         </div>
         <table className="inv-grid"><tbody>
           <tr className="h"><td>Customer ID</td><td>Customer PO</td><td colSpan={2}>Payment Terms</td></tr>
-          <tr><td>&nbsp;</td><td>{inv.poNumber || " "}</td><td colSpan={2}>{termsLabel(contact, settings)}</td></tr>
-          <tr className="h"><td>Sales Rep ID</td><td>Shipping Method</td><td>Ship Date</td><td>Due Date</td></tr>
-          <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>{fmtDate(inv.dueDate)}</td></tr>
+          <tr><td>&nbsp;</td><td>{inv.poNumber || " "}</td><td colSpan={2}>{isCredit ? "Credit memo" : termsLabel(contact, settings)}</td></tr>
+          <tr className="h"><td>Sales Rep ID</td><td>Shipping Method</td><td>Ship Date</td><td>{isCredit ? "Credit Date" : "Due Date"}</td></tr>
+          <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>{fmtDate(isCredit ? inv.date : inv.dueDate)}</td></tr>
         </tbody></table>
         <div className="inv-body">
           <table className="inv-items"><thead><tr>
@@ -126,13 +137,13 @@ function InvoiceDoc({ inv, contact, settings, onClose, print }) {
         </div>
         {last ? <>
           <div className="inv-foot">
-            <div className="memo">Check/Credit Memo No:</div>
+            <div className="memo">{isCredit ? "Apply this credit to any open invoice." : "Check/Credit Memo No:"}</div>
             <table className="totals"><tbody>
               <tr><td>Subtotal</td><td className="r">{fmt2(t.sub)}</td></tr>
               <tr><td>Sales Tax</td><td className="r">{t.tax ? fmt2(t.tax) : ""}</td></tr>
-              <tr><td>Total Invoice Amount</td><td className="r">{fmt2(t.total)}</td></tr>
-              <tr><td>Payment/Credit Applied</td><td className="r">{p ? fmt2(p) : ""}</td></tr>
-              <tr className="grand"><td>TOTAL</td><td className="r">{fmt2(p ? balance(inv) : t.total)}</td></tr>
+              <tr><td>{L.total}</td><td className="r">{fmt2(t.total)}</td></tr>
+              <tr><td>{L.applied}</td><td className="r">{p ? fmt2(p) : ""}</td></tr>
+              <tr className="grand"><td>{L.grand}</td><td className="r">{fmt2(p ? balance(inv) * flip : t.total)}</td></tr>
             </tbody></table>
           </div>
           {notes && <div className="doc-notes">{notes}</div>}

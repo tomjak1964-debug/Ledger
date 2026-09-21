@@ -119,12 +119,19 @@ export function useLedger(session, onError) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const dbRef = useRef(null);
+  // dbRef is the source of truth, not a mirror of React's state: an action
+  // writes it synchronously and then reads it back in the same tick. Assigning
+  // it inside the state updater used to leave it one update behind — React runs
+  // the updater when it processes the update, not when setDb is called — so a
+  // follow-up like reconcileJobTask() saw the state from before its own write
+  // and left the job's task open. Applying the updater here keeps every
+  // dbRef.current read current, which matters most in the batch loops (billing
+  // several jobs, applying credits, a pay run) where nothing yields to React
+  // between iterations.
   const setDb = useCallback((updater) => {
-    setDbState(prev => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      dbRef.current = next;
-      return next;
-    });
+    const next = typeof updater === "function" ? updater(dbRef.current) : updater;
+    dbRef.current = next;
+    setDbState(next);
   }, []);
 
   const reload = useCallback(async () => {
@@ -139,12 +146,14 @@ export function useLedger(session, onError) {
         raw = await fetchAll();
       }
       setDb(assemble(raw));
-      // Ensure jobs with ready, un-invoiced lines have an open invoice task —
-      // covers 'ready' set outside the app (e.g. a bulk data import).
+      // Put every job's invoice task back in step with its lines, both ways:
+      // open one where lines are ready and un-invoiced (covers 'ready' set
+      // outside the app, e.g. a bulk import) and close one whose job has
+      // nothing left to bill (covers tasks stranded open by an earlier bug).
       for (const so of (dbRef.current?.salesOrders || [])) {
         const hasReady = (so.lineItems || []).some(li => li.ready && !li.invoiced);
         const hasTask = (dbRef.current?.tasks || []).some(t => t.salesOrderId === so.id && t.type === "create_invoice" && t.status === "open");
-        if (hasReady && !hasTask) await reconcileJobTask(so.id);
+        if (hasReady !== hasTask) await reconcileJobTask(so.id);
       }
     } catch (e) {
       setLoadError(e.message || String(e));

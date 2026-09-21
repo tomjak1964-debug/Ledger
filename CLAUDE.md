@@ -342,6 +342,16 @@ on a list of what was created, with a Print button per invoice. The dialog close
 successful generate, so the queue advances in `onClose` and nowhere else — advancing in `onGenerate` too
 skips a job.
 
+**`dbRef.current` is the state, not a copy of it.** `setDb` applies the updater against the ref and
+writes it before calling `setState`, because an action writes state and then reads it back in the same
+tick — `reconcileJobTask()` right after `generateInvoice()`'s write, for one. Assigning the ref inside
+the React updater left it an update behind (React runs the updater when it processes the update, not
+when `setDb` is called), which a single action got away with and a batch did not: a run that billed
+three jobs wrote all three invoices and left two of the three tasks open. Anything that loops over
+documents — billing several jobs, applying credits, a pay run — depends on this. `reload()` also
+reconciles job tasks **both ways** now, so a task stranded open by that bug closes itself on the next
+load.
+
 **Payment terms live on the contact** (`src/lib/terms.js`, migration 019). Each customer and vendor
 carries `terms` (days), `discountPct` and `discountDays`; `terms` blank means "use the company default"
 in Settings, so nothing changes for a contact nobody has set up. `termsLabel()` renders them the way the

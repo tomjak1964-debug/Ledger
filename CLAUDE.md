@@ -305,6 +305,21 @@ number / email / remit-to address, migration 017 — the email default when send
 and the mail-to block on printed checks and remittances) · installable PWA (manifest + icons +
 service worker; Supabase never cached).
 
+**Applying a credit** (`src/lib/credits.js`, `src/components/ApplyCreditModal.jsx`, `applyCredit()` in
+`store.js`): a credit memo is an invoice with a negative total, so it already sits in Receivables with a
+negative balance. **Apply Credit** — on the credit's own row, or on any open invoice for a customer who
+has one — opens a dialog listing that customer's open invoices oldest first, with **Oldest first** to
+spend the credit down the list in a click. Nothing is applied until an amount is typed, what is left
+stays on the credit, and the dialog refuses to apply more than an invoice owes (the precise complaint)
+or more than the credit holds.
+
+**No cash moves.** Each allocation writes a *pair* of payment rows with method `Credit` and the credit's
+number as the reference: **+amount on the invoice, −amount on the credit**. The invoice settles against
+`settled()` and the credit is consumed by its own negative total, while `paid()` — which is cash (§6) —
+nets to zero across the pair, so the registers and the cash-basis P&L are untouched. The pair shares a
+date, method and reference, so the register groups it as one entry worth nothing, expandable to the two
+documents; voiding that group unwinds both sides at once.
+
 **Invoicing several jobs at once:** Tasks tick-selects the open *create invoice* tasks and bills them
 two ways (`src/views/Tasks.jsx`). **Create N Invoices** shows what each job would bill — lines, approved
 unbilled time (a tick turns time off for the whole run), and what the invoice comes to — then writes them
@@ -421,7 +436,8 @@ Purchase Orders, Expenses, Contacts, Catalog, Jobs, Tasks, Proposals, Machine Ra
 Time Tracking, the Payments/Receipts register, and the report tables — sorts on any column heading,
 ascending then descending. See §7 for the convention new pages follow.
 
-**Not built (candidates for next work):** credit notes / refunds · partial invoicing of an SO ·
+**Not built (candidates for next work):** issuing a credit note as its own document (today a credit is
+an invoice typed with negative amounts — applying one is built, see above) · refunds · partial invoicing of an SO ·
 recurring invoices · email sending · attachments / receipt photos · quote line-item reordering ·
 multi-user roles · bank import / reconciliation · double-entry GL · undo · automated tests ·
 Capacitor store apps (PWA covers home-screen install today).

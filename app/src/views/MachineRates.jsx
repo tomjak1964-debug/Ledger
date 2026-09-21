@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { uid, money } from "../lib/helpers.js";
 import { TMJ_DEFAULT_RATES } from "../calc/proposals.js";
-import { Ico, ICONS, Empty, Modal, Field } from "../components/ui.jsx";
+import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort } from "../components/ui.jsx";
 
 const RATE_FIELDS = [
   ["engBase", "Engineering/Start-Up Base"], ["cameraRate", "Per-Camera Adder"],
@@ -17,6 +17,10 @@ export default function MachineRatesView({ db, actions, toast, readOnly }) {
     if (await actions.saveMachineType(clean)) { setEdit(null); toast("Rates saved"); }
   };
   const del = async (id) => { if (!confirm("Delete this machine type?")) return; if (await actions.deleteMachineType(id)) toast("Deleted"); };
+  const { sorted: rateRows, sort, onSort } = useTableSort(db.machineTypes, {
+    name: m => m.name || "",
+    ...Object.fromEntries(RATE_FIELDS.map(([k]) => [k, m => Number(m[k]) || 0])),
+  });
 
   return <div>
     <div className="toolbar">
@@ -27,8 +31,13 @@ export default function MachineRatesView({ db, actions, toast, readOnly }) {
       {db.machineTypes.length === 0
         ? <Empty icon={ICONS.so} title="No machine rates yet" msg="Load the TMJ defaults (Big Sonic, Robot Sonic, Check, Screw, Insert, Limiter — from TMJ Costing.xlsx) and adjust from there."
           action={!readOnly && <button className="btn primary" onClick={async () => { if (await actions.seedMachineRates(TMJ_DEFAULT_RATES)) toast("TMJ default rates loaded"); }}>Load TMJ Default Rates</button>} />
-        : <table><thead><tr><th>Machine Type</th><th className="num">Eng Base</th><th className="num">/Camera</th><th className="num">Panel</th><th className="num">I/O 1st</th><th className="num">I/O Add'l</th><th className="num">Wiring</th><th className="num">Run Off</th><th className="num">Remote HMI</th><th></th></tr></thead>
-          <tbody>{db.machineTypes.map(m => <tr key={m.id}>
+        : <table><thead><tr>
+          <SortTh label="Machine Type" col="name" sort={sort} onSort={onSort} />
+          {[["engBase", "Eng Base"], ["cameraRate", "/Camera"], ["panelBudget", "Panel"], ["ioFirst", "I/O 1st"],
+            ["ioAddl", "I/O Add'l"], ["fieldWiring", "Wiring"], ["runoff", "Run Off"], ["remoteHmi", "Remote HMI"]]
+            .map(([col, label]) => <SortTh key={col} label={label} col={col} sort={sort} onSort={onSort} num />)}
+          <th></th></tr></thead>
+          <tbody>{rateRows.map(m => <tr key={m.id}>
             <td style={{ fontWeight: 600 }}>{m.name}</td>
             <td className="num">{money(m.engBase)}</td><td className="num">{money(m.cameraRate)}</td>
             <td className="num">{money(m.panelBudget)}</td><td className="num">{money(m.ioFirst)}</td>

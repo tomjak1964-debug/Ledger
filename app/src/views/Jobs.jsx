@@ -1,12 +1,18 @@
 import { useState, Fragment } from "react";
 import { money, fmtDate, nameOf } from "../lib/helpers.js";
-import { Ico, ICONS, Badge, Empty } from "../components/ui.jsx";
+import { Ico, ICONS, Badge, Empty, SortTh, useTableSort } from "../components/ui.jsx";
 
 // A job = a Sales Order. Track progress by marking line items ready (work done).
 // Marking un-invoiced items ready raises a task for an invoicer to bill them.
 export default function JobsView({ db, actions, toast, readOnly }) {
   const [open, setOpen] = useState(null);   // expanded SO id
   const jobs = db.salesOrders.filter(s => s.status === "open");
+  const readyOf = so => (so.lineItems || []).filter(li => li.ready).length;
+  const { sorted: jobRows, sort, onSort } = useTableSort(jobs.slice().reverse(), {
+    number: so => so.number, customer: so => nameOf(db, so.customerId), po: so => so.poNumber || "",
+    progress: so => { const t = (so.lineItems || []).length; return t ? readyOf(so) / t : 0; },
+    ready: so => readyOf(so),
+  });
 
   const toggleReady = async (so, li, ready) => {
     if (await actions.setLineReady(so.id, li.id, ready)) toast(ready ? "Marked ready" : "Marked not ready");
@@ -17,8 +23,14 @@ export default function JobsView({ db, actions, toast, readOnly }) {
       <div className="card-head"><h3>Active Jobs</h3></div>
       {jobs.length === 0
         ? <Empty icon={ICONS.job} title="No active jobs" msg="Jobs are your open sales orders. Mark line items ready as the work is completed — that flags them for invoicing." />
-        : <table><thead><tr><th>Job</th><th>Customer</th><th>PO #</th><th>Progress</th><th className="num">Ready / Total</th><th></th></tr></thead>
-          <tbody>{jobs.slice().reverse().map(so => {
+        : <table><thead><tr>
+          <SortTh label="Job" col="number" sort={sort} onSort={onSort} />
+          <SortTh label="Customer" col="customer" sort={sort} onSort={onSort} />
+          <SortTh label="PO #" col="po" sort={sort} onSort={onSort} />
+          <SortTh label="Progress" col="progress" sort={sort} onSort={onSort} />
+          <SortTh label="Ready / Total" col="ready" sort={sort} onSort={onSort} num />
+          <th></th></tr></thead>
+          <tbody>{jobRows.map(so => {
             const lines = so.lineItems || [];
             const total = lines.length;
             const ready = lines.filter(li => li.ready).length;

@@ -6,7 +6,7 @@ import {
   plCashBasis, salesTaxReport, salesByCustomer, expensesByCategory, customerStatement,
   agedReceivables, agedPayables, incomeExpenseByMonth, receiptGroups,
 } from "../calc/reports.js";
-import { Ico, ICONS, Badge, Empty } from "../components/ui.jsx";
+import { Ico, ICONS, Badge, Empty, SortTh, useTableSort } from "../components/ui.jsx";
 import FilterBar, { rangeLabel } from "../components/FilterBar.jsx";
 
 /* ---------- CSV export ---------- */
@@ -137,12 +137,16 @@ function RegisterReport({ db, from, to, partyId, rangeLabel: label, kind }) {
     ? { title: "Payments Register", one: "payment", plural: "Payments", ref: "Check / Ref #", party: "Vendor", when: "Date Paid", docs: "Bills", doc: "Bill", file: "payments-register", stat: "Total Paid", meta: "checks / transfers sent" }
     : { title: "Receipts Register", one: "receipt", plural: "Receipts", ref: "Reference #", party: "Customer", when: "Date Received", docs: "Invoices", doc: "Invoice", file: "receipts-register", stat: "Total Received", meta: "checks / transfers received" };
   const r = receiptGroups(db, { kind, from, to, partyId });
+  const { sorted: regRows, sort, onSort } = useTableSort(r.rows, {
+    ref: g => g.ref || "", party: g => nameOf(db, g.partyId), date: g => g.date || "",
+    method: g => g.method || "", docs: g => g.count, amount: g => g.amount,
+  });
   const exportCSV = () => downloadCSV(L.file,
     detail
       ? ["Reference", L.party, L.when, "Method", L.plural.slice(0, -1) + " Amount", L.doc, L.doc + " Date", "Applied"]
       : ["Reference", L.party, L.when, "Method", L.docs, "Amount"],
     detail
-      ? r.rows.flatMap(g => g.lines.map(l =>
+      ? regRows.flatMap(g => g.lines.map(l =>
         [g.ref || "", nameOf(db, g.partyId), g.date, g.method, g.amount.toFixed(2), l.number, l.docDate, l.amount.toFixed(2)]))
       : r.rows.map(g => [g.ref || "", nameOf(db, g.partyId), g.date, g.method, g.count, g.amount.toFixed(2)]));
 
@@ -161,9 +165,13 @@ function RegisterReport({ db, from, to, partyId, rangeLabel: label, kind }) {
         ? <Empty icon={ICONS.money} title={"No " + L.one + "s in this range"} msg={"Widen the date range or clear the " + L.party.toLowerCase() + " filter."} />
         : <table><thead><tr>
           {!detail && <th style={{ width: 34 }}></th>}
-          <th>{L.ref}</th><th>{L.party}</th><th>{L.when}</th><th>Method</th>
-          <th className="num">{L.docs}</th><th className="num">Amount</th></tr></thead>
-          <tbody>{r.rows.map(g => {
+          <SortTh label={L.ref} col="ref" sort={sort} onSort={onSort} />
+          <SortTh label={L.party} col="party" sort={sort} onSort={onSort} />
+          <SortTh label={L.when} col="date" sort={sort} onSort={onSort} />
+          <SortTh label="Method" col="method" sort={sort} onSort={onSort} />
+          <SortTh label={L.docs} col="docs" sort={sort} onSort={onSort} num />
+          <SortTh label="Amount" col="amount" sort={sort} onSort={onSort} num /></tr></thead>
+          <tbody>{regRows.map(g => {
             const isOpen = detail || !!open[g.key];
             const toggle = () => setOpen(o => ({ ...o, [g.key]: !o[g.key] }));
             return <Fragment key={g.key}>
@@ -210,17 +218,24 @@ function AgedReport({ db, asOf, partyId, kind }) {
   const title = isAR ? "Aged Receivables" : "Aged Payables";
   const who = isAR ? "Customer" : "Vendor";
   const cols = [["cur", "Current"], ["d30", "1–30"], ["d60", "31–60"], ["d90", "61–90"], ["d90p", "90+"]];
+  const { sorted: agedRows, sort, onSort } = useTableSort(rows, {
+    who: x => nameOf(db, x.key), total: x => x.total,
+    ...Object.fromEntries(cols.map(([k]) => [k, x => x[k]])),
+  });
   const exportCSV = () => downloadCSV(isAR ? "aged-receivables" : "aged-payables",
     [who, ...cols.map(([, l]) => l), "Total"],
-    [...rows.map(x => [nameOf(db, x.key), ...cols.map(([k]) => x[k].toFixed(2)), x.total.toFixed(2)]),
+    [...agedRows.map(x => [nameOf(db, x.key), ...cols.map(([k]) => x[k].toFixed(2)), x.total.toFixed(2)]),
     ["TOTAL", ...cols.map(([k]) => totals[k].toFixed(2)), totals.total.toFixed(2)]]);
   return <ReportCard title={title} rangeLabel={"As of " + fmtDate(asOf)}
     right={<button className="btn sm no-print" onClick={exportCSV}>Export CSV</button>}>
     {rows.length === 0
       ? <Empty icon={isAR ? ICONS.ar : ICONS.ap} title="Nothing outstanding" msg={isAR ? "No customer owed you money on this date." : "You owed no vendor bills on this date."} />
-      : <table><thead><tr><th>{who}</th>{cols.map(([k, l]) => <th key={k} className="num">{l}</th>)}<th className="num">Total</th></tr></thead>
+      : <table><thead><tr>
+        <SortTh label={who} col="who" sort={sort} onSort={onSort} />
+        {cols.map(([k, l]) => <SortTh key={k} label={l} col={k} sort={sort} onSort={onSort} num />)}
+        <SortTh label="Total" col="total" sort={sort} onSort={onSort} num /></tr></thead>
         <tbody>
-          {rows.map(x => <tr key={x.key}>
+          {agedRows.map(x => <tr key={x.key}>
             <td style={{ fontWeight: 600 }}>{nameOf(db, x.key)}</td>
             {cols.map(([k]) => <td key={k} className="num" style={k !== "cur" && x[k] > 0 ? { color: "var(--neg)" } : {}}>{x[k] > 0 ? money(x[k]) : "—"}</td>)}
             <td className="num" style={{ fontWeight: 600 }}>{money(x.total)}</td>
@@ -238,9 +253,12 @@ function AgedReport({ db, asOf, partyId, kind }) {
 function IncomeExpense({ db, from, to, rangeLabel: label }) {
   const r = incomeExpenseByMonth(db, from, to);
   const mLabel = ym => { const [y, m] = ym.split("-"); return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("en-US", { month: "short", year: "numeric" }); };
+  const { sorted: flowRows, sort, onSort } = useTableSort(r.rows, {
+    month: x => x.month, income: x => x.income, expenses: x => x.expenses, billsPaid: x => x.billsPaid, net: x => x.net,
+  });
   const exportCSV = () => downloadCSV("income-expense",
     ["Month", "Income", "Expenses", "Bill Payments", "Net"],
-    [...r.rows.map(x => [mLabel(x.month), x.income.toFixed(2), x.expenses.toFixed(2), x.billsPaid.toFixed(2), x.net.toFixed(2)]),
+    [...flowRows.map(x => [mLabel(x.month), x.income.toFixed(2), x.expenses.toFixed(2), x.billsPaid.toFixed(2), x.net.toFixed(2)]),
     ["TOTAL", r.totals.income.toFixed(2), r.totals.expenses.toFixed(2), r.totals.billsPaid.toFixed(2), r.totals.net.toFixed(2)]]);
   return <>
     <div className="grid" style={{ gridTemplateColumns: "repeat(3,1fr)", marginBottom: 16 }}>
@@ -252,9 +270,12 @@ function IncomeExpense({ db, from, to, rangeLabel: label }) {
       right={<button className="btn sm no-print" onClick={exportCSV}>Export CSV</button>}>
       {r.rows.length === 0
         ? <Empty icon={ICONS.reports} title="Nothing in this range" msg="No payments or expenses fall in the selected dates." />
-        : <table><thead><tr><th>Month</th><th className="num">Income</th><th className="num">Expenses</th><th className="num">Bill Payments</th><th className="num">Net</th></tr></thead>
+        : <table><thead><tr>
+          <SortTh label="Month" col="month" sort={sort} onSort={onSort} />
+          {[["income", "Income"], ["expenses", "Expenses"], ["billsPaid", "Bill Payments"], ["net", "Net"]]
+            .map(([col, label]) => <SortTh key={col} label={label} col={col} sort={sort} onSort={onSort} num />)}</tr></thead>
           <tbody>
-            {r.rows.map(x => <tr key={x.month}>
+            {flowRows.map(x => <tr key={x.month}>
               <td style={{ fontWeight: 600 }}>{mLabel(x.month)}</td>
               <td className="num" style={{ color: "var(--pos)" }}>{money(x.income)}</td>
               <td className="num">{money(x.expenses)}</td>
@@ -302,9 +323,13 @@ function SalesTax({ db, from, to, partyId, rangeLabel: label }) {
   const r0 = salesTaxReport(db, from, to);
   const rows = partyId ? r0.rows.filter(x => x.inv.customerId === partyId) : r0.rows;
   const sub = rows.reduce((t, x) => t + x.sub, 0), tax = rows.reduce((t, x) => t + x.tax, 0);
+  const { sorted: taxRows, sort, onSort } = useTableSort(rows, {
+    invoice: x => x.inv.number, customer: x => nameOf(db, x.inv.customerId), date: x => x.inv.date || "",
+    status: x => invoiceStatus(x.inv), sub: x => x.sub, tax: x => x.tax, total: x => x.total,
+  });
   const exportCSV = () => downloadCSV("sales-tax",
     ["Invoice", "Customer", "Date", "Status", "Subtotal", "Tax", "Total"],
-    rows.map(({ inv, sub: s, tax: t, total }) => [inv.number, nameOf(db, inv.customerId), inv.date, invoiceStatus(inv), s.toFixed(2), t.toFixed(2), total.toFixed(2)]));
+    taxRows.map(({ inv, sub: s, tax: t, total }) => [inv.number, nameOf(db, inv.customerId), inv.date, invoiceStatus(inv), s.toFixed(2), t.toFixed(2), total.toFixed(2)]));
   return <>
     <div className="grid" style={{ gridTemplateColumns: "repeat(3,1fr)", marginBottom: 16 }}>
       <div className="stat"><div className="lbl">Taxable Sales (invoiced)</div><div className="val mono">{money(sub)}</div></div>
@@ -315,8 +340,15 @@ function SalesTax({ db, from, to, partyId, rangeLabel: label }) {
       right={<button className="btn sm no-print" onClick={exportCSV}>Export CSV</button>}>
       {rows.length === 0
         ? <Empty icon={ICONS.inv} title="No invoices in this range" msg="Change the date range or customer above." />
-        : <table><thead><tr><th>Invoice</th><th>Customer</th><th>Date</th><th>Status</th><th className="num">Subtotal</th><th className="num">Tax</th><th className="num">Total</th></tr></thead>
-          <tbody>{rows.map(({ inv, sub: s, tax: t, total }) => <tr key={inv.id}>
+        : <table><thead><tr>
+          <SortTh label="Invoice" col="invoice" sort={sort} onSort={onSort} />
+          <SortTh label="Customer" col="customer" sort={sort} onSort={onSort} />
+          <SortTh label="Date" col="date" sort={sort} onSort={onSort} />
+          <SortTh label="Status" col="status" sort={sort} onSort={onSort} />
+          <SortTh label="Subtotal" col="sub" sort={sort} onSort={onSort} num />
+          <SortTh label="Tax" col="tax" sort={sort} onSort={onSort} num />
+          <SortTh label="Total" col="total" sort={sort} onSort={onSort} num /></tr></thead>
+          <tbody>{taxRows.map(({ inv, sub: s, tax: t, total }) => <tr key={inv.id}>
             <td className="doc-id">{inv.number}</td><td>{nameOf(db, inv.customerId)}</td>
             <td className="subtle">{fmtDate(inv.date)}</td><td><Badge status={invoiceStatus(inv)} /></td>
             <td className="num">{money(s)}</td><td className="num">{money(t)}</td><td className="num">{money(total)}</td>
@@ -328,15 +360,22 @@ function SalesTax({ db, from, to, partyId, rangeLabel: label }) {
 function SalesByCustomer({ db, from, to, partyId, rangeLabel: label }) {
   const all = salesByCustomer(db, from, to);
   const rows = partyId ? all.filter(r => r.customerId === partyId) : all;
+  const { sorted: custRows, sort, onSort } = useTableSort(rows, {
+    customer: r => nameOf(db, r.customerId), count: r => r.count, invoiced: r => r.invoiced,
+    collected: r => r.collected, balance: r => r.balance,
+  });
   const exportCSV = () => downloadCSV("sales-by-customer",
     ["Customer", "Invoices", "Invoiced", "Collected", "Open Balance"],
-    rows.map(r => [nameOf(db, r.customerId), r.count, r.invoiced.toFixed(2), r.collected.toFixed(2), r.balance.toFixed(2)]));
+    custRows.map(r => [nameOf(db, r.customerId), r.count, r.invoiced.toFixed(2), r.collected.toFixed(2), r.balance.toFixed(2)]));
   return <ReportCard title="Sales by Customer" rangeLabel={label}
     right={<button className="btn sm no-print" onClick={exportCSV}>Export CSV</button>}>
     {rows.length === 0
       ? <Empty icon={ICONS.contacts} title="No sales in this range" msg="Change the date range or customer above." />
-      : <table><thead><tr><th>Customer</th><th className="num">Invoices</th><th className="num">Invoiced</th><th className="num">Collected</th><th className="num">Open Balance</th></tr></thead>
-        <tbody>{rows.map(r => <tr key={r.customerId}>
+      : <table><thead><tr>
+        <SortTh label="Customer" col="customer" sort={sort} onSort={onSort} />
+        {[["count", "Invoices"], ["invoiced", "Invoiced"], ["collected", "Collected"], ["balance", "Open Balance"]]
+          .map(([col, label]) => <SortTh key={col} label={label} col={col} sort={sort} onSort={onSort} num />)}</tr></thead>
+        <tbody>{custRows.map(r => <tr key={r.customerId}>
           <td style={{ fontWeight: 600 }}>{nameOf(db, r.customerId)}</td>
           <td className="num">{r.count}</td>
           <td className="num">{money(r.invoiced)}</td>
@@ -348,16 +387,22 @@ function SalesByCustomer({ db, from, to, partyId, rangeLabel: label }) {
 
 function ExpenseReport({ db, from, to, rangeLabel: label }) {
   const r = expensesByCategory(db, from, to);
+  const { sorted: expRows, sort, onSort } = useTableSort(r.rows, {
+    category: x => x.category || "", count: x => x.count, total: x => x.total,
+  });
   const exportCSV = () => downloadCSV("expenses-by-category",
     ["Category", "Entries", "Total"],
-    [...r.rows.map(x => [x.category, x.count, x.total.toFixed(2)]), ["TOTAL", r.count, r.total.toFixed(2)]]);
+    [...expRows.map(x => [x.category, x.count, x.total.toFixed(2)]), ["TOTAL", r.count, r.total.toFixed(2)]]);
   return <ReportCard title="Expenses by Category" rangeLabel={label}
     right={<button className="btn sm no-print" onClick={exportCSV}>Export CSV</button>}>
     {r.rows.length === 0
       ? <Empty icon={ICONS.exp} title="No expenses in this range" msg="Change the date range above." />
-      : <table><thead><tr><th>Category</th><th className="num">Entries</th><th className="num">Total</th></tr></thead>
+      : <table><thead><tr>
+        <SortTh label="Category" col="category" sort={sort} onSort={onSort} />
+        <SortTh label="Entries" col="count" sort={sort} onSort={onSort} num />
+        <SortTh label="Total" col="total" sort={sort} onSort={onSort} num /></tr></thead>
         <tbody>
-          {r.rows.map(x => <tr key={x.category}><td>{x.category}</td><td className="num">{x.count}</td><td className="num">{money(x.total)}</td></tr>)}
+          {expRows.map(x => <tr key={x.category}><td>{x.category}</td><td className="num">{x.count}</td><td className="num">{money(x.total)}</td></tr>)}
           <tr><td style={{ fontWeight: 700 }}>Total</td><td className="num" style={{ fontWeight: 700 }}>{r.count}</td><td className="num" style={{ fontWeight: 700 }}>{money(r.total)}</td></tr>
         </tbody></table>}
   </ReportCard>;

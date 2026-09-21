@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { money, fmtDate, nameOf } from "../lib/helpers.js";
 import { lineTotals } from "../calc/ledger.js";
-import { Ico, ICONS, Empty } from "../components/ui.jsx";
+import { Ico, ICONS, Empty, SortTh, useTableSort } from "../components/ui.jsx";
 import InvoiceFromSOModal from "../components/InvoiceFromSOModal.jsx";
 
 // Work waiting on the user. Today's only task type is "create invoice" — raised
@@ -10,6 +10,16 @@ import InvoiceFromSOModal from "../components/InvoiceFromSOModal.jsx";
 export default function TasksView({ db, actions, toast, openDoc, readOnly }) {
   const [invoiceSO, setInvoiceSO] = useState(null);
   const openTasks = (db.tasks || []).filter(t => t.status === "open");
+  const soOf = t => db.salesOrders.find(s => s.id === t.salesOrderId);
+  const readyValue = t => {
+    const so = soOf(t);
+    return so ? lineTotals((so.lineItems || []).filter(li => li.ready && !li.invoiced), so.taxRate).total : 0;
+  };
+  const { sorted: taskRows, sort, onSort } = useTableSort(openTasks, {
+    task: t => t.title || "Create invoice", job: t => soOf(t)?.number || "",
+    customer: t => { const so = soOf(t); return so ? nameOf(db, so.customerId) : t.detail || ""; },
+    value: readyValue,
+  });
 
   const generate = async (so, ids, opts, print) => {
     const inv = await actions.generateInvoice(so, ids, opts);
@@ -23,8 +33,13 @@ export default function TasksView({ db, actions, toast, openDoc, readOnly }) {
       <div className="card-head"><h3>Open Tasks</h3></div>
       {openTasks.length === 0
         ? <Empty icon={ICONS.task} title="All clear" msg="When someone marks a job's items ready to invoice, a task shows up here for whoever can create invoices." />
-        : <table><thead><tr><th>Task</th><th>Job</th><th>Customer</th><th className="num">Ready to bill</th><th></th></tr></thead>
-          <tbody>{openTasks.map(t => {
+        : <table><thead><tr>
+          <SortTh label="Task" col="task" sort={sort} onSort={onSort} />
+          <SortTh label="Job" col="job" sort={sort} onSort={onSort} />
+          <SortTh label="Customer" col="customer" sort={sort} onSort={onSort} />
+          <SortTh label="Ready to bill" col="value" sort={sort} onSort={onSort} num />
+          <th></th></tr></thead>
+          <tbody>{taskRows.map(t => {
             const so = db.salesOrders.find(s => s.id === t.salesOrderId);
             const readyLines = so ? (so.lineItems || []).filter(li => li.ready && !li.invoiced) : [];
             const readyVal = lineTotals(readyLines, so?.taxRate).total;

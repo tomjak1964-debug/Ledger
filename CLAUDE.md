@@ -251,6 +251,15 @@ declined/overdue=red.
 - New list module = a `card` with a `table`; empty state uses `<Empty>`; row actions are
   `btn ghost icon` buttons on the right. Editors are either an inline editor (like `QuoteEditor`)
   or a `<Modal>` (like bills/expenses/contacts).
+- **Every list sorts on every column heading.** Build the table with `useTableSort` +
+  `<SortTh>` (`src/components/ui.jsx`): one accessor per column, `num` on money and counts,
+  and map the rows the hook returns rather than the raw array. This is not optional on a new
+  list page — a column a user can see is a column they can sort by. Only three kinds of table
+  are exempt: line-item **editors** (order is the document's own), the **dashboard** (ordered
+  by what it is reporting), and a **customer statement** (a running balance is chronological by
+  definition). Where the view exports CSV, export the sorted rows so the file matches the
+  screen. Hooks go above any early `return`, and a hook can't live inside a conditional block —
+  hoist the rows it sorts (see `TimeTracking.jsx`).
 - Every mutation goes through `setDb(d => ...)`. Show a `toast("…")` on success.
 - Copy style: active voice, sentence case, name things by what the user does. Buttons say exactly
   what happens ("Generate Invoice", "Record Payment").
@@ -396,6 +405,11 @@ in `saveInvoice`, and only a new invoice can be auto-numbered.
 anything that doesn't match on party, amount, date or reference — including one payment
 applied twice to the same document, which is how the original import mis-filed five
 payments. See `tools/README.md`.
+
+**Sortable lists:** every list view — Quotes, Sales Orders, Invoices, Receivables, Payables,
+Purchase Orders, Expenses, Contacts, Catalog, Jobs, Tasks, Proposals, Machine Rates, Job Costing,
+Time Tracking, the Payments/Receipts register, and the report tables — sorts on any column heading,
+ascending then descending. See §7 for the convention new pages follow.
 
 **Not built (candidates for next work):** credit notes / refunds · partial invoicing of an SO ·
 recurring invoices · email sending · attachments / receipt photos · quote line-item reordering ·

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { uid, money, fmtDate, todayISO, nameOf, cls } from "../lib/helpers.js";
 import { proposalConfig, priceProposal, ioBlocks, phaseAmount, SPEC_FIELDS, DEFAULT_PHASES } from "../calc/proposals.js";
-import { Ico, ICONS, Badge, Empty, Field, MenuItem, Modal } from "../components/ui.jsx";
+import { Ico, ICONS, Badge, Empty, Field, MenuItem, Modal, SortTh, useTableSort } from "../components/ui.jsx";
 import { downloadProposalDocx, proposalDocxBlob } from "../lib/proposalDocx.js";
 import EmailModal from "../components/EmailModal.jsx";
 
@@ -73,6 +73,12 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
     return [p.number, p.jobNumber, p.description, nameOf(db, p.customerId), p.status].join(" ").toLowerCase().includes(s);
   });
 
+  const { sorted: propRows, sort, onSort } = useTableSort(filtered.slice().reverse(), {
+    number: p => p.number, job: p => p.jobNumber || "", customer: p => nameOf(db, p.customerId),
+    desc: p => p.description || "", type: p => db.machineTypes.find(m => m.id === p.machineTypeId)?.name || "",
+    date: p => p.date || "", status: p => p.status || "", total: p => Number(p.pricing?.total) || 0,
+  });
+
   const startNew = () => setEdit({
     id: uid(), _new: true, number: "(assigned at save)", customerId: customers[0]?.id || "",
     contactPersonId: "", contactName: customers[0]?.contact || "", date: todayISO(), status: "draft", jobNumber: "", description: "",
@@ -115,8 +121,17 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
       {db.proposals.length === 0
         ? <Empty icon={ICONS.quote} title="No proposals yet" msg="Enter the machine details — type, welds, clamps, cameras — and the app prices it, generates the proposal document, and tracks it to PO."
           action={!readOnly && <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Proposal</button>} />
-        : <table><thead><tr><th>Proposal</th><th>Job #</th><th>Customer</th><th>Description</th><th>Type</th><th>Date</th><th>Status</th><th className="num">Total</th><th></th></tr></thead>
-          <tbody>{filtered.slice().reverse().map(p => {
+        : <table><thead><tr>
+          <SortTh label="Proposal" col="number" sort={sort} onSort={onSort} />
+          <SortTh label="Job #" col="job" sort={sort} onSort={onSort} />
+          <SortTh label="Customer" col="customer" sort={sort} onSort={onSort} />
+          <SortTh label="Description" col="desc" sort={sort} onSort={onSort} />
+          <SortTh label="Type" col="type" sort={sort} onSort={onSort} />
+          <SortTh label="Date" col="date" sort={sort} onSort={onSort} />
+          <SortTh label="Status" col="status" sort={sort} onSort={onSort} />
+          <SortTh label="Total" col="total" sort={sort} onSort={onSort} num />
+          <th></th></tr></thead>
+          <tbody>{propRows.map(p => {
             const mt = db.machineTypes.find(m => m.id === p.machineTypeId);
             const billed = (p.phases || []).filter(ph => ph.invoiceId).length;
             return <tr key={p.id}>

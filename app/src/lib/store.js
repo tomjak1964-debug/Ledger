@@ -12,10 +12,11 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabaseClient.js";
 import * as A from "./adapters.js";
 import { dueDateFor } from "./terms.js";
-import { uid, todayISO, addDays, pad4 } from "./helpers.js";
+import { CREDIT_METHOD } from "./credits.js";
+import { uid, todayISO, addDays, pad4, money } from "./helpers.js";
 import { defaultSettings, sampleData } from "./seed.js";
 import { proposalConfig, phaseAmount } from "../calc/proposals.js";
-import { round2, lineTotals } from "../calc/ledger.js";
+import { round2, lineTotals, balance } from "../calc/ledger.js";
 import { checkNumberTaken, isCheckPayment, normRef } from "./checks.js";
 
 const SEQ_TYPES = ["quote", "so", "invoice", "bill"];
@@ -683,6 +684,46 @@ export function useLedger(session, onError) {
           }),
         }));
         return true;
+      } catch (e) { return fail(e); }
+    },
+
+    // Apply an open credit to one or more of that customer's invoices. No cash
+    // moves: every allocation writes a pair — +amount on the invoice, −amount on
+    // the credit — so the invoice settles, the credit is used up, and the two
+    // cancel out in every cash figure. They share a date, method and reference,
+    // so the register shows them as one entry worth nothing, expandable to the
+    // documents it moved between.
+    async applyCredit(creditId, allocations, meta = {}) {
+      try {
+        const d0 = dbRef.current;
+        const credit = d0.invoices.find(i => i.id === creditId);
+        if (!credit) throw new Error("That credit is no longer on file.");
+        const available = round2(-balance(credit));
+        if (available <= 0.005) throw new Error(`${credit.number} has nothing left to apply.`);
+        const rows = (allocations || [])
+          .map(a => ({ invoiceId: a.invoiceId, amount: round2(Number(a.amount) || 0) }))
+          .filter(a => a.amount > 0.005);
+        if (!rows.length) throw new Error("Enter an amount to apply.");
+        const total = round2(rows.reduce((s, a) => s + a.amount, 0));
+        if (total > available + 0.005)
+          throw new Error(`That applies ${money(total)}, but ${credit.number} only has ${money(available)} left.`);
+        for (const a of rows) {
+          const inv = d0.invoices.find(i => i.id === a.invoiceId);
+          if (!inv) throw new Error("That invoice is no longer on file.");
+          if (inv.id === credit.id) throw new Error("A credit can't be applied to itself.");
+          if (inv.customerId !== credit.customerId)
+            throw new Error(`${inv.number} belongs to a different customer than ${credit.number}.`);
+          if (a.amount > round2(balance(inv)) + 0.005)
+            throw new Error(`${money(a.amount)} is more than ${inv.number} still owes (${money(balance(inv))}).`);
+        }
+        const date = meta.date || todayISO();
+        const ref = meta.ref || credit.number;
+        const entries = rows.flatMap(a => [
+          { parentType: "invoice", parentId: a.invoiceId, payment: { id: uid(), amount: a.amount, discount: 0, date, method: CREDIT_METHOD, ref } },
+          { parentType: "invoice", parentId: credit.id, payment: { id: uid(), amount: -a.amount, discount: 0, date, method: CREDIT_METHOD, ref } },
+        ]);
+        const written = await actions.recordPayments(entries);
+        return written ? { applied: total, count: rows.length } : false;
       } catch (e) { return fail(e); }
     },
 

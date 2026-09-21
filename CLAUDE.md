@@ -305,6 +305,16 @@ number / email / remit-to address, migration 017 — the email default when send
 and the mail-to block on printed checks and remittances) · installable PWA (manifest + icons +
 service worker; Supabase never cached).
 
+**Invoicing several jobs at once:** Tasks tick-selects the open *create invoice* tasks and bills them
+two ways (`src/views/Tasks.jsx`). **Create N Invoices** shows what each job would bill — lines, approved
+unbilled time (a tick turns time off for the whole run), and what the invoice comes to — then writes them
+sequentially, so each claims its own number; a job the store refuses is reported and its task stays open
+rather than stopping the run. **Review One by One** opens the normal `InvoiceFromSOModal` per job with a
+`queue` prop: it shows *2 of 5*, Cancel reads **Skip**, and **Stop** ends the run. Either way the run ends
+on a list of what was created, with a Print button per invoice. The dialog closes itself after a
+successful generate, so the queue advances in `onClose` and nowhere else — advancing in `onGenerate` too
+skips a job.
+
 **Payment terms live on the contact** (`src/lib/terms.js`, migration 019). Each customer and vendor
 carries `terms` (days), `discountPct` and `discountDays`; `terms` blank means "use the company default"
 in Settings, so nothing changes for a contact nobody has set up. `termsLabel()` renders them the way the

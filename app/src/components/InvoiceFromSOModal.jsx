@@ -4,11 +4,13 @@ import { AUTO_NUMBER } from "../lib/store.js";
 import { Modal, Field, Badge, Ico, ICONS, AutoTextarea } from "./ui.jsx";
 
 // Bill selected line items of a sales order onto one invoice, optionally with
-// logged time as T&M lines. Un-invoiced lines are selectable; already-billed
+// logged time as T&M lines. `queue` runs it as one step of a review-one-by-one
+// batch: it says where you are, Cancel becomes Skip (on to the next job) and
+// Stop ends the run. Un-invoiced lines are selectable; already-billed
 // lines show greyed. When onlyReady is set (invoicing from a task), only the
 // ready-and-un-invoiced lines are pre-checked. PO comes from the SO. The invoice
 // number defaults to auto — type over it to override.
-export default function InvoiceFromSOModal({ so, db, onClose, onGenerate, onlyReady, onCloseLine }) {
+export default function InvoiceFromSOModal({ so, db, onClose, onGenerate, onlyReady, onCloseLine, queue }) {
   // Read lines live from the store so closing a line updates the modal.
   const lines = (db.salesOrders.find(s => s.id === so.id)?.lineItems) || so.lineItems || [];
   // Default everything unchecked — the user picks what to bill. (From a task,
@@ -46,12 +48,13 @@ export default function InvoiceFromSOModal({ so, db, onClose, onGenerate, onlyRe
   };
   const nothing = chosen.length === 0 && chosenTime.length === 0 && liveExtras.length === 0;
 
-  return <Modal wide title={"Invoice from " + so.number} onClose={onClose}
+  return <Modal wide title={"Invoice from " + so.number + (queue ? `  ·  ${queue.index} of ${queue.total}` : "")} onClose={onClose}
     foot={<>
       <div className="subtle" style={{ marginRight: "auto", alignSelf: "center" }}>
         {(chosen.length || chosenTime.length || liveExtras.length) ? `${money(subtotal + tax)} on this invoice` : "Select what to invoice"}
       </div>
-      <button className="btn" onClick={onClose}>Cancel</button>
+      {queue && <button className="btn" onClick={queue.onStop} title="End the run — the jobs you haven't reached stay as they are">Stop</button>}
+      <button className="btn" onClick={onClose}>{queue ? "Skip" : "Cancel"}</button>
       <button className="btn" disabled={saving || nothing} onClick={() => submit(false)} title="Create the invoice without opening print">
         {saving ? "Saving…" : "Generate"}
       </button>

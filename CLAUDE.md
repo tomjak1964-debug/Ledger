@@ -352,6 +352,21 @@ documents — billing several jobs, applying credits, a pay run — depends on t
 reconciles job tasks **both ways** now, so a task stranded open by that bug closes itself on the next
 load.
 
+**Importing a quote chart** (`src/lib/quoteChart.js`, `src/components/ImportProposalsModal.jsx`): the
+shop keeps one row per machine in a quote chart, and **Import Quote Chart** in Proposals turns that
+chart into proposals — an `.xlsx` straight out of Excel, a `.csv`, or rows pasted from a sheet. The
+`.xlsx` reader is the trick `tools/reconcile.mjs` uses (a zip of XML, inflated with
+`DecompressionStream`), so there is no library to add. Columns are matched by heading, so column order
+doesn't matter and the chart's working columns — the weighted point count and its division — are
+ignored, because `ioBlocks()` recomputes them; the chart's I/O block figure only rides along as an
+override when it disagrees with the formula. There is deliberately no bare `quote` heading in the
+column map: a chart with both *QUOTE NUMBER* and an empty *QUOTE* column would otherwise blank the
+number. The preview prices every row, pre-matches the machine type by name (*Sonuc* reads as *Sonic*),
+and gives any row it can't match a dropdown — rates are never invented. Where the chart names a type
+from the TMJ rate card that isn't set up yet, one button adds it: `seedMachineRates()` skips names
+already present, so it both seeds an empty list and tops one up. Proposals are written one at a time so
+each claims its own number; the chart's quote number and end user go in the notes.
+
 **Payment terms live on the contact** (`src/lib/terms.js`, migration 019). Each customer and vendor
 carries `terms` (days), `discountPct` and `discountDays`; `terms` blank means "use the company default"
 in Settings, so nothing changes for a contact nobody has set up. `termsLabel()` renders them the way the

@@ -4,6 +4,7 @@ import { lineTotals, balance, invoiceStatus, agingBuckets, round2 } from "../cal
 import { useFilters } from "../components/useFilters.jsx";
 import { Ico, ICONS, Badge, Empty, SortTh, useTableSort } from "../components/ui.jsx";
 import PaymentModal from "../components/PaymentModal.jsx";
+import { discountOffer } from "../lib/terms.js";
 import PaymentGroupModal from "../components/PaymentGroupModal.jsx";
 import EmailModal from "../components/EmailModal.jsx";
 import PaymentRegister from "../components/PaymentRegister.jsx";
@@ -118,6 +119,7 @@ export default function ReceivablesView({ db, actions, toast, openDoc, readOnly 
       buildAttachment={() => invoicePdf(remind, db)}
       onClose={() => setRemind(null)} toast={toast} />}
     {pay && <PaymentModal doc={pay} onClose={() => setPay(null)}
+      offerFor={d => discountOffer(db, pay, pay.customerId, d)}
       onSave={async (p) => {
         if (!await actions.recordPayment("invoice", pay.id, p)) return false;
         toast("Payment recorded");

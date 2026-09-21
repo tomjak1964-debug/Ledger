@@ -4,7 +4,7 @@ import { round2 } from "../calc/ledger.js";
 import { receiptGroups } from "../calc/reports.js";
 import { checkNumberTaken, normRef, remitEmail } from "../lib/checks.js";
 import { rangeFor, defaultCustom } from "../lib/dateRanges.js";
-import { Ico, ICONS, Empty, Modal, Field } from "./ui.jsx";
+import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort } from "./ui.jsx";
 import FilterBar from "./FilterBar.jsx";
 import PaymentGroupModal from "./PaymentGroupModal.jsx";
 import EmailModal from "./EmailModal.jsx";
@@ -117,6 +117,11 @@ function Register({ db, actions, toast, readOnly, kind, from, to, partyId, needl
       .some(v => String(v || "").toLowerCase().includes(needle)))
     : all.rows;
   const total = round2(sum(rows, g => g.amount));
+  // One row per check or transfer, sortable on any heading.
+  const { sorted: sortedRows, sort, onSort } = useTableSort(rows, {
+    ref: g => g.ref || "", party: g => nameOf(db, g.partyId), date: g => g.date || "",
+    method: g => g.method || "", docs: g => g.count, amount: g => g.amount,
+  });
   const anyPayments = (isBill ? db.bills : db.invoices).some(d => (d.payments || []).length);
 
   const voidGroup = async (g) => {
@@ -142,9 +147,15 @@ function Register({ db, actions, toast, readOnly, kind, from, to, partyId, needl
         msg={anyPayments ? "Widen the date range or clear the search."
           : `Payments you ${isBill ? "make against vendor bills" : "receive against customer invoices"} show up here, grouped by the check or transfer they went out on.`} />
       : <table><thead><tr>
-        <th style={{ width: 34 }}></th><th>{L.ref}</th><th>{L.party}</th><th>{L.when}</th><th>Method</th>
-        <th className="num">{L.docs}</th><th className="num">Amount</th><th></th></tr></thead>
-        <tbody>{rows.map(g => {
+        <th style={{ width: 34 }}></th>
+        <SortTh label={L.ref} col="ref" sort={sort} onSort={onSort} />
+        <SortTh label={L.party} col="party" sort={sort} onSort={onSort} />
+        <SortTh label={L.when} col="date" sort={sort} onSort={onSort} />
+        <SortTh label="Method" col="method" sort={sort} onSort={onSort} />
+        <SortTh label={L.docs} col="docs" sort={sort} onSort={onSort} num />
+        <SortTh label="Amount" col="amount" sort={sort} onSort={onSort} num />
+        <th></th></tr></thead>
+        <tbody>{sortedRows.map(g => {
           const isOpen = !!open[g.key];
           const toggle = () => setOpen(o => ({ ...o, [g.key]: !o[g.key] }));
           return <Fragment key={g.key}>

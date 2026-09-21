@@ -5,6 +5,7 @@ import { AUTO_NUMBER } from "../lib/store.js";
 import { useFilters } from "../components/useFilters.jsx";
 import { Ico, ICONS, Badge, Empty, Field, Modal, SortTh, useTableSort } from "../components/ui.jsx";
 import PaymentModal from "../components/PaymentModal.jsx";
+import { dueDateFor, termsLabelFor, discountOffer } from "../lib/terms.js";
 import LineItemsEditor from "../components/LineItemsEditor.jsx";
 import EmailModal from "../components/EmailModal.jsx";
 import InvoiceFromSOModal from "../components/InvoiceFromSOModal.jsx";
@@ -32,9 +33,10 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
     // Standalone invoice — no quote or SO behind it (time & materials, service
     // calls). The number defaults to auto (customer code + date + index) but can
     // be overridden per-invoice in the editor.
+    const customerId = customers[0]?.id || "";
     setEdit({
-      id: uid(), number: AUTO_NUMBER, _new: true, salesOrderId: "", quoteId: "", customerId: customers[0]?.id || "",
-      poNumber: "", date: todayISO(), dueDate: addDays(todayISO(), db.settings.terms),
+      id: uid(), number: AUTO_NUMBER, _new: true, salesOrderId: "", quoteId: "", customerId,
+      poNumber: "", date: todayISO(), dueDate: dueDateFor(db, customerId, todayISO()),
       lineItems: [{ id: uid(), desc: "", qty: 1, unit: "", unitPrice: 0 }], taxRate: db.settings.taxRate, notes: "", payments: []
     });
   };
@@ -124,6 +126,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
       buildAttachment={() => invoicePdf(email, db)}
       onClose={() => setEmail(null)} toast={toast} />}
     {pay && <PaymentModal doc={pay} onClose={() => setPay(null)}
+      offerFor={d => discountOffer(db, pay, pay.customerId, d)}
       onSave={async (p) => {
         if (!await actions.recordPayment("invoice", pay.id, p)) return false;
         toast("Payment recorded");
@@ -146,7 +149,14 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
 function InvoiceEditor({ invoice, customers, catalog, onCancel, onSave, db, actions, toast, readOnly }) {
   const [inv, setInv] = useState(invoice);
   const [saving, setSaving] = useState(false);
-  const set = (k, v) => setInv(p => ({ ...p, [k]: v }));
+  // Changing the invoice date — or the customer — re-dates the invoice from
+  // that customer's terms. Type over the due date afterwards and it stays put
+  // until one of those two changes again.
+  const set = (k, v) => setInv(p => {
+    const next = { ...p, [k]: v };
+    if (k === "date" || k === "customerId") next.dueDate = dueDateFor(db, next.customerId, next.date);
+    return next;
+  });
   // The number is editable on an issued invoice too — imports and typos happen.
   // Only a new one may be left on (auto); anything else has to be filled in and
   // must not collide with an invoice that already carries it. The store checks
@@ -169,14 +179,16 @@ function InvoiceEditor({ invoice, customers, catalog, onCancel, onSave, db, acti
     </div>
     <div className="card"><div className="card-body">
       <div className="row">
-        <Field label="Customer"><select className="select" value={inv.customerId} onChange={e => set("customerId", e.target.value)}>
+        <Field label="Customer" hint={inv.customerId ? termsLabelFor(db, inv.customerId) : undefined}>
+          <select className="select" value={inv.customerId} onChange={e => set("customerId", e.target.value)}>
           <option value="">Select customer…</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select></Field>
         <Field label="Invoice #" hint={inv._new ? "Leave as (auto) to use the generated number" : "Renaming affects this invoice only"}>
           <input className="input mono" value={inv.number} onChange={e => set("number", e.target.value)}
             style={numErr ? { borderColor: "var(--neg)" } : undefined} /></Field>
         <Field label="Invoice Date"><input className="input" type="date" value={inv.date} onChange={e => set("date", e.target.value)} /></Field>
-        <Field label="Due Date"><input className="input" type="date" value={inv.dueDate} onChange={e => set("dueDate", e.target.value)} /></Field>
+        <Field label="Due Date" hint={inv.customerId ? "From " + termsLabelFor(db, inv.customerId) : undefined}>
+          <input className="input" type="date" value={inv.dueDate} onChange={e => setInv(p => ({ ...p, dueDate: e.target.value }))} /></Field>
         <Field label="Customer PO #"><input className="input mono" value={inv.poNumber || ""} onChange={e => set("poNumber", e.target.value)} /></Field>
       </div>
       {numErr && <p className="subtle" style={{ margin: "0 0 8px", color: "var(--neg)" }}>{numErr}</p>}

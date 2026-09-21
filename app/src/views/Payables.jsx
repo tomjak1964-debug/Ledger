@@ -5,6 +5,7 @@ import { checksPdf } from "../lib/checkPrint.js";
 import { remittancesPdf } from "../lib/remittance.js";
 import { nextCheckNumber, checkNumberTaken, remitEmail } from "../lib/checks.js";
 import { useFilters } from "../components/useFilters.jsx";
+import { dueDateFor, termsLabelFor, discountOffer } from "../lib/terms.js";
 import { Ico, ICONS, Badge, Empty, Modal, Field, SortTh, useTableSort } from "../components/ui.jsx";
 import PaymentModal from "../components/PaymentModal.jsx";
 import Attachments from "../components/Attachments.jsx";
@@ -57,7 +58,8 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
   };
   const startNew = () => {
     const n = db.settings.billPrefix + "-" + String(db.settings.counters.bill).padStart(4, "0");
-    setEdit({ id: uid(), number: n, _new: true, vendorId: vendors[0]?.id || "", date: todayISO(), dueDate: addDays(todayISO(), db.settings.terms), amount: 0, ref: "", notes: "", salesOrderId: "", payments: [] });
+    const vendorId = vendors[0]?.id || "";
+    setEdit({ id: uid(), number: n, _new: true, vendorId, date: todayISO(), dueDate: dueDateFor(db, vendorId, todayISO()), amount: 0, ref: "", notes: "", salesOrderId: "", payments: [] });
   };
 
   return <div>
@@ -124,7 +126,9 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
       foot={<><button className="btn" onClick={() => setEdit(null)}>Cancel</button>
         <button className="btn primary" disabled={!!err} onClick={() => save(edit)}>Save Bill</button></>}>
       <div className="row">
-        <Field label="Vendor"><select className="select" value={edit.vendorId} onChange={e => setEdit({ ...edit, vendorId: e.target.value })}>
+        <Field label="Vendor" hint={edit.vendorId ? termsLabelFor(db, edit.vendorId) : undefined}>
+          <select className="select" value={edit.vendorId}
+            onChange={e => setEdit({ ...edit, vendorId: e.target.value, dueDate: dueDateFor(db, e.target.value, edit.date) })}>
           <option value="">Select vendor…</option>{vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></Field>
         <Field label="Vendor Ref / Inv #" hint="Required — the vendor's invoice number">
           <input className="input" value={edit.ref} onChange={e => setEdit({ ...edit, ref: e.target.value })}
@@ -132,8 +136,10 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
       </div>
       {err && <p className="subtle" style={{ margin: "0 0 8px", color: "var(--neg)" }}>{err}</p>}
       <div className="row">
-        <Field label="Bill Date"><input className="input" type="date" value={edit.date} onChange={e => setEdit({ ...edit, date: e.target.value })} /></Field>
-        <Field label="Due Date"><input className="input" type="date" value={edit.dueDate} onChange={e => setEdit({ ...edit, dueDate: e.target.value })} /></Field>
+        <Field label="Bill Date"><input className="input" type="date" value={edit.date}
+          onChange={e => setEdit({ ...edit, date: e.target.value, dueDate: dueDateFor(db, edit.vendorId, e.target.value) })} /></Field>
+        <Field label="Due Date" hint={edit.vendorId ? "From " + termsLabelFor(db, edit.vendorId) : undefined}>
+          <input className="input" type="date" value={edit.dueDate} onChange={e => setEdit({ ...edit, dueDate: e.target.value })} /></Field>
         <Field label="Amount"><input className="input mono" type="number" step="any" value={edit.amount} onChange={e => setEdit({ ...edit, amount: e.target.value })} /></Field>
       </div>
       <Field label="Job (optional)" hint="Attribute this bill to a sales order for job costing">
@@ -149,6 +155,7 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
     </Modal>;
     })()}
     {pay && <PaymentModal doc={pay} isBill onClose={() => setPay(null)}
+      offerFor={d => discountOffer(db, pay, pay.vendorId, d)}
       nextCheckRef={nextCheckNumber(db, db.settings)}
       isRefTaken={(r) => checkNumberTaken(db, r)}
       onSave={async (p) => {
@@ -217,6 +224,20 @@ function PayBillsModal({ db, actions, toast, onClose }) {
   const updDiscount = (i, v) => setRows(rs => rs.map((r, x) => x === i
     ? { ...r, discount: v, amount: round2(Math.max(0, billBalance(r.bill) - (Number(v) || 0))), sel: true } : r));
   const setAll = (s) => setRows(rs => rs.map(r => ({ ...r, sel: s })));
+  // What each bill's vendor terms are worth if this run's date is inside the
+  // window — never more than the bill's balance.
+  const offerOn = (bill) => {
+    const o = discountOffer(db, bill, bill.vendorId, date);
+    if (!o || o.expired) return null;
+    const amount = round2(Math.min(o.amount, billBalance(bill)));
+    return amount > 0 ? { ...o, amount } : null;
+  };
+  const available = rows.map(r => offerOn(r.bill));
+  const untaken = available.filter((o, i) => o && round2(Number(rows[i].discount) || 0) !== o.amount);
+  const takeAllDiscounts = () => setRows(rs => rs.map((r, i) => {
+    const o = available[i];
+    return o ? { ...r, discount: o.amount, amount: round2(Math.max(0, billBalance(r.bill) - o.amount)), sel: true } : r;
+  }));
   const sel = rows.filter(r => r.sel && (Number(r.amount) > 0 || Number(r.discount) > 0));
   const total = sum(sel, r => Number(r.amount) || 0);
   const groups = groupSel(sel);
@@ -330,6 +351,8 @@ function PayBillsModal({ db, actions, toast, onClose }) {
     {err && <p className="subtle" style={{ margin: "0 0 8px", color: "var(--neg)" }}>{err}</p>}
     <div className="toolbar" style={{ marginBottom: 8 }}>
       <span className="subtle">Tick the bills this run pays.</span>
+      {untaken.length > 0 && <button className="btn sm" onClick={takeAllDiscounts}>
+        Take {untaken.length} available discount{untaken.length === 1 ? "" : "s"} · {money(sum(untaken, o => o.amount))}</button>}
       <button className="btn sm" style={{ marginLeft: "auto" }} disabled={rows.every(r => r.sel)} onClick={() => setAll(true)}>Select all</button>
       <button className="btn sm" disabled={!rows.some(r => r.sel)} onClick={() => setAll(false)}>Deselect all</button>
     </div>
@@ -342,8 +365,13 @@ function PayBillsModal({ db, actions, toast, onClose }) {
           <td className="mono subtle">{r.bill.ref || r.bill.number}</td>
           <td className="subtle">{fmtDate(r.bill.dueDate)}</td>
           <td className="num">{money(bal)}</td>
-          <td className="num"><input className="input mono" style={{ maxWidth: 100, textAlign: "right" }} type="number" step="any" value={r.discount}
-            title="Early-payment discount taken — the bill still closes" onChange={e => updDiscount(i, e.target.value)} /></td>
+          <td className="num">
+            <input className="input mono" style={{ maxWidth: 100, textAlign: "right" }} type="number" step="any" value={r.discount}
+              title="Early-payment discount taken — the bill still closes" onChange={e => updDiscount(i, e.target.value)} />
+            {available[i] && round2(Number(r.discount) || 0) !== available[i].amount &&
+              <div><button className="btn sm" style={{ marginTop: 4 }} title={`${available[i].label}, until ${fmtDate(available[i].until)}`}
+                onClick={() => updDiscount(i, available[i].amount)}>Take {money(available[i].amount)}</button></div>}
+          </td>
           <td className="num"><input className="input mono" style={{ maxWidth: 110, textAlign: "right" }} type="number" step="any" value={r.amount}
             onChange={e => upd(i, { amount: e.target.value, sel: true })} /></td>
           <td><select className="select" style={{ minWidth: 110 }} value={r.method} onChange={e => upd(i, { method: e.target.value, sel: true })}>

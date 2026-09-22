@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { uid, money, fmtDate, todayISO, nameOf, cls } from "../lib/helpers.js";
 import { proposalConfig, priceProposal, ioBlocks, phaseAmount, SPEC_FIELDS, DEFAULT_PHASES } from "../calc/proposals.js";
 import { Ico, ICONS, Badge, Empty, Field, MenuItem, Modal, SortTh, useTableSort } from "../components/ui.jsx";
@@ -301,13 +302,18 @@ function ProposalDoc({ p, db, onClose, toast }) {
   const s = db.settings;
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState(false);
+  // Same two moves DocumentView makes, and for the same reason: the overlay is
+  // portalled out of the page so it isn't inside .main, and the body is flagged
+  // so printing hides .main. Rendered in place it printed the proposals list on
+  // the sheets ahead of the proposal.
+  useEffect(() => { document.body.classList.add("doc-open"); return () => document.body.classList.remove("doc-open"); }, []);
   const word = async () => {
     setBusy(true);
     try { await downloadProposalDocx(p, db); }
     catch (e) { toast("⚠ Word export failed: " + (e.message || e)); }
     setBusy(false);
   };
-  return <div className="doc-screen">
+  return createPortal(<div className="doc-screen">
     <div className="doc-bar">
       <button className="btn" onClick={onClose}><Ico d={ICONS.back} size={16} />Close</button>
       <button className="btn" onClick={() => setEmail(true)}><Ico d={ICONS.mail} size={15} />Email…</button>
@@ -361,5 +367,5 @@ function ProposalDoc({ p, db, onClose, toast }) {
       <p>{c.cfg.signer || s.company}</p>
       <div className="doc-foot">{[s.companyAddress?.replace(/\n/g, ", "), s.companyPhone].filter(Boolean).join(" - ")}</div>
     </div>
-  </div>;
+  </div>, document.body);
 }

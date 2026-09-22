@@ -367,6 +367,13 @@ from the TMJ rate card that isn't set up yet, one button adds it: `seedMachineRa
 already present, so it both seeds an empty list and tops one up. Proposals are written one at a time so
 each claims its own number; the chart's quote number and end user go in the notes.
 
+**A printable document overlay belongs outside `.main`.** Printing hides the app behind the document
+with `body.doc-open .main{display:none}` (`styles.css`), which needs both halves: the overlay adds
+`doc-open` to the body, and it sits *outside* `.main` so that rule doesn't hide it too. `DocumentView`
+is rendered by `App` as a sibling of `.main`; `ProposalDoc` lives inside `ProposalsView`, so it
+portals itself to `document.body` (`createPortal`) and sets the same flag. Rendered in place it did
+neither, and a printed proposal came out with the proposals list on the sheet ahead of it.
+
 **Payment terms live on the contact** (`src/lib/terms.js`, migration 019). Each customer and vendor
 carries `terms` (days), `discountPct` and `discountDays`; `terms` blank means "use the company default"
 in Settings, so nothing changes for a contact nobody has set up. `termsLabel()` renders them the way the

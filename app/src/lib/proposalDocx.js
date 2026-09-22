@@ -108,9 +108,14 @@ export async function proposalDocxBlob(p, db) {
   });
 
   const blob = await Packer.toBlob(doc);
-  const filename = `${p.number} - ${[p.jobNumber, p.description].filter(Boolean).join(" – ").replace(/[\\/:*?"<>|]/g, "-")}.docx`;
-  return { blob, filename };
+  return { blob, filename: proposalFileStem(p) + ".docx" };
 }
+
+// The name a proposal is saved under, without extension — the Word download
+// and the browser's Save-as-PDF suggestion (which takes document.title) both
+// read it, so the two files sit together in a folder.
+export const proposalFileStem = p =>
+  `${p.number} - ${[p.jobNumber, p.description].filter(Boolean).join(" – ").replace(/[\\/:*?"<>|]/g, "-")}`;
 
 export async function downloadProposalDocx(p, db) {
   const { blob, filename } = await proposalDocxBlob(p, db);

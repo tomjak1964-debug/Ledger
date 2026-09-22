@@ -374,7 +374,9 @@ is rendered by `App` as a sibling of `.main`; `ProposalDoc` lives inside `Propos
 portals itself to `document.body` (`createPortal`) and sets the same flag. Rendered in place it did
 neither, and a printed proposal came out with the proposals list on the sheet ahead of it. The print
 rules also drop `.app`'s `min-height:100vh` while a document is open: with its children hidden and the
-document portalled outside it, that empty container printed as a blank first sheet.
+document portalled outside it, that empty container printed as a blank first sheet. While a proposal is open, `document.title` is the file name — Print / Save PDF
+suggests the tab title as the file name, so it matches the Word download; `proposalFileStem()` in
+`src/lib/proposalDocx.js` is the one place that name is built.
 
 **Payment terms live on the contact** (`src/lib/terms.js`, migration 019). Each customer and vendor
 carries `terms` (days), `discountPct` and `discountDays`; `terms` blank means "use the company default"

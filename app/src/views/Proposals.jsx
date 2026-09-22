@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { uid, money, fmtDate, todayISO, nameOf, cls } from "../lib/helpers.js";
 import { proposalConfig, priceProposal, ioBlocks, phaseAmount, SPEC_FIELDS, DEFAULT_PHASES } from "../calc/proposals.js";
 import { Ico, ICONS, Badge, Empty, Field, MenuItem, Modal, SortTh, useTableSort } from "../components/ui.jsx";
-import { downloadProposalDocx, proposalDocxBlob } from "../lib/proposalDocx.js";
+import { downloadProposalDocx, proposalDocxBlob, proposalFileStem } from "../lib/proposalDocx.js";
 import EmailModal from "../components/EmailModal.jsx";
 import ImportProposalsModal from "../components/ImportProposalsModal.jsx";
 
@@ -305,8 +305,15 @@ function ProposalDoc({ p, db, onClose, toast }) {
   // Same two moves DocumentView makes, and for the same reason: the overlay is
   // portalled out of the page so it isn't inside .main, and the body is flagged
   // so printing hides .main. Rendered in place it printed the proposals list on
-  // the sheets ahead of the proposal.
-  useEffect(() => { document.body.classList.add("doc-open"); return () => document.body.classList.remove("doc-open"); }, []);
+  // the sheets ahead of the proposal. The tab title becomes the file name while
+  // the document is open: Print / Save PDF offers document.title as the file
+  // name, so it matches the Word download instead of reading "Ledger".
+  useEffect(() => {
+    const title = document.title;
+    document.body.classList.add("doc-open");
+    document.title = proposalFileStem(p);
+    return () => { document.body.classList.remove("doc-open"); document.title = title; };
+  }, [p]);
   const word = async () => {
     setBusy(true);
     try { await downloadProposalDocx(p, db); }

@@ -258,8 +258,11 @@ table.doc-items td.mono{font-family:"IBM Plex Mono"}
   .inv-page:last-child{break-after:auto}
   /* printing app pages (reports, statements): hide the chrome */
   .sidebar,.topbar,.toolbar.no-print,.no-print{display:none!important}
-  /* when a printable document overlay is open, hide the app content behind it */
+  /* when a printable document overlay is open, hide the app content behind it —
+     and let the emptied .app collapse, or its min-height:100vh prints as a
+     blank first sheet ahead of a document portalled outside it */
   body.doc-open .main{display:none!important}
+  body.doc-open .app{min-height:0}
   .app{display:block}
   .content{padding:0;max-width:none}
   .card{box-shadow:none;break-inside:avoid}

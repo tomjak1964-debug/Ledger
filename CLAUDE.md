@@ -372,7 +372,9 @@ with `body.doc-open .main{display:none}` (`styles.css`), which needs both halves
 `doc-open` to the body, and it sits *outside* `.main` so that rule doesn't hide it too. `DocumentView`
 is rendered by `App` as a sibling of `.main`; `ProposalDoc` lives inside `ProposalsView`, so it
 portals itself to `document.body` (`createPortal`) and sets the same flag. Rendered in place it did
-neither, and a printed proposal came out with the proposals list on the sheet ahead of it.
+neither, and a printed proposal came out with the proposals list on the sheet ahead of it. The print
+rules also drop `.app`'s `min-height:100vh` while a document is open: with its children hidden and the
+document portalled outside it, that empty container printed as a blank first sheet.
 
 **Payment terms live on the contact** (`src/lib/terms.js`, migration 019). Each customer and vendor
 carries `terms` (days), `discountPct` and `discountDays`; `terms` blank means "use the company default"

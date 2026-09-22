@@ -1061,12 +1061,19 @@ export function useLedger(session, onError) {
         return true;
       } catch (e) { return fail(e); }
     },
+    // Add rate cards, skipping any name already set up — so it both seeds an
+    // empty list and tops it up with a type a quote chart names. Returns the
+    // rows actually added.
     async seedMachineRates(rates) {
       try {
-        const rows = rates.map((r, i) => ({ ...r, id: uid(), sort: i }));
+        const key = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        const have = new Set(dbRef.current.machineTypes.map(m => key(m.name)));
+        const start = dbRef.current.machineTypes.reduce((n, m) => Math.max(n, Number(m.sort) || 0), -1) + 1;
+        const rows = rates.filter(r => !have.has(key(r.name))).map((r, i) => ({ ...r, id: uid(), sort: start + i }));
+        if (!rows.length) return [];
         th(await supabase.from("machine_types").insert(rows.map(A.machineTypeToRow)));
         setDb(d => ({ ...d, machineTypes: [...d.machineTypes, ...rows] }));
-        return true;
+        return rows;
       } catch (e) { return fail(e); }
     },
     async saveContactPerson(p) {

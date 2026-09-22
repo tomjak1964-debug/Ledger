@@ -4,6 +4,7 @@ import { proposalConfig, priceProposal, ioBlocks, phaseAmount, SPEC_FIELDS, DEFA
 import { Ico, ICONS, Badge, Empty, Field, MenuItem, Modal, SortTh, useTableSort } from "../components/ui.jsx";
 import { downloadProposalDocx, proposalDocxBlob } from "../lib/proposalDocx.js";
 import EmailModal from "../components/EmailModal.jsx";
+import ImportProposalsModal from "../components/ImportProposalsModal.jsx";
 
 // Shared by the print view and the Word export — the proposal letter content.
 export function buildProposalContent(p, db) {
@@ -65,6 +66,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
   const [doc, setDoc] = useState(null);
   const [phasesFor, setPhasesFor] = useState(null);
   const [search, setSearch] = useState("");
+  const [importing, setImporting] = useState(false);
   const customers = db.contacts.filter(c => c.type === "customer");
   const cfg = proposalConfig(db.settings);
 
@@ -115,7 +117,9 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
   return <div>
     <div className="toolbar">
       <div className="search"><Ico d={ICONS.search} size={15} /><input className="input" placeholder="Search proposals…" value={search} onChange={e => setSearch(e.target.value)} /></div>
-      {!readOnly && <button className="btn primary" style={{ marginLeft: "auto" }} onClick={startNew}><Ico d={ICONS.plus} size={15} />New Proposal</button>}
+      {!readOnly && <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setImporting(true)}>
+        <Ico d={ICONS.quote} size={15} />Import Quote Chart</button>}
+      {!readOnly && <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Proposal</button>}
     </div>
     <div className="card">
       {db.proposals.length === 0
@@ -151,6 +155,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
             </tr>;
           })}</tbody></table>}
     </div>
+    {importing && <ImportProposalsModal db={db} actions={actions} toast={toast} onClose={() => setImporting(false)} />}
     {doc && <ProposalDoc p={doc} db={db} onClose={() => setDoc(null)} toast={toast} />}
     {phasesFor && <PhasesModal p={db.proposals.find(x => x.id === phasesFor.id) || phasesFor} db={db} actions={actions} toast={toast} onClose={() => setPhasesFor(null)} />}
   </div>;

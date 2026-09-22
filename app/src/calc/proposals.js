@@ -84,8 +84,11 @@ export const proposalTotal = p => n(p.pricing?.total);
 // TMJ Costing.xlsx defaults for the Machine Rates seed
 export const TMJ_DEFAULT_RATES = [
   { name: "Big Sonic",   engBase: 3900, cameraRate: 200, panelBudget: 26000, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 2500, runoff: 560, remoteHmi: 0 },
+  // Small Sonic is a Big Sonic on a smaller panel; Clip is a Check by another name.
+  { name: "Small Sonic", engBase: 3900, cameraRate: 200, panelBudget: 23000, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 2500, runoff: 560, remoteHmi: 0 },
   { name: "Robot Sonic", engBase: 3900, cameraRate: 200, panelBudget: 23000, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 2500, runoff: 560, remoteHmi: 2500 },
   { name: "Check",       engBase: 2900, cameraRate: 200, panelBudget: 21500, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 1700, runoff: 560, remoteHmi: 0 },
+  { name: "Clip",        engBase: 2900, cameraRate: 200, panelBudget: 21500, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 1700, runoff: 560, remoteHmi: 0 },
   { name: "Screw",       engBase: 2900, cameraRate: 200, panelBudget: 21500, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 1700, runoff: 560, remoteHmi: 0 },
   { name: "Insert",      engBase: 2900, cameraRate: 200, panelBudget: 21500, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 1700, runoff: 560, remoteHmi: 0 },
   { name: "Limiter",     engBase: 2900, cameraRate: 200, panelBudget: 21500, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 1700, runoff: 560, remoteHmi: 0 },

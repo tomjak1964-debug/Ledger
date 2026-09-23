@@ -90,7 +90,7 @@ export function Badge({ status }) {
     draft: ["gray", "Draft"], sent: ["blue", "Sent"], accepted: ["green", "Accepted"], declined: ["red", "Declined"],
     open: ["blue", "Open"], invoiced: ["green", "Invoiced"], fulfilled: ["green", "Fulfilled"],
     unpaid: ["amber", "Unpaid"], partial: ["blue", "Partial"], paid: ["green", "Paid"], overdue: ["red", "Overdue"],
-    submitted: ["blue", "Submitted"], won: ["green", "Won"], lost: ["red", "Lost"],
+    submitted: ["blue", "Submitted"], won: ["green", "Won"], lost: ["red", "Lost"], superseded: ["gray", "Superseded"],
     credit: ["blue", "Credit"],
     received: ["green", "Received"], closed: ["gray", "Closed"], cancelled: ["red", "Cancelled"],
     ready: ["blue", "Ready"],

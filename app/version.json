@@ -1,0 +1,4 @@
+{
+  "rev": "1.00",
+  "_": "Rev X.yy of the app. Bump yy for each shipped change the shop can see, X for a big one. The build (commit sha + time) is stamped by vite.config.js at build time; nothing here tracks it."
+}

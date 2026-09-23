@@ -452,9 +452,20 @@ token in the URL) straight to `/app`. The footer carries the shop's real address
 the same details go out as schema.org `Organization` JSON-LD — a contactable business is the single
 strongest signal against a false-positive listing, so keep both in step if they ever change.
 
+**Revision and updates:** the app carries **Rev X.yy** from `app/version.json` — bump `yy` for each
+shipped change the shop can see, `X` for a big one — and a **build** stamp (`__BUILD__`: build time plus
+the commit sha on Vercel) that vite fills in. `vite.config.js` also writes both to **`/version.json`** in
+the build output and serves it in dev; it is in the service worker's `globIgnores` and routed explicitly
+in `vercel.json` / `netlify.toml`, so a fetch of it always says what the server has right now.
+`src/lib/version.js` — `checkForUpdate()` compares the served build stamp to the running one (a hot-fix
+without a rev bump still counts), `updateNow()` unregisters the worker, clears the caches and reloads,
+and `useUpdateNudge(toast)` runs the check once a few seconds after load and offers **Update now** on
+the toast. **Settings → Revision** shows the rev and build, **Check for Update**, **Update Now** when
+there is one, and *Reload Latest Version* for a copy that seems stuck.
+
 **Unsticking a cached copy:** the app is a PWA, so a browser can keep serving the build it cached.
-Settings → Account shows the running build (`__BUILD__`, the commit sha) and *Load Latest Version*
-unregisters the service worker and clears the caches. For a device too stuck to reach that button,
+Settings → Revision shows the running rev and build and *Reload Latest Version* / *Update Now*
+unregister the service worker and clear the caches. For a device too stuck to reach that button,
 **`/reset`** (`app/public/reset.html`) does the same from a standalone page and reports what it
 cleared. It is deliberately outside the service worker's reach — `globIgnores` keeps it out of the
 precache and `navigateFallbackDenylist` stops the SPA fallback answering for it (`vite.config.js`) —

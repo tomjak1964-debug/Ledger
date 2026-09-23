@@ -14,6 +14,13 @@
   to = "/reset.html"
   status = 200
 
+# /version.json says which build the server has — the update check reads it,
+# so it must be the real file, never the landing page.
+[[redirects]]
+  from = "/version.json"
+  to = "/version.json"
+  status = 200
+
 # The app itself lives under /app; everything there serves its shell.
 [[redirects]]
   from = "/app"

@@ -376,7 +376,9 @@ neither, and a printed proposal came out with the proposals list on the sheet ah
 rules also drop `.app`'s `min-height:100vh` while a document is open: with its children hidden and the
 document portalled outside it, that empty container printed as a blank first sheet. While a proposal is open, `document.title` is the file name — Print / Save PDF
 suggests the tab title as the file name, so it matches the Word download; `proposalFileStem()` in
-`src/lib/proposalDocx.js` is the one place that name is built.
+`src/lib/proposalDocx.js` is the one place that name is built. `DocumentView` does the same with the
+document number, so an invoice, quote or PO prints as `INV-0042.pdf` — the name `invoicePdf()` already
+gives the download.
 
 **Two kinds of proposal** (`proposals.kind`, migration 021). `machine` is the Venture Global proposal
 exactly as it was — content counts priced off Machine Rates, the quote-chart import, the letter. `controls`

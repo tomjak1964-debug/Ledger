@@ -438,10 +438,15 @@ export function useLedger(session, onError) {
         return true;
       } catch (e) { return fail(e); }
     },
-    async markInvoicePrinted(id) {
+    // Mark invoices printed — or not — without printing them: one that went
+    // out by email, a backlog from before the flag existed, a tick made by
+    // mistake. One id or a list. Printing calls this too, with the one printed.
+    async markInvoicePrinted(ids, printed = true) {
       try {
-        th(await supabase.from("invoices").update({ printed: true }).eq("id", id));
-        setDb(d => ({ ...d, invoices: d.invoices.map(i => i.id === id ? { ...i, printed: true } : i) }));
+        const list = Array.isArray(ids) ? ids : [ids];
+        if (!list.length) return true;
+        th(await supabase.from("invoices").update({ printed }).in("id", list));
+        setDb(d => ({ ...d, invoices: d.invoices.map(i => list.includes(i.id) ? { ...i, printed } : i) }));
         return true;
       } catch (e) { return fail(e); }
     },

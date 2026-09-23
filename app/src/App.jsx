@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useUpdateNudge } from "./lib/version.js";
 import { supabase } from "./lib/supabaseClient.js";
 import { useLedger } from "./lib/store.js";
 import { cls } from "./lib/helpers.js";
@@ -98,6 +99,7 @@ export default function App({ session }) {
     setToastMsg(t);
     setTimeout(() => setToastMsg(null), t.onAction ? 8000 : 2600);
   }, []);
+  useUpdateNudge(toast);
   const { db, loading, loadError, actions } = useLedger(session, toast);
   const openDoc = (kind, d) => setDoc({ kind, doc: d });
   const go = (v) => { setView(v); setNavOpen(false); window.scrollTo(0, 0); };

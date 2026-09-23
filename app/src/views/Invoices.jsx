@@ -49,8 +49,19 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
   const base = db.invoices.slice().reverse().filter(i => (!unprintedOnly || !i.printed) && f.keep(i.date, i.customerId));
   const { sorted: rows, sort, onSort } = useTableSort(base, {
     number: i => i.number, customer: i => nameOf(db, i.customerId), date: i => i.date, due: i => i.dueDate,
-    status: i => invoiceStatus(i), total: i => lineTotals(i.lineItems, i.taxRate).total, balance: i => balance(i),
+    status: i => invoiceStatus(i), printed: i => (i.printed ? 1 : 0),
+    total: i => lineTotals(i.lineItems, i.taxRate).total, balance: i => balance(i),
   });
+  // The Printed tick is the control: an invoice that went out by email, or one
+  // printed before the flag existed, is marked by hand; unticking undoes a slip.
+  const setPrinted = async (inv, printed) => {
+    if (await actions.markInvoicePrinted(inv.id, printed)) toast(inv.number + (printed ? " marked printed" : " marked unprinted"));
+  };
+  const markAllShown = async () => {
+    const ids = rows.filter(i => !i.printed).map(i => i.id);
+    if (!ids.length || !confirm(`Mark ${ids.length} invoice${ids.length === 1 ? "" : "s"} as printed?`)) return;
+    if (await actions.markInvoicePrinted(ids, true)) toast(`${ids.length} invoice${ids.length === 1 ? "" : "s"} marked printed`);
+  };
 
   if (edit) return <InvoiceEditor invoice={edit} customers={customers} catalog={db.catalog} onCancel={() => setEdit(null)} onSave={save} db={db} actions={actions} toast={toast} readOnly={readOnly} />;
 
@@ -59,6 +70,8 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
       <button className={"btn" + (unprintedOnly ? " primary" : "")} onClick={() => setUnprintedOnly(v => !v)}
         title="Invoices you haven't printed yet">
         <Ico d={ICONS.print} size={14} />{unprintedOnly ? "Showing unprinted" : `Unprinted${unprintedCount ? " · " + unprintedCount : ""}`}</button>
+      {!readOnly && unprintedOnly && rows.length > 0 && <button className="btn" onClick={markAllShown} title="Mark every invoice shown as printed, without printing">
+        <Ico d={ICONS.check} size={14} />Mark all {rows.length} as printed</button>}
       {!readOnly && <>
         <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setPickSO(true)} disabled={openSOs.length === 0}
           title={openSOs.length === 0 ? "No open sales orders" : "Bill selected lines from a sales order"}>
@@ -77,6 +90,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
           <SortTh label="Date" col="date" sort={sort} onSort={onSort} />
           <SortTh label="Due" col="due" sort={sort} onSort={onSort} />
           <SortTh label="Status" col="status" sort={sort} onSort={onSort} />
+          <SortTh label="Printed" col="printed" sort={sort} onSort={onSort} />
           <SortTh label="Total" col="total" sort={sort} onSort={onSort} num />
           <SortTh label="Balance" col="balance" sort={sort} onSort={onSort} num /><th></th></tr></thead>
           <tbody>{rows.map(inv => {
@@ -86,7 +100,12 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
               <td>{nameOf(db, inv.customerId)}</td>
               <td className="subtle">{fmtDate(inv.date)}</td>
               <td className="subtle">{fmtDate(inv.dueDate)}</td>
-              <td><Badge status={st} />{!inv.printed && <span className="badge amber" style={{ marginLeft: 6 }} title="Not printed yet"><span className="dot"></span>Unprinted</span>}</td>
+              <td><Badge status={st} /></td>
+              <td><label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: readOnly ? "default" : "pointer" }}
+                title={inv.printed ? "Printed — untick to mark it unprinted" : "Not printed yet — tick to mark it printed without printing"}>
+                <input type="checkbox" checked={!!inv.printed} disabled={readOnly} onChange={e => setPrinted(inv, e.target.checked)} />
+                {inv.printed ? <span className="subtle">Printed</span> : <span className="badge amber"><span className="dot"></span>Unprinted</span>}
+              </label></td>
               <td className="num">{money(lineTotals(inv.lineItems, inv.taxRate).total)}</td>
               <td className="num" style={{ fontWeight: 600 }}>{money(balance(inv))}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>

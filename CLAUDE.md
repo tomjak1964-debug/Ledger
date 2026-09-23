@@ -493,6 +493,13 @@ Reference # field, listed with its vendor, method and subtotal before you record
 prints on the remittance advice and identifies the payment in the register — without one,
 two electronic runs to the same vendor on the same day collapse into a single register row.
 
+**Marking an invoice printed by hand:** the Invoices list has a **Printed** column — a tick per row
+that is the control, not just the status. Ticking marks an invoice printed without printing it (one that
+went out by email, or was printed before the flag existed); unticking undoes a slip. With the *Unprinted*
+filter on, **Mark all N as printed** does the lot in one write. `markInvoicePrinted(ids, printed)` takes
+one id or a list and either value; printing still calls it with the one it printed. Invoices are the only
+document with a printed flag.
+
 **Show/hide settled documents:** Payables → Vendor Bills and Receivables → Customer Invoices each
 carry a "Show paid" tick with a count, and a Paid column giving the settlement date. Receivables
 judges settled on the balance rather than the status, so an unapplied credit — which reads as

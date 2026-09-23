@@ -378,6 +378,31 @@ document portalled outside it, that empty container printed as a blank first she
 suggests the tab title as the file name, so it matches the Word download; `proposalFileStem()` in
 `src/lib/proposalDocx.js` is the one place that name is built.
 
+**Two kinds of proposal** (`proposals.kind`, migration 021). `machine` is the Venture Global proposal
+exactly as it was — content counts priced off Machine Rates, the quote-chart import, the letter. `controls`
+is the **Controls Estimate**: a job for any customer, built from the standard engineering components as
+hours × rate (`src/calc/estimates.js` — `COMPONENTS`: Hardware Design, Drafting, PLC Program Development,
+HMI Development, Start-Up/Debug, and optional Project Management, Documentation & Training, FAT, Safety
+Validation), with hardware **optional** (a toggle; off, the document has no hardware section at all) and
+the field work — trips × days × people — as Field Services with travel & living. An hour model suggests
+hours from the job's content (I/O, drives, servo axes, stations, steps, screens, alarms, recipes, safety
+system, vision, data collection); the estimator overrides any of them and the override prices. Standard
+control elements (`STANDARD_ELEMENTS`) quick-add hardware lines with a description and a typical qty —
+**never a price**. The editor, the document content and the on-screen body live in
+`src/views/ControlsEstimate.jsx`; the Word export branches on `kind` in `proposalDocx.js`; `Proposals.jsx`
+routes on `kind` everywhere else. The document carries the sections a general quote needs — header block
+with number/rev/valid-through, Scope of Work per component with deliverables, Assumptions & Clarifications,
+Exclusions, Pricing by group, Options priced separately, Schedule, Invoicing Schedule, Terms (payment
+terms from the contact, validity, support rate) and an Acceptance block. **Everything it reads is in
+Settings → Proposals** (`settings.proposal`, read through `proposalConfig()`): the letter fields that used
+to be code-only defaults, the labor rate card, the hour model, the three invoicing splits (machine,
+controls engineering-only, controls with hardware — toggling hardware swaps the split while it is still a
+stock one), and the standard assumptions/exclusions. Hour and rate defaults are trade-standard starting
+points, not the shop's own numbers. **Revisions:** New Revision writes the same number at `rev + 1` as a
+fresh draft and marks the row it replaces `superseded` (a fifth status); the rev prints as *Rev A* on the
+document and in the file name. A won controls estimate lands on the sales order as one line per group it
+priced (Engineering / Hardware / Field Services / Contingency) rather than one lot.
+
 **Payment terms live on the contact** (`src/lib/terms.js`, migration 019). Each customer and vendor
 carries `terms` (days), `discountPct` and `discountDays`; `terms` blank means "use the company default"
 in Settings, so nothing changes for a contact nobody has set up. `termsLabel()` renders them the way the

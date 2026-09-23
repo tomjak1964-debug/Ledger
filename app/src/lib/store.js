@@ -1095,8 +1095,8 @@ export function useLedger(session, onError) {
     async saveProposal(p) {
       try {
         const isNew = !!p._new;
-        const prop = { ...p }; delete prop._new;
-        if (isNew) {
+        const prop = { ...p, kind: p.kind || "machine", rev: Number(p.rev) || 0 }; delete prop._new;
+        if (isNew && !prop.number?.startsWith(proposalConfig(dbRef.current.settings).propPrefix)) {
           const cfg = proposalConfig(dbRef.current.settings);
           const ymd = (prop.date || todayISO()).slice(2).replace(/-/g, "");
           const n = await claimNumber("prop:" + ymd);
@@ -1127,13 +1127,22 @@ export function useLedger(session, onError) {
     async winProposal(p, po) {
       try {
         const d0 = dbRef.current;
+        // A controls estimate lands on the SO as one line per group it priced,
+        // so the job reads the way it was sold; a machine proposal is one lot.
+        const pr = p.pricing || {};
+        const groups = p.kind === "controls" ? [
+          ["Controls Engineering", pr.engineeringTotal], ["Control Hardware", pr.hardwareTotal],
+          ["Field Services — Start-Up / Debug", pr.fieldTotal], ["Contingency", pr.contingency],
+        ].filter(([, amt]) => Number(amt) > 0) : [];
         const so = {
           id: uid(), number: d0.settings.soPrefix + "-" + pad4(await claimNumber("so")),
           quoteId: "", customerId: p.customerId, poNumber: po, date: todayISO(), status: "open",
-          taxRate: 0, lineItems: [{
-            id: uid(), desc: `Turnkey Controls — ${p.description} (${p.number})`,
-            qty: 1, unit: "lot", unitPrice: Number(p.pricing?.total) || 0,
-          }],
+          taxRate: 0, lineItems: groups.length
+            ? groups.map(([label, amt]) => ({ id: uid(), desc: `${label} — ${p.description} (${p.number})`, qty: 1, unit: "lot", unitPrice: Number(amt) || 0 }))
+            : [{
+              id: uid(), desc: `Turnkey Controls — ${p.description} (${p.number})`,
+              qty: 1, unit: "lot", unitPrice: Number(p.pricing?.total) || 0,
+            }],
         };
         th(await supabase.from("sales_orders").insert(A.soToRow(so)));
         await replaceLineItems("sales_order_line_items", "sales_order_id", so.id, so.lineItems, A.soLineItemsToRows);
@@ -1144,6 +1153,20 @@ export function useLedger(session, onError) {
           proposals: d.proposals.map(x => x.id === p.id ? { ...x, status: "won", poNumber: po, salesOrderId: so.id } : x),
         }));
         return so;
+      } catch (e) { return fail(e); }
+    },
+    // A re-quote: the same number at rev + 1 as a fresh draft, and the row it
+    // replaces marked superseded with everything it had left intact.
+    async reviseProposal(p) {
+      try {
+        const next = {
+          ...p, id: uid(), rev: (Number(p.rev) || 0) + 1, status: "draft", date: todayISO(),
+          poNumber: "", salesOrderId: "", phases: (p.phases || []).map(({ invoiceId, ...ph }) => ph),
+        };
+        th(await supabase.from("proposals").insert(A.proposalToRow(next)));
+        th(await supabase.from("proposals").update({ status: "superseded" }).eq("id", p.id));
+        setDb(d => ({ ...d, proposals: [...d.proposals.map(x => x.id === p.id ? { ...x, status: "superseded" } : x), next] }));
+        return next;
       } catch (e) { return fail(e); }
     },
     // Bill one or more phases of a won proposal on a single invoice.

@@ -4,6 +4,8 @@ import { Ico, ICONS, Field, PasswordInput } from "../components/ui.jsx";
 import { AREAS, isAdminRole } from "../lib/permissions.js";
 import { supabase } from "../lib/supabaseClient.js";
 import FormsTab from "../components/FormsEditor.jsx";
+import { proposalConfig } from "../calc/proposals.js";
+import { ROLE_LABELS, HOUR_MODEL_LABELS } from "../calc/estimates.js";
 
 export default function SettingsView({ db, actions, toast, session, readOnly, isAdmin }) {
   const [s, setS] = useState(db.settings);
@@ -14,6 +16,7 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
     ["company", "Company"],
     ["data", "Data"],
     ["forms", "Forms"],
+    ["proposals", "Proposals"],
     ...(isAdmin ? [["users", "Users & Access"], ["time", "Time Categories"], ["backups", "Backups"]] : []),
     ["activity", "Activity"],
     ["account", "Account"],
@@ -102,6 +105,7 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
     </div>}
 
     {tab === "forms" && <FormsTab s={s} set={set} readOnly={readOnly} saveAll={saveAll} />}
+    {tab === "proposals" && <ProposalsTab s={s} set={set} readOnly={readOnly} saveAll={saveAll} />}
 
     {tab === "users" && isAdmin && <UsersCard db={db} actions={actions} toast={toast} session={session} />}
     {tab === "time" && isAdmin && <TimeCategoriesCard db={db} actions={actions} toast={toast} />}
@@ -408,4 +412,105 @@ function CreateUserForm({ actions, toast }) {
     </div>
     <p className="subtle" style={{ margin: "8px 0 0" }}>Requires the <span className="mono">admin-create-user</span> edge function to be deployed.</p>
   </div>;
+}
+
+
+// Settings → Proposals: what the machine proposal and the controls estimate
+// read from settings.proposal (calc/proposals.js proposalConfig). The rate
+// card and the hour model price a controls estimate; the letter fields go on
+// both documents.
+function ProposalsTab({ s, set, readOnly, saveAll }) {
+  const cfg = proposalConfig(s);
+  const p = s.proposal || {};
+  const setP = (k, v) => set("proposal", { ...p, [k]: v });
+  const setRate = (k, v) => setP("laborRates", { ...(p.laborRates || {}), [k]: Number(v) || 0 });
+  const setHm = (table, key, v) => setP("hourModel", { ...(p.hourModel || {}), [table]: { ...((p.hourModel || {})[table] || {}), [key]: Number(v) || 0 } });
+  const setHmScalar = (key, v) => setP("hourModel", { ...(p.hourModel || {}), [key]: Number(v) || 0 });
+  const phaseRows = (key, phases, onChange) => <div>
+    {phases.map((ph, i) => <div key={i} className="row" style={{ alignItems: "center", marginBottom: 4 }}>
+      <input className="input" value={ph.label} disabled={readOnly} onChange={e => onChange(phases.map((q, j) => j === i ? { ...q, label: e.target.value } : q))} />
+      <input className="input mono" type="number" min="0" style={{ maxWidth: 90 }} value={ph.pct} disabled={readOnly} onChange={e => onChange(phases.map((q, j) => j === i ? { ...q, pct: Number(e.target.value) || 0 } : q))} />
+      <button className="btn ghost icon" disabled={readOnly} onClick={() => onChange(phases.filter((_, j) => j !== i))}><Ico d={ICONS.trash} size={15} /></button>
+    </div>)}
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <button className="btn sm" disabled={readOnly} onClick={() => onChange([...phases, { key: key + phases.length, label: "", pct: 0 }])}><Ico d={ICONS.plus} size={14} />Add phase</button>
+      <span className="mono subtle">{phases.reduce((t, ph) => t + (Number(ph.pct) || 0), 0)}%</span>
+    </div>
+  </div>;
+  const hmKeys = ["hardwareDesign", "drafting", "plc", "hmi", "docs", "fat", "safetyVal"];
+  const hmLabels = { hardwareDesign: "Hdw Design", drafting: "Drafting", plc: "PLC", hmi: "HMI", docs: "Docs", fat: "FAT", safetyVal: "Safety Val." };
+
+  return <>
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-head"><h3>Proposal Letter</h3></div>
+      <div className="card-body">
+        <div className="row">
+          <Field label="Signer" hint="Prints under Regards,"><input className="input" value={cfg.signer} disabled={readOnly} onChange={e => setP("signer", e.target.value)} /></Field>
+          <Field label="Proposal number prefix"><input className="input mono" value={cfg.propPrefix} disabled={readOnly} onChange={e => setP("propPrefix", e.target.value)} /></Field>
+        </div>
+        <Field label="Standards line" hint="Machine proposals: “System hardware and software design will follow …”"><input className="input" value={cfg.standards} disabled={readOnly} onChange={e => setP("standards", e.target.value)} /></Field>
+        <div className="row">
+          <Field label="Default build / start-up location"><input className="input" value={cfg.location} disabled={readOnly} onChange={e => setP("location", e.target.value)} /></Field>
+          <Field label="PLC platform"><input className="input" value={cfg.plcType} disabled={readOnly} onChange={e => setP("plcType", e.target.value)} /></Field>
+          <Field label="HMI platform"><input className="input" value={cfg.hmiType} disabled={readOnly} onChange={e => setP("hmiType", e.target.value)} /></Field>
+        </div>
+        <div className="row">
+          <Field label="Offer valid for (days)"><input className="input mono" type="number" min="0" value={cfg.validityDays} disabled={readOnly} onChange={e => setP("validityDays", Number(e.target.value) || 0)} /></Field>
+          <Field label="Support rate ($/hr)" hint="Stand-by / production support beyond the scope"><input className="input mono" type="number" min="0" value={cfg.supportRate} disabled={readOnly} onChange={e => setP("supportRate", Number(e.target.value) || 0)} /></Field>
+        </div>
+      </div>
+    </div>
+
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-head"><h3>Labor Rate Card</h3><span className="subtle" style={{ marginLeft: "auto" }}>$/hour — prices a controls estimate</span></div>
+      <div className="card-body"><div className="row">
+        {Object.entries(ROLE_LABELS).map(([k, label]) => <Field key={k} label={label}>
+          <input className="input mono" type="number" min="0" step="any" value={cfg.laborRates[k] ?? 0} disabled={readOnly} onChange={e => setRate(k, e.target.value)} />
+        </Field>)}
+      </div>
+      <div className="row">
+        <Field label="Travel & living ($ per person-day)"><input className="input mono" type="number" min="0" value={cfg.travelPerDay} disabled={readOnly} onChange={e => setP("travelPerDay", Number(e.target.value) || 0)} /></Field>
+        <Field label="Hardware markup (%)"><input className="input mono" type="number" min="0" step="any" value={cfg.hardwareMarkupPct} disabled={readOnly} onChange={e => setP("hardwareMarkupPct", Number(e.target.value) || 0)} /></Field>
+        <Field label="Default contingency (%)"><input className="input mono" type="number" min="0" step="any" value={cfg.contingencyPct} disabled={readOnly} onChange={e => setP("contingencyPct", Number(e.target.value) || 0)} /></Field>
+      </div></div>
+    </div>
+
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-head"><h3>Hour Model</h3><span className="subtle" style={{ marginLeft: "auto" }}>hours a controls estimate suggests per unit of content</span></div>
+      <table><thead><tr><th>Per</th>{hmKeys.map(k => <th key={k} className="num">{hmLabels[k]}</th>)}</tr></thead>
+        <tbody>{Object.entries(HOUR_MODEL_LABELS).map(([table, label]) => <tr key={table}>
+          <td>{label}</td>
+          {hmKeys.map(k => <td key={k} className="num"><input className="input mono" type="number" min="0" step="any" style={{ width: 70 }}
+            value={cfg.hourModel[table]?.[k] ?? ""} placeholder="0" disabled={readOnly} onChange={e => setHm(table, k, e.target.value)} /></td>)}
+        </tr>)}</tbody></table>
+      <div className="card-body"><div className="row">
+        <Field label="Project management (% of engineering hours)"><input className="input mono" type="number" min="0" step="any" value={cfg.hourModel.pmPct} disabled={readOnly} onChange={e => setHmScalar("pmPct", e.target.value)} /></Field>
+        <Field label="Hours in a start-up day"><input className="input mono" type="number" min="0" step="any" value={cfg.hourModel.hoursPerDay} disabled={readOnly} onChange={e => setHmScalar("hoursPerDay", e.target.value)} /></Field>
+      </div></div>
+    </div>
+
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-head"><h3>Invoicing Schedules</h3><span className="subtle" style={{ marginLeft: "auto" }}>the splits a new proposal starts with</span></div>
+      <div className="card-body">
+        <div className="row">
+          <div style={{ flex: 1, minWidth: 260 }}><div className="subtle" style={{ fontWeight: 700, marginBottom: 6 }}>Machine proposal</div>
+            {phaseRows("m", cfg.phases, v => setP("phases", v))}</div>
+          <div style={{ flex: 1, minWidth: 260 }}><div className="subtle" style={{ fontWeight: 700, marginBottom: 6 }}>Controls — engineering only</div>
+            {phaseRows("e", cfg.controlsPhases.engineering, v => setP("controlsPhases", { ...cfg.controlsPhases, engineering: v }))}</div>
+          <div style={{ flex: 1, minWidth: 260 }}><div className="subtle" style={{ fontWeight: 700, marginBottom: 6 }}>Controls — with hardware</div>
+            {phaseRows("h", cfg.controlsPhases.hardware, v => setP("controlsPhases", { ...cfg.controlsPhases, hardware: v }))}</div>
+        </div>
+      </div>
+    </div>
+
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-head"><h3>Standard Assumptions and Exclusions</h3><span className="subtle" style={{ marginLeft: "auto" }}>one per line — a new controls estimate starts with these</span></div>
+      <div className="card-body"><div className="row">
+        <Field label="Assumptions and clarifications"><textarea className="input" rows={7} value={cfg.assumptions.join("\n")} disabled={readOnly} onChange={e => setP("assumptions", e.target.value.split("\n"))} /></Field>
+        <Field label="Exclusions"><textarea className="input" rows={7} value={cfg.exclusions.join("\n")} disabled={readOnly} onChange={e => setP("exclusions", e.target.value.split("\n"))} /></Field>
+      </div></div>
+    </div>
+
+    {!readOnly && <button className="btn primary" onClick={saveAll}><Ico d={ICONS.check} size={15} />Save Proposal Settings</button>}
+  </>;
 }

@@ -110,14 +110,16 @@ export const machineTypeFromRow = r => ({
 
 /* ---- proposals ---- */
 export const proposalToRow = p => ({
-  id: p.id, number: p.number, customer_id: idOrNull(p.customerId), contact_person_id: idOrNull(p.contactPersonId),
+  id: p.id, number: p.number, kind: p.kind || "machine", rev: Number(p.rev) || 0,
+  customer_id: idOrNull(p.customerId), contact_person_id: idOrNull(p.contactPersonId),
   date: dateOrNull(p.date), status: p.status, job_number: p.jobNumber ?? "", description: p.description ?? "",
   location: p.location ?? "", machine_type_id: idOrNull(p.machineTypeId), specs: p.specs || {},
   pricing: p.pricing || {}, phases: p.phases || [], notes: p.notes ?? "", po_number: p.poNumber ?? "",
   sales_order_id: idOrNull(p.salesOrderId), contact_name: p.contactName ?? "",
 });
 export const proposalFromRow = r => ({
-  id: r.id, number: r.number, customerId: r.customer_id || "", contactPersonId: r.contact_person_id || "",
+  id: r.id, number: r.number, kind: r.kind || "machine", rev: Number(r.rev) || 0,
+  customerId: r.customer_id || "", contactPersonId: r.contact_person_id || "",
   contactName: r.contact_name || "", date: r.date || "", status: r.status, jobNumber: r.job_number, description: r.description,
   location: r.location, machineTypeId: r.machine_type_id || "", specs: r.specs || {},
   pricing: r.pricing || {}, phases: r.phases || [], notes: r.notes, poNumber: r.po_number,

@@ -8,8 +8,16 @@ import { Ico, ICONS } from "./ui.jsx";
 
 export default function DocumentView({ kind, doc, contact, settings, onClose, onPrinted }) {
   // While a document overlay is open, flag the body so print hides the app
-  // content behind it (otherwise the list page prints along with the document).
-  useEffect(() => { document.body.classList.add("doc-open"); return () => document.body.classList.remove("doc-open"); }, []);
+  // content behind it (otherwise the list page prints along with the document),
+  // and make the tab title the document number: Print / Save PDF offers the
+  // title as the file name, so it comes out as INV-0001.pdf — the same name
+  // the PDF download uses — instead of Ledger.pdf.
+  useEffect(() => {
+    const title = document.title;
+    document.body.classList.add("doc-open");
+    if (doc?.number) document.title = doc.number;
+    return () => { document.body.classList.remove("doc-open"); document.title = title; };
+  }, [doc?.number]);
   const print = () => { onPrinted?.(); window.print(); };
   if (kind === "invoice") return <InvoiceDoc inv={doc} contact={contact} settings={settings} onClose={onClose} print={print} />;
   const t = lineTotals(doc.lineItems, doc.taxRate);

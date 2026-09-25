@@ -6,6 +6,7 @@ import { Ico, ICONS, Badge, Empty, Field, MenuItem, Modal, SortTh, useTableSort 
 import { downloadProposalDocx, proposalDocxBlob, proposalFileStem } from "../lib/proposalDocx.js";
 import EmailModal from "../components/EmailModal.jsx";
 import ImportProposalsModal from "../components/ImportProposalsModal.jsx";
+import ImportLineupModal from "../components/ImportLineupModal.jsx";
 import ControlsEstimateEditor, { buildControlsContent, ControlsDocBody, revLabel } from "./ControlsEstimate.jsx";
 import { newEstimate, priceEstimate } from "../calc/estimates.js";
 
@@ -70,6 +71,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
   const [phasesFor, setPhasesFor] = useState(null);
   const [search, setSearch] = useState("");
   const [importing, setImporting] = useState(false);
+  const [importingLineup, setImportingLineup] = useState(false);
   const customers = db.contacts.filter(c => c.type === "customer");
   const cfg = proposalConfig(db.settings);
 
@@ -132,7 +134,9 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
   return <div>
     <div className="toolbar">
       <div className="search"><Ico d={ICONS.search} size={15} /><input className="input" placeholder="Search proposals…" value={search} onChange={e => setSearch(e.target.value)} /></div>
-      {!readOnly && <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setImporting(true)}>
+      {!readOnly && <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setImportingLineup(true)}>
+        <Ico d={ICONS.quote} size={15} />Import Lineup</button>}
+      {!readOnly && <button className="btn" onClick={() => setImporting(true)}>
         <Ico d={ICONS.quote} size={15} />Import Quote Chart</button>}
       {!readOnly && <button className="btn" onClick={startNewControls}><Ico d={ICONS.plus} size={15} />New Controls Estimate</button>}
       {!readOnly && <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Machine Proposal</button>}
@@ -174,6 +178,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
           })}</tbody></table>}
     </div>
     {importing && <ImportProposalsModal db={db} actions={actions} toast={toast} onClose={() => setImporting(false)} />}
+    {importingLineup && <ImportLineupModal db={db} actions={actions} toast={toast} onClose={() => setImportingLineup(false)} />}
     {doc && <ProposalDoc p={doc} db={db} onClose={() => setDoc(null)} toast={toast} />}
     {phasesFor && <PhasesModal p={db.proposals.find(x => x.id === phasesFor.id) || phasesFor} db={db} actions={actions} toast={toast} onClose={() => setPhasesFor(null)} />}
   </div>;

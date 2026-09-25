@@ -2,7 +2,8 @@ import { useState, useMemo } from "react";
 import { uid, money, fmtDate, addDays, cls } from "../lib/helpers.js";
 import { termsLabelFor } from "../lib/terms.js";
 import { proposalConfig } from "../calc/proposals.js";
-import { COMPONENTS, DRIVER_FIELDS, SAFETY_OPTIONS, STANDARD_ELEMENTS, ROLE_LABELS, priceEstimate, suggestAll } from "../calc/estimates.js";
+import { COMPONENTS, IO_FIELDS, DEVICE_FIELDS, STRUCTURE_FIELDS, LINEUP_FIELDS, SAFETY_OPTIONS, STANDARD_ELEMENTS, ROLE_LABELS,
+  priceEstimate, suggestAll, derivedIo, contentSummary } from "../calc/estimates.js";
 import { Ico, ICONS, Field } from "../components/ui.jsx";
 
 // The controls estimate — a job for any customer. This file holds the editor,
@@ -41,9 +42,14 @@ export function buildControlsContent(p, db) {
     payment: termsLabelFor(db, p.customerId),
     supportRate: cfg.supportRate,
   };
+  // What the price was built on: the lineup's header and the content counts.
+  const lineup = s.lineup || {};
+  const basis = LINEUP_FIELDS.filter(([k]) => String(lineup[k] || "").trim() && !(k === "qty" && String(lineup[k]).trim() === "1"))
+    .map(([k, label]) => [label, String(lineup[k]).trim()]);
   return { cfg, customer, person, custName, salutation, pricing, scope, hardware, phases, terms,
     assumptions: s.assumptions || [], exclusions: s.exclusions || [], schedule: s.schedule || [],
     options: pricing.options, showHours: !!s.showHours, rev: revLabel(p),
+    basis, content: contentSummary(s.drivers),
     reLine: [p.jobNumber, p.description].filter(Boolean).join(" – ") };
 }
 
@@ -76,6 +82,14 @@ export function ControlsDocBody({ p, db }) {
     <p className="mono" style={{ marginTop: 6 }}>Re: {c.reLine}</p>
     <p>{c.salutation}</p>
     <p>Thank you for the opportunity to provide a proposal for controls engineering services{c.hardware.length ? " and control hardware" : ""} for {p.description || "this project"}{p.location ? ` at ${p.location}` : ""}.</p>
+
+    {(c.basis.length > 0 || c.content) && <>
+      <h4 style={{ margin: "14px 0 4px" }}>Basis of Estimate</h4>
+      {c.basis.length > 0 && <table style={{ fontSize: 13, borderCollapse: "collapse", marginBottom: 6 }}><tbody>
+        {c.basis.map(([k, v]) => <tr key={k}><td className="subtle" style={{ paddingRight: 14, verticalAlign: "top", whiteSpace: "nowrap" }}>{k}</td><td>{v}</td></tr>)}
+      </tbody></table>}
+      {c.content && <p style={{ margin: "0 0 4px" }}>Priced for: {c.content}.</p>}
+    </>}
 
     <h4 style={{ margin: "14px 0 4px" }}>Scope of Work</h4>
     <p style={{ marginTop: 0 }}>{s.company || "We"} will provide the following:</p>
@@ -171,6 +185,8 @@ export default function ControlsEstimateEditor({ p, db, cfg, customers, onCancel
   const set = (k, v) => setX(prev => ({ ...prev, [k]: v }));
   const setSpec = (k, v) => setX(prev => ({ ...prev, specs: { ...prev.specs, [k]: v } }));
   const setDriver = (k, v) => setSpec("drivers", { ...sp.drivers, [k]: v });
+  const setLineup = (k, v) => setSpec("lineup", { ...(sp.lineup || {}), [k]: v });
+  const dio = derivedIo(sp.drivers);
   const setComp = (k, patch) => setSpec("components", { ...sp.components, [k]: { ...sp.components[k], ...patch } });
   const people = db.contactPeople.filter(cp => cp.contactId === x.customerId);
   const pricing = useMemo(() => priceEstimate(sp, cfg), [sp, cfg]);
@@ -230,24 +246,58 @@ export default function ControlsEstimateEditor({ p, db, cfg, customers, onCancel
     </div></div>
 
     <div className="card" style={{ marginBottom: 16 }}>
-      <div className="card-head"><h3>Job Content</h3><span className="subtle" style={{ marginLeft: "auto" }}>what the hour model reads — every hour below can be overridden</span></div>
+      <div className="card-head"><h3>From the Lineup</h3><span className="subtle" style={{ marginLeft: "auto" }}>prints on the document as the basis of the estimate</span></div>
       <div className="card-body">
         <div className="row">
-          {DRIVER_FIELDS.map(([k, label]) => <Field key={k} label={label}>
-            <input className="input mono" type="number" min="0" value={sp.drivers[k] ?? 0} onChange={e => setDriver(k, e.target.value)} />
+          {LINEUP_FIELDS.map(([k, label]) => <Field key={k} label={label}>
+            <input className={cls("input", k === "customerJob" && "mono")} value={sp.lineup?.[k] ?? ""} onChange={e => setLineup(k, e.target.value)} />
           </Field>)}
+        </div>
+      </div>
+    </div>
+
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-head"><h3>Job Content</h3><span className="subtle" style={{ marginLeft: "auto" }}>what the hour model reads — every hour below can be overridden</span></div>
+      <div className="card-body">
+        <div className="subtle" style={{ fontWeight: 600, marginBottom: 6 }}>I/O</div>
+        <div className="row">
+          <Field label="Discrete I/O" hint={`blank = derived from the devices: ${dio.total} (${dio.inputs} in / ${dio.outputs} out)`}>
+            <input className="input mono" type="number" min="0" value={sp.drivers.ioDiscrete ?? ""} placeholder={String(dio.total)} onChange={e => setDriver("ioDiscrete", e.target.value)} />
+          </Field>
+          <Field label="Analog / IO-Link points" hint="transducers, analog channels">
+            <input className="input mono" type="number" min="0" value={sp.drivers.ioAnalog ?? 0} onChange={e => setDriver("ioAnalog", e.target.value)} />
+          </Field>
           <Field label="Safety system"><select className="select" value={sp.drivers.safety} onChange={e => setDriver("safety", e.target.value)}>
             {SAFETY_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+          <Field label="Reuse from reference job (%)" hint="base hardware, cycle start, an HMI to copy">
+            <input className="input mono" type="number" min="0" max="90" value={sp.drivers.reusePct ?? 0} onChange={e => setDriver("reusePct", e.target.value)} />
+          </Field>
+        </div>
+        <div className="subtle" style={{ fontWeight: 600, margin: "6px 0" }}>Devices — count them off the lineup</div>
+        <div className="row" style={{ flexWrap: "wrap" }}>
+          {DEVICE_FIELDS.map(f => <Field key={f.key} label={f.label} hint={f.hint || undefined}>
+            <input className="input mono" type="number" min="0" value={sp.drivers[f.key] ?? 0} onChange={e => setDriver(f.key, e.target.value)} />
+          </Field>)}
+        </div>
+        <div className="subtle" style={{ fontWeight: 600, margin: "6px 0" }}>Program and documents</div>
+        <div className="row" style={{ flexWrap: "wrap" }}>
+          {STRUCTURE_FIELDS.map(([k, label]) => <Field key={k} label={label}>
+            <input className="input mono" type="number" min="0" value={sp.drivers[k] ?? 0} onChange={e => setDriver(k, e.target.value)} />
+          </Field>)}
         </div>
         <div className="row" style={{ alignItems: "center" }}>
-          {[["vision", "Vision system"], ["dataCollection", "Data collection / reporting"], ["remoteAccess", "Remote access"]].map(([k, l]) =>
+          {[["dataCollection", "Data collection / reporting"], ["remoteAccess", "Remote access"]].map(([k, l]) =>
             <label key={k} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px 9px 0" }}>
               <input type="checkbox" checked={!!sp.drivers[k]} onChange={e => setDriver(k, e.target.checked)} />{l}</label>)}
         </div>
-        <div className="row">
+        <div className="subtle" style={{ fontWeight: 600, margin: "6px 0" }}>Start-up</div>
+        <div className="row" style={{ alignItems: "flex-end" }}>
           <Field label="Start-up trips"><input className="input mono" type="number" min="0" value={sp.drivers.trips} onChange={e => setDriver("trips", e.target.value)} /></Field>
           <Field label="Days per trip"><input className="input mono" type="number" min="0" step="0.5" value={sp.drivers.daysPerTrip} onChange={e => setDriver("daysPerTrip", e.target.value)} /></Field>
           <Field label="People on site"><input className="input mono" type="number" min="1" value={sp.drivers.people} onChange={e => setDriver("people", e.target.value)} /></Field>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px 9px 0" }}>
+            <input type="checkbox" checked={sp.drivers.travelIncluded !== false} onChange={e => setDriver("travelIncluded", e.target.checked)} />Travel &amp; living applies
+            <span className="subtle">(off for a start-up down the road)</span></label>
         </div>
       </div>
     </div>

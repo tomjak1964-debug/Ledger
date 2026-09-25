@@ -405,6 +405,33 @@ fresh draft and marks the row it replaces `superseded` (a fifth status); the rev
 document and in the file name. A won controls estimate lands on the sales order as one line per group it
 priced (Engineering / Hardware / Field Services / Contingency) rather than one lot.
 
+**Estimating from a lineup** (`src/lib/lineup.js`, `src/components/ImportLineupModal.jsx`): an integrator's
+*Electrical Engineering Line-up* — one document per fixture with a header (job #, end user, fixture, PLC, HMI,
+runoff), the sequence of operations, the components on the machine with `(xN)` quantities, the valve manifold
+and sensors, and an I/O tally — is what a controls estimate is priced from. **Import Lineup** in Proposals
+reads the PDFs (pdf.js, loaded on demand; text can be pasted instead) and `parseLineup()` turns each into the
+counts the hour model reads: the header fields, the I/O totals, and one keyword rule per device
+(`RULES`: cylinders, vacuum zones, sensors, operator stations, HMIs, VFDs, servo/electric actuators, robots,
+torque controllers and P-sets, vision systems, dispensing systems, scanners, remote I/O blocks, networked
+devices, E-stops, light curtains, other safety devices, analog/IO-Link points), plus stations, sequence steps
+and part types. Devices are counted in the component lists only — the per-station tooling detail and the I/O
+drawings that follow repeat them — and a sub-item (`o (x1) VS smart camera – Part #…`) is the item above it
+in more detail, so it is skipped except under a valve or a torque tool. The parser is keyword-driven on
+purpose: `(x31) Part present sensor` is 31 sensors whoever wrote the lineup, so another customer's format
+parses too, and the review panel shows every count with the line it came from so the estimator corrects it
+before anything is written. The customer is guessed from the name on the page; a start-up at a customer in
+the same state as the shop is local, so travel & living is off unless the estimator turns it on.
+
+The estimate's **Job Content** (`calc/estimates.js`) now has the lineup's vocabulary: `DEVICE_FIELDS` each carry
+the discrete I/O they imply (`derivedIo()` — a clamp is two switches and two solenoids), so the I/O field can
+be left blank and derived, and the hour model prices each device *beyond* its points (`perCylinder`,
+`perRobot`, `perTorque`… in Settings → Proposals) with the points still priced per I/O. `reusePct` takes a
+share off Hardware Design / Drafting / PLC / HMI when the lineup names a reference job; `travelIncluded:
+false` drops Travel & Living. `specs.lineup` holds the header (`LINEUP_FIELDS`) and prints on the document
+and in the Word export as **Basis of Estimate**, with `contentSummary()` ("197 discrete I/O · 23 pneumatic
+cylinders · 1 robot…") under it, so the customer sees what the price was built on. Estimates saved before
+this keep working: a missing device count is zero, a `vision: true` tick still prices as one vision system.
+
 **Payment terms live on the contact** (`src/lib/terms.js`, migration 019). Each customer and vendor
 carries `terms` (days), `discountPct` and `discountDays`; `terms` blank means "use the company default"
 in Settings, so nothing changes for a contact nobody has set up. `termsLabel()` renders them the way the

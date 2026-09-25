@@ -47,19 +47,19 @@ const NAV = [
     ]
   },
   {
-    group: "Work", items: [
-      { k: "jobs", label: "Jobs", icon: ICONS.job },
-      { k: "tasks", label: "Tasks", icon: ICONS.task },
-      { k: "field", label: "Field", icon: ICONS.job },
-      { k: "timeTracking", label: "Time Tracking", icon: ICONS.clock },
-    ]
-  },
-  {
     group: "Vendors & Purchases", items: [
       { k: "purchaseOrders", label: "Purchase Orders", icon: ICONS.so },
       { k: "payables", label: "Payables", icon: ICONS.ap },
       { k: "payments", label: "Payments", icon: ICONS.money },
       { k: "expenses", label: "Expenses", icon: ICONS.exp },
+    ]
+  },
+  {
+    group: "Work", items: [
+      { k: "jobs", label: "Jobs", icon: ICONS.job },
+      { k: "tasks", label: "Tasks", icon: ICONS.task },
+      { k: "field", label: "Field", icon: ICONS.job },
+      { k: "timeTracking", label: "Time Tracking", icon: ICONS.clock },
     ]
   },
   {

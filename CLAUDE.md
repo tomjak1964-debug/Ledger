@@ -505,8 +505,8 @@ prints on the remittance advice and identifies the payment in the register — w
 two electronic runs to the same vendor on the same day collapse into a single register row.
 
 **Navigation groups:** the sidebar reads Overview · **Customers & Sales** (Proposals, Quotes, Sales
-Orders, Invoices, Receivables) · **Work** (Jobs, Tasks, Field, Time Tracking) · **Vendors & Purchases**
-(Purchase Orders, Payables, Payments, Expenses) · Records. The group names are labels in `NAV`
+Orders, Invoices, Receivables) · **Vendors & Purchases** (Purchase Orders, Payables, Payments, Expenses) ·
+**Work** (Jobs, Tasks, Field, Time Tracking) · Records. The group names are labels in `NAV`
 (`App.jsx`) only; view keys and `NAV_AREA` permissions are unchanged, so moving or renaming a page is a
 one-line edit there.
 

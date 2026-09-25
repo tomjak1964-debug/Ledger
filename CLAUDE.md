@@ -290,7 +290,7 @@ delete/correction · **check register** (`src/lib/checks.js` — next check numb
 overridable, duplicate numbers refused, voiding a check reopens its bills and frees the number) ·
 **guided payment flow** (record → print → confirm the check printed → email/save → every dialog
 closes; a misprinted check is reversed in one click) · **payments & receipts register**
-(`src/components/PaymentRegister.jsx`, shown as Spend → Payments and Receivables → Receipts:
+(`src/components/PaymentRegister.jsx`, shown as Vendors & Purchases → Payments and Receivables → Receipts:
 search, date range, edit, delete, void a whole check; both sides list one row per
 check/transfer, expandable to the invoices or bills it covered — `receiptGroups()` in
 `src/calc/reports.js` does the grouping) · **whole receipts and payments are editable**
@@ -492,7 +492,7 @@ amount and ticks the row), the whole-receipt/payment editor, and the register's 
 A discount-only line is legitimate and settles its document with no cash.
 
 **Emailing a remittance:** from the pay-run confirmation (one Email per electronic group,
-vendor by vendor) and from any non-check row in Spend → Payments, as well as the single-bill
+vendor by vendor) and from any non-check row in Vendors & Purchases → Payments, as well as the single-bill
 Pay dialog it was already in. The advice covers the whole payment — every bill the transfer
 settled — and goes to the vendor's A/P remittance contact. Checks are excluded: they carry
 their own printed stub.
@@ -503,6 +503,19 @@ consecutive numbers from the Starting Check #; each electronic group gets its ow
 Reference # field, listed with its vendor, method and subtotal before you record. The reference
 prints on the remittance advice and identifies the payment in the register — without one,
 two electronic runs to the same vendor on the same day collapse into a single register row.
+
+**Navigation groups:** the sidebar reads Overview · **Customers & Sales** (Proposals, Quotes, Sales
+Orders, Invoices, Receivables) · **Work** (Jobs, Tasks, Field, Time Tracking) · **Vendors & Purchases**
+(Purchase Orders, Payables, Payments, Expenses) · Records. The group names are labels in `NAV`
+(`App.jsx`) only; view keys and `NAV_AREA` permissions are unchanged, so moving or renaming a page is a
+one-line edit there.
+
+**Remittance PDFs are named** `<Vendor> Remittance - <Reference #>` (`remittanceFileStem()` in
+`src/lib/remittance.js`; the payment date stands in when the transfer has no reference). That is the
+attachment name when one is emailed, and it is also written into the PDF's Title metadata, which is
+what Chrome's viewer offers in the Save / Print dialog for a PDF opened from a blob URL — the URL itself
+has no name to suggest. A pay-run's combined file is named the same way for one vendor and
+`Remittances - <date>` for several.
 
 **Marking an invoice printed by hand:** the Invoices list has a **Printed** column — a tick per row
 that is the control, not just the status. Ticking marks an invoice printed without printing it (one that

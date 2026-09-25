@@ -38,24 +38,24 @@ const NAV = [
     ]
   },
   {
-    group: "Sell", items: [
+    group: "Customers & Sales", items: [
       { k: "proposals", label: "Proposals", icon: ICONS.so },
       { k: "quotes", label: "Quotes", icon: ICONS.quote },
       { k: "salesOrders", label: "Sales Orders", icon: ICONS.so },
-      { k: "jobs", label: "Jobs", icon: ICONS.job },
       { k: "invoices", label: "Invoices", icon: ICONS.inv },
-      { k: "tasks", label: "Tasks", icon: ICONS.task },
       { k: "receivables", label: "Receivables", icon: ICONS.ar },
     ]
   },
   {
     group: "Work", items: [
+      { k: "jobs", label: "Jobs", icon: ICONS.job },
+      { k: "tasks", label: "Tasks", icon: ICONS.task },
       { k: "field", label: "Field", icon: ICONS.job },
       { k: "timeTracking", label: "Time Tracking", icon: ICONS.clock },
     ]
   },
   {
-    group: "Spend", items: [
+    group: "Vendors & Purchases", items: [
       { k: "purchaseOrders", label: "Purchase Orders", icon: ICONS.so },
       { k: "payables", label: "Payables", icon: ICONS.ap },
       { k: "payments", label: "Payments", icon: ICONS.money },

@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { uid, money, fmtDate, todayISO, nameOf, cls } from "../lib/helpers.js";
 import { proposalConfig, priceProposal, ioBlocks, phaseAmount, SPEC_FIELDS, DEFAULT_PHASES } from "../calc/proposals.js";
-import { Ico, ICONS, Badge, Empty, Field, MenuItem, Modal, SortTh, useTableSort } from "../components/ui.jsx";
+import { Ico, ICONS, Badge, Empty, Field, MenuItem, ActionMenu, Modal, SortTh, useTableSort } from "../components/ui.jsx";
 import { downloadProposalDocx, proposalDocxBlob, proposalFileStem } from "../lib/proposalDocx.js";
 import EmailModal from "../components/EmailModal.jsx";
 import ImportProposalsModal from "../components/ImportProposalsModal.jsx";
@@ -22,10 +22,17 @@ export function buildProposalContent(p, db) {
   const person = contactName ? { name: contactName, email: personRec?.email || "" } : null;
   const s = p.specs || {};
   const cams = Number(s.cameras) || 0, gens = Number(s.generators) || 0, welds = Number(s.welds) || 0;
+  const torque = Number(s.torque) || 0, ioLink = Number(s.ioLink) || 0;
   const plc = s.plcType || cfg.plcType, hmi = s.hmiType || cfg.hmiType;
   const loc = p.location || cfg.location;
   const custName = customer?.name || "Customer";
-  const pricing = p.pricing?.total != null ? p.pricing : priceProposal(mt, s, cfg);
+  // A saved pricing snapshot from before zero lines were dropped still carries
+  // them; the document leaves off anything worth nothing, just as a fresh
+  // price would.
+  const drop0 = lines => (lines || []).filter(l => (Number(l.amount) || 0) > 0);
+  const pricing = p.pricing?.total != null
+    ? { ...p.pricing, baseLines: drop0(p.pricing.baseLines), premiumLines: drop0(p.pricing.premiumLines) }
+    : priceProposal(mt, s, cfg);
 
   const salutation = (() => {
     if (!person?.name) return custName + " Team:";
@@ -46,10 +53,13 @@ export function buildProposalContent(p, db) {
     { t: `(1) Main control Panel with ${plc} PLC, ${hmi} HMI, and miscellaneous panel components (duct, wire, terminal, power supplies, etc….)`, sub: true },
     { t: "Automation Direct Bingo Board HMI", sub: true },
     mt && Number(mt.remoteHmi) > 0 ? { t: "(1) Remote HMI Panel", sub: true } : null,
+    mt && Number(mt.remoteSonic) > 0 ? { t: "(1) Remote Sonic Panel", sub: true } : null,
     { t: `Field Wiring at ${loc}.` },
     { t: `Start-up/Debug Support at ${loc}.` },
     { t: `${custName} will supply the machine and all on machine components and cabling.` },
     cams > 0 ? { t: `Installation and Configuration of ${cams} Cameras` } : null,
+    torque > 0 ? { t: `Installation and Configuration of ${torque} Torque Tool${torque === 1 ? "" : "s"}` } : null,
+    ioLink > 0 ? { t: `Configuration of ${ioLink} IO-Link Device${ioLink === 1 ? "" : "s"}` } : null,
     gens > 0 ? { t: welds > 0 ? `${gens} Sonic Generators, ${welds} Welds` : `${gens} Sonic Generators` } : null,
   ].filter(Boolean);
 
@@ -122,10 +132,10 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
   if (edit?.kind === "controls") return <ControlsEstimateEditor p={edit} db={db} cfg={cfg} customers={customers} onCancel={() => setEdit(null)} onSave={save} />;
 
   if (db.machineTypes.length === 0 && db.proposals.every(p => p.kind !== "controls")) return <div className="card">
-    <Empty icon={ICONS.so} title="Set up machine rates first" msg="Proposals price themselves from your machine-type rates. Load the TMJ defaults (from TMJ Costing.xlsx) or add types under Machine Rates." action={
+    <Empty icon={ICONS.so} title="Set up fixture rates first" msg="Proposals price themselves from your fixture-type rates. Load the TMJ defaults (from TMJ Costing.xlsx) or add types under Fixture Rates." action={
       !readOnly && <button className="btn primary" onClick={async () => {
         const { TMJ_DEFAULT_RATES } = await import("../calc/proposals.js");
-        if (await actions.seedMachineRates(TMJ_DEFAULT_RATES)) toast("Machine rates loaded");
+        if (await actions.seedMachineRates(TMJ_DEFAULT_RATES)) toast("Fixture rates loaded");
       }}>Load TMJ Default Rates</button>} />
   </div>;
 
@@ -143,7 +153,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
     </div>
     <div className="card">
       {db.proposals.length === 0
-        ? <Empty icon={ICONS.quote} title="No proposals yet" msg="Enter the machine details — type, welds, clamps, cameras — and the app prices it, generates the proposal document, and tracks it to PO."
+        ? <Empty icon={ICONS.quote} title="No proposals yet" msg="Enter the fixture details — type, welds, clamps, cameras — and the app prices it, generates the proposal document, and tracks it to PO."
           action={!readOnly && <span style={{ display: "inline-flex", gap: 8 }}>
             <button className="btn" onClick={startNewControls}><Ico d={ICONS.plus} size={15} />New System Proposal</button>
             <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Fixture Proposal</button></span>} />
@@ -185,21 +195,17 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
 }
 
 function PropMenu({ p, setStatus, win, del, revise, onPhases }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef();
-  useEffect(() => { const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }; document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h); }, []);
-  const item = (label, fn, opts = {}) => <MenuItem {...opts} onClick={() => { fn(); setOpen(false); }}>{label}</MenuItem>;
-  return <span style={{ position: "relative", display: "inline-block" }} ref={ref}>
-    <button className="btn ghost icon" onClick={() => setOpen(o => !o)} title="More">⋯</button>
-    {open && <div style={{ position: "absolute", right: 0, top: "100%", background: "#fff", border: "1px solid var(--line)", borderRadius: 9, boxShadow: "var(--shadow)", zIndex: 30, minWidth: 200, padding: 6, textAlign: "left" }}>
+  return <ActionMenu minWidth={200}>{close => {
+    const item = (label, fn, opts = {}) => <MenuItem {...opts} onClick={() => { fn(); close(); }}>{label}</MenuItem>;
+    return <>
       {p.status === "draft" && item("Mark as Submitted", () => setStatus(p.id, "submitted"))}
       {p.status !== "won" && p.status !== "superseded" && item("Won — PO received →", () => win(p), { accent: true })}
       {p.status === "won" && item("Invoice Phases…", onPhases, { accent: true })}
       {p.status !== "superseded" && item("New Revision", () => revise(p))}
       {p.status !== "lost" && p.status !== "won" && p.status !== "superseded" && item("Mark as Lost", () => setStatus(p.id, "lost"))}
       {item("Delete", () => del(p.id), { danger: true })}
-    </div>}
-  </span>;
+    </>;
+  }}</ActionMenu>;
 }
 
 function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
@@ -241,7 +247,7 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
       <div className="row">
         <Field label="Job Number"><input className="input mono" value={x.jobNumber} onChange={e => set("jobNumber", e.target.value)} placeholder="VGE_2026015" /></Field>
         <Field label="Description"><input className="input" value={x.description} onChange={e => set("description", e.target.value)} placeholder="Seat Back w/o Vent" /></Field>
-        <Field label="Machine Type"><select className="select" value={x.machineTypeId} onChange={e => set("machineTypeId", e.target.value)}>
+        <Field label="Fixture Type"><select className="select" value={x.machineTypeId} onChange={e => set("machineTypeId", e.target.value)}>
           {db.machineTypes.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
         </select></Field>
       </div>
@@ -249,7 +255,7 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
     </div></div>
 
     <div className="card" style={{ marginBottom: 16 }}>
-      <div className="card-head"><h3>Machine Content</h3>
+      <div className="card-head"><h3>Fixture Content</h3>
         <span className="subtle" style={{ marginLeft: "auto" }}>{points} points → {blocks} I/O block{blocks === 1 ? "" : "s"}</span></div>
       <div className="card-body">
         <div className="row">
@@ -264,7 +270,7 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
           <Field label="Data National">
             <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 0" }}>
               <input type="checkbox" checked={!!x.specs.dataNational} onChange={e => setSpec("dataNational", e.target.checked)} />
-              Machine reports to Data National
+              Fixture reports to Data National
             </label>
           </Field>
         </div>
@@ -279,11 +285,11 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
           {pricing.baseLines.map(l => <div key={l.label} className="cat-row"><span>{l.label}</span><span className="mono" style={{ marginLeft: "auto" }}>{money(l.amount)}</span></div>)}
           <div className="cat-row" style={{ fontWeight: 700 }}><span>Base Sub Total</span><span className="mono" style={{ marginLeft: "auto" }}>{money(pricing.base)}</span></div>
         </div>
-        <div style={{ flex: 1, minWidth: 260 }}>
+        {pricing.premiumLines.length > 0 && <div style={{ flex: 1, minWidth: 260 }}>
           <div className="subtle" style={{ fontWeight: 700, marginBottom: 6 }}>Premium Pricing</div>
           {pricing.premiumLines.map(l => <div key={l.label} className="cat-row"><span>{l.label}</span><span className="mono" style={{ marginLeft: "auto" }}>{money(l.amount)}</span></div>)}
           <div className="cat-row" style={{ fontWeight: 700 }}><span>Premium Sub Total</span><span className="mono" style={{ marginLeft: "auto" }}>{money(pricing.premium)}</span></div>
-        </div>
+        </div>}
       </div>
     </div>
   </div>;
@@ -377,11 +383,13 @@ function ProposalDoc({ p, db, onClose, toast }) {
           {c.pricing.baseLines.map(l => <tr key={l.label}><td>{l.label}</td><td className="amt">{money(l.amount)}</td></tr>)}
           <tr className="tot"><td>Base Price Sub Total</td><td className="amt">{money(c.pricing.base)}</td></tr>
         </tbody></table>
-        <h4>Premium Pricing</h4>
-        <table><tbody>
-          {c.pricing.premiumLines.map(l => <tr key={l.label}><td>{l.label}</td><td className="amt">{money(l.amount)}</td></tr>)}
-          <tr className="tot"><td>Premium Price Sub Total</td><td className="amt">{money(c.pricing.premium)}</td></tr>
-        </tbody></table>
+        {c.pricing.premiumLines.length > 0 && <>
+          <h4>Premium Pricing</h4>
+          <table><tbody>
+            {c.pricing.premiumLines.map(l => <tr key={l.label}><td>{l.label}</td><td className="amt">{money(l.amount)}</td></tr>)}
+            <tr className="tot"><td>Premium Price Sub Total</td><td className="amt">{money(c.pricing.premium)}</td></tr>
+          </tbody></table>
+        </>}
         <table style={{ marginTop: 10 }}><tbody>
           <tr className="tot"><td>Total Price for this proposal is:</td><td className="amt">{money(c.pricing.total)}</td></tr>
         </tbody></table>

@@ -71,6 +71,10 @@ If you ran `schema.sql` before a migration existed, run the files in
   Vendors & Purchases → Vendors; without it, saving a vendor fails with
   "Could not find the 'tax_id' column". Fresh installs of `schema.sql`
   already include it.
+- `023_fixture_rate_columns.sql` — adds `torque_rate`, `io_link_rate` and
+  `remote_sonic` on `machine_types` for the /Torque, /IO Link and Remote
+  Sonic Panel columns of Fixture Rates. Without it, saving a fixture type
+  fails with "Could not find the 'torque_rate' column".
 
 ## Email sending (invoices & proposals)
 

@@ -63,7 +63,7 @@ const NAV = [
       { k: "field", label: "Field", icon: ICONS.job },
       { k: "timeTracking", label: "Time Tracking", icon: ICONS.clock },
       { k: "catalog", label: "Item Catalog", icon: ICONS.catalog },
-      { k: "machineRates", label: "Machine Rates", icon: ICONS.settings },
+      { k: "machineRates", label: "Fixture Rates", icon: ICONS.settings },
     ]
   },
   {
@@ -87,7 +87,7 @@ const TITLES = {
   reports: ["Reports", "P&L, sales tax, customers, and statements"],
   jobCosting: ["Job Costing", "Profit per job — revenue vs labor and materials"],
   proposals: ["Proposals", "Fixture and system proposals — priced, tracked, and documented"],
-  machineRates: ["Machine Rates", "The costing table behind proposal pricing"],
+  machineRates: ["Fixture Rates", "The costing table behind fixture proposal pricing"],
 };
 
 export default function App({ session }) {
@@ -106,7 +106,9 @@ export default function App({ session }) {
   const { db, loading, loadError, actions } = useLedger(session, toast);
   const openDoc = (kind, d) => setDoc({ kind, doc: d });
   // "contacts" was the combined page before Customers and Vendors split; a stale link lands on Customers.
-  const go = (v) => { setView(v === "contacts" ? "customers" : v); setNavOpen(false); window.scrollTo(0, 0); };
+  // The page area scrolls on its own (the sidebar stays put), so a new page
+  // starts at its top by scrolling .main, not the window.
+  const go = (v) => { setView(v === "contacts" ? "customers" : v); setNavOpen(false); document.querySelector(".main")?.scrollTo(0, 0); window.scrollTo(0, 0); };
 
   if (loading) return <div className="boot">Loading your books…</div>;
   if (loadError || !db) return <div className="boot"><div>

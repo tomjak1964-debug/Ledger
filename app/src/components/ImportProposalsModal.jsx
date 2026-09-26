@@ -69,7 +69,7 @@ export default function ImportProposalsModal({ db, actions, toast, onClose, onDo
     const added = await actions.seedMachineRates(missing);
     setBusy(false);
     if (added == null) return;
-    toast(missing.map(m => m.name).join(" and ") + " added to Machine Rates");
+    toast(missing.map(m => m.name).join(" and ") + " added to Fixture Rates");
     // Re-match now that the types exist.
     setRows(rs => rs.map(r => r.machineTypeId ? r : {
       ...r, machineTypeId: matchMachineType(r.rec.typeName, [...db.machineTypes, ...added])?.id || "",
@@ -146,14 +146,14 @@ export default function ImportProposalsModal({ db, actions, toast, onClose, onDo
       </div>
 
       {missing.length > 0 && <p className="subtle" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span>The chart names {missing.map(m => m.name).join(" and ")}, which {missing.length === 1 ? "isn't" : "aren't"} in your Machine Rates yet.</span>
-        <button className="btn sm primary" disabled={busy} onClick={addMissing}>Add to Machine Rates</button>
+        <span>The chart names {missing.map(m => m.name).join(" and ")}, which {missing.length === 1 ? "isn't" : "aren't"} in your Fixture Rates yet.</span>
+        <button className="btn sm primary" disabled={busy} onClick={addMissing}>Add to Fixture Rates</button>
       </p>}
 
       <table><thead><tr>
         <th style={{ width: 34 }}><input type="checkbox" title="Select all" checked={taken.length === rows.length}
           onChange={e => setRows(rs => rs.map(r => ({ ...r, take: e.target.checked })))} /></th>
-        <th>Quote</th><th>Job</th><th>Description</th><th>Machine type</th><th>Location</th>
+        <th>Quote</th><th>Job</th><th>Description</th><th>Fixture type</th><th>Location</th>
         <th className="num">Blocks</th><th className="num">Total</th></tr></thead>
         <tbody>{rows.map((r, i) => {
           const { blocks, pricing } = priced(r);
@@ -177,7 +177,7 @@ export default function ImportProposalsModal({ db, actions, toast, onClose, onDo
 
       <p className="subtle" style={{ marginBottom: 0, display: "flex" }}>
         <span>{ready.length} of {rows.length} ready to write{taken.length > ready.length
-          ? ` — ${taken.length - ready.length} still need a machine type` : ""}.
+          ? ` — ${taken.length - ready.length} still need a fixture type` : ""}.
           Each gets its own proposal number; the chart's quote number and end user go in the notes.</span>
         <span className="mono" style={{ marginLeft: "auto", fontWeight: 600 }}>{money(total)}</span>
       </p>

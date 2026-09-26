@@ -89,12 +89,14 @@ export async function proposalDocxBlob(p, db) {
           priceRow("Base Price Sub Total", c.pricing.base, { bold: true }),
         ]),
         P("", { after: 20 }),
-        P("Premium Pricing", { bold: true, ul: true, after: 40 }),
-        priceTable([
-          ...c.pricing.premiumLines.map(l => priceRow(l.label, l.amount)),
-          priceRow("Premium Price Sub Total", c.pricing.premium, { bold: true }),
-        ]),
-        P("", { after: 20 }),
+        ...(c.pricing.premiumLines.length ? [
+          P("Premium Pricing", { bold: true, ul: true, after: 40 }),
+          priceTable([
+            ...c.pricing.premiumLines.map(l => priceRow(l.label, l.amount)),
+            priceRow("Premium Price Sub Total", c.pricing.premium, { bold: true }),
+          ]),
+          P("", { after: 20 }),
+        ] : []),
         priceTable([priceRow("Total Price for this proposal is:", c.pricing.total, { bold: true })]),
         P("", { after: 20 }),
         P("Invoicing Schedule", { bold: true, ul: true, after: 40 }),

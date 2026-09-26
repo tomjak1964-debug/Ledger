@@ -9,6 +9,8 @@ export const SPEC_FIELDS = [
   ["nests", "Nests"], ["generators", "Sonic Generators"], ["welds", "Welds"],
   ["pp", "Pick Points"], ["clamps", "Clamps"], ["clips", "Clips"],
   ["tabs", "Tabs"], ["shuttle", "Shuttles"], ["platen", "Platens"], ["cameras", "Cameras"],
+  // priced like cameras: a per-unit adder on the engineering/start-up line
+  ["torque", "Torque Tools"], ["ioLink", "IO-Link Devices"],
 ];
 
 export const DEFAULT_POINT_WEIGHTS = { pp: 1, welds: 2, clamps: 2, clips: 3, tabs: 2, shuttle: 2, platen: 6 };
@@ -73,30 +75,36 @@ export function ioBlocks(specs, cfg) {
   return { points, blocks };
 }
 
+// A pricing line only exists when it is worth something: a rate left at 0 on
+// the Fixture Rates page (or a category the fixture has none of) is left off
+// the proposal rather than printed as $0.00.
+const priced = lines => lines.filter(l => n(l.amount) > 0);
+
 // Full price build-up matching the proposal document's Base/Premium sections.
 export function priceProposal(mt, specs, cfg) {
   if (!mt) return { baseLines: [], premiumLines: [], base: 0, premium: 0, total: 0, blocks: 0, points: 0 };
   const { points, blocks: computed } = ioBlocks(specs, cfg);
   const blocks = specs.ioBlocks === "" || specs.ioBlocks == null ? computed : n(specs.ioBlocks);
   const dn = !!specs.dataNational;
-  const cams = n(specs.cameras);
-  const eng = n(mt.engBase) + n(mt.cameraRate) * cams;
+  const cams = n(specs.cameras), torque = n(specs.torque), ioLink = n(specs.ioLink);
+  // per-unit adders — cameras, torque tools and IO-Link devices — roll into engineering
+  const eng = n(mt.engBase) + n(mt.cameraRate) * cams + n(mt.torqueRate) * torque + n(mt.ioLinkRate) * ioLink;
   const blockio = blocks > 0 ? n(mt.ioFirst) + n(mt.ioAddl) * (blocks - 1) : 0;
 
-  const baseLines = [
+  const baseLines = priced([
     { label: "Engineering/Start/Up", amount: eng },
     { label: "CompactLogix Control Panel /HMI/Bingo Board", amount: n(mt.panelBudget) },
     { label: "Block I/O", amount: blockio },
     { label: "Field Wiring", amount: n(mt.fieldWiring) },
-  ];
-  if (n(mt.remoteHmi) > 0) baseLines.push({ label: "Remote HMI", amount: n(mt.remoteHmi) });
+    { label: "Remote HMI", amount: n(mt.remoteHmi) },
+    { label: "Remote Sonic Panel", amount: n(mt.remoteSonic) },
+  ]);
 
-  const premiumLines = [
+  const premiumLines = priced([
     { label: "Data National Checkout", amount: dn ? n(mt.dnCheckout) : 0 },
     { label: "Data National Material", amount: dn ? n(mt.dnMaterial) : 0 },
     { label: "Run Off Support", amount: n(mt.runoff) },
-    { label: "Brivo Enet Switch", amount: 0 },
-  ];
+  ]);
   const base = round2(baseLines.reduce((t, l) => t + l.amount, 0));
   const premium = round2(premiumLines.reduce((t, l) => t + l.amount, 0));
   return { baseLines, premiumLines, base, premium, total: round2(base + premium), blocks, points };
@@ -106,15 +114,17 @@ export const phaseAmount = (total, pct) => round2(total * pct / 100);
 
 export const proposalTotal = p => n(p.pricing?.total);
 
-// TMJ Costing.xlsx defaults for the Machine Rates seed
+// TMJ Costing.xlsx defaults for the Fixture Rates seed. The sheet has no
+// torque, IO-Link or remote sonic panel figures, so those start at 0 (and a
+// 0 rate is simply left off the proposal).
 export const TMJ_DEFAULT_RATES = [
-  { name: "Big Sonic",   engBase: 3900, cameraRate: 200, panelBudget: 26000, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 2500, runoff: 560, remoteHmi: 0 },
+  { name: "Big Sonic",   engBase: 3900, cameraRate: 200, panelBudget: 26000, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 2500, runoff: 560, remoteHmi: 0, torqueRate: 0, ioLinkRate: 0, remoteSonic: 0 },
   // Small Sonic is a Big Sonic on a smaller panel; Clip is a Check by another name.
-  { name: "Small Sonic", engBase: 3900, cameraRate: 200, panelBudget: 23000, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 2500, runoff: 560, remoteHmi: 0 },
-  { name: "Robot Sonic", engBase: 3900, cameraRate: 200, panelBudget: 23000, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 2500, runoff: 560, remoteHmi: 2500 },
-  { name: "Check",       engBase: 2900, cameraRate: 200, panelBudget: 21500, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 1700, runoff: 560, remoteHmi: 0 },
-  { name: "Clip",        engBase: 2900, cameraRate: 200, panelBudget: 21500, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 1700, runoff: 560, remoteHmi: 0 },
-  { name: "Screw",       engBase: 2900, cameraRate: 200, panelBudget: 21500, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 1700, runoff: 560, remoteHmi: 0 },
-  { name: "Insert",      engBase: 2900, cameraRate: 200, panelBudget: 21500, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 1700, runoff: 560, remoteHmi: 0 },
-  { name: "Limiter",     engBase: 2900, cameraRate: 200, panelBudget: 21500, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 1700, runoff: 560, remoteHmi: 0 },
+  { name: "Small Sonic", engBase: 3900, cameraRate: 200, panelBudget: 23000, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 2500, runoff: 560, remoteHmi: 0, torqueRate: 0, ioLinkRate: 0, remoteSonic: 0 },
+  { name: "Robot Sonic", engBase: 3900, cameraRate: 200, panelBudget: 23000, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 2500, runoff: 560, remoteHmi: 2500, torqueRate: 0, ioLinkRate: 0, remoteSonic: 0 },
+  { name: "Check",       engBase: 2900, cameraRate: 200, panelBudget: 21500, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 1700, runoff: 560, remoteHmi: 0, torqueRate: 0, ioLinkRate: 0, remoteSonic: 0 },
+  { name: "Clip",        engBase: 2900, cameraRate: 200, panelBudget: 21500, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 1700, runoff: 560, remoteHmi: 0, torqueRate: 0, ioLinkRate: 0, remoteSonic: 0 },
+  { name: "Screw",       engBase: 2900, cameraRate: 200, panelBudget: 21500, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 1700, runoff: 560, remoteHmi: 0, torqueRate: 0, ioLinkRate: 0, remoteSonic: 0 },
+  { name: "Insert",      engBase: 2900, cameraRate: 200, panelBudget: 21500, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 1700, runoff: 560, remoteHmi: 0, torqueRate: 0, ioLinkRate: 0, remoteSonic: 0 },
+  { name: "Limiter",     engBase: 2900, cameraRate: 200, panelBudget: 21500, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 1700, runoff: 560, remoteHmi: 0, torqueRate: 0, ioLinkRate: 0, remoteSonic: 0 },
 ];

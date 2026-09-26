@@ -100,12 +100,14 @@ export const machineTypeToRow = m => ({
   panel_budget: num(m.panelBudget), io_first: num(m.ioFirst), io_addl: num(m.ioAddl),
   dn_checkout: num(m.dnCheckout), dn_material: num(m.dnMaterial), field_wiring: num(m.fieldWiring),
   runoff: num(m.runoff), remote_hmi: num(m.remoteHmi), sort: num(m.sort),
+  torque_rate: num(m.torqueRate), io_link_rate: num(m.ioLinkRate), remote_sonic: num(m.remoteSonic),
 });
 export const machineTypeFromRow = r => ({
   id: r.id, name: r.name, engBase: num(r.eng_base), cameraRate: num(r.camera_rate),
   panelBudget: num(r.panel_budget), ioFirst: num(r.io_first), ioAddl: num(r.io_addl),
   dnCheckout: num(r.dn_checkout), dnMaterial: num(r.dn_material), fieldWiring: num(r.field_wiring),
   runoff: num(r.runoff), remoteHmi: num(r.remote_hmi), sort: num(r.sort),
+  torqueRate: num(r.torque_rate), ioLinkRate: num(r.io_link_rate), remoteSonic: num(r.remote_sonic),
 });
 
 /* ---- proposals ---- */

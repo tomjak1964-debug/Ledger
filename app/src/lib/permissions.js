@@ -19,7 +19,7 @@ export const AREAS = [
   { key: "expenses", label: "Expenses" },
   { key: "timeTracking", label: "Time Tracking" },
   { key: "field", label: "Field (mobile)" },
-  { key: "contacts", label: "Contacts" },
+  { key: "contacts", label: "Customers & Vendors" },
   { key: "catalog", label: "Item Catalog" },
   { key: "settings", label: "Settings & Users" },
 ];
@@ -45,7 +45,8 @@ export const NAV_AREA = {
   expenses: "expenses",
   timeTracking: "timeTracking",
   field: "field",
-  contacts: "contacts",
+  customers: "contacts",
+  vendors: "contacts",
   catalog: "catalog",
   settings: "settings",
 };

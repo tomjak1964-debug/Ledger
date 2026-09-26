@@ -60,6 +60,8 @@ create table if not exists contacts (
   remit_phone   text not null default '',
   remit_email   text not null default '',
   remit_address text not null default '',
+  -- vendor tax id (EIN or SSN) for the 1099 vendor report (migration 022)
+  tax_id        text not null default '',
   created_at  timestamptz not null default now()
 );
 create index if not exists contacts_user_idx on contacts(user_id);

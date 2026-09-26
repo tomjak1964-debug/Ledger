@@ -74,7 +74,7 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
       <div className="card-body">
         <div className="row">
           <Field label="Default Tax Rate (%)"><input className="input mono" type="number" step="any" value={s.taxRate} onChange={e => set("taxRate", Number(e.target.value))} /></Field>
-          <Field label="Default Payment Terms (days)" hint="Used for any customer or vendor without terms of their own (Contacts)"><input className="input mono" type="number" value={s.terms} onChange={e => set("terms", Number(e.target.value))} /></Field>
+          <Field label="Default Payment Terms (days)" hint="Used for any customer or vendor without terms of their own (Customers / Vendors)"><input className="input mono" type="number" value={s.terms} onChange={e => set("terms", Number(e.target.value))} /></Field>
         </div>
         <div className="row">
           <Field label="Quote Prefix"><input className="input" value={s.quotePrefix} onChange={e => set("quotePrefix", e.target.value)} /></Field>

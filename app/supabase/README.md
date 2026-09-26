@@ -63,8 +63,13 @@ If you ran `schema.sql` before a migration existed, run the files in
   when) deploying that app version — the app can't load without it.
 - `017_remittance_contact.sql` — adds the vendor remittance contact
   (`remit_name` / `remit_phone` / `remit_email` / `remit_address` on
-  `contacts`). Needed for the remittance contact in Contacts → Vendors and the
+  `contacts`). Needed for the remittance contact in Vendors & Purchases → Vendors and the
   default recipient when emailing a remittance. Fresh installs of `schema.sql`
+  already include it.
+- `022_vendor_tax_id.sql` — adds `tax_id` on `contacts`, the vendor's EIN or
+  SSN for the 1099 vendor report. Needed for the Tax ID field in
+  Vendors & Purchases → Vendors; without it, saving a vendor fails with
+  "Could not find the 'tax_id' column". Fresh installs of `schema.sql`
   already include it.
 
 ## Email sending (invoices & proposals)

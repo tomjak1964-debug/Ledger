@@ -39,6 +39,7 @@ const NAV = [
   },
   {
     group: "Customers & Sales", items: [
+      { k: "customers", label: "Customers", icon: ICONS.contacts },
       { k: "proposals", label: "Proposals", icon: ICONS.so },
       { k: "quotes", label: "Quotes", icon: ICONS.quote },
       { k: "salesOrders", label: "Sales Orders", icon: ICONS.so },
@@ -48,6 +49,7 @@ const NAV = [
   },
   {
     group: "Vendors & Purchases", items: [
+      { k: "vendors", label: "Vendors", icon: ICONS.contacts },
       { k: "purchaseOrders", label: "Purchase Orders", icon: ICONS.so },
       { k: "payables", label: "Payables", icon: ICONS.ap },
       { k: "payments", label: "Payments", icon: ICONS.money },
@@ -60,13 +62,12 @@ const NAV = [
       { k: "tasks", label: "Tasks", icon: ICONS.task },
       { k: "field", label: "Field", icon: ICONS.job },
       { k: "timeTracking", label: "Time Tracking", icon: ICONS.clock },
+      { k: "catalog", label: "Item Catalog", icon: ICONS.catalog },
+      { k: "machineRates", label: "Machine Rates", icon: ICONS.settings },
     ]
   },
   {
-    group: "Records", items: [
-      { k: "contacts", label: "Contacts", icon: ICONS.contacts },
-      { k: "machineRates", label: "Machine Rates", icon: ICONS.settings },
-      { k: "catalog", label: "Item Catalog", icon: ICONS.catalog },
+    group: "System", items: [
       { k: "settings", label: "Settings", icon: ICONS.settings },
     ]
   },
@@ -80,7 +81,8 @@ const TITLES = {
   receivables: ["Receivables", "What customers owe you, by age"], payables: ["Payables", "Vendor bills you owe"],
   payments: ["Payments", "Every payment made — edit, correct, or void"],
   purchaseOrders: ["Purchase Orders", "Orders you issue to vendors for parts"],
-  expenses: ["Expenses", "Business spend by category"], contacts: ["Contacts", "Customers and vendors"],
+  expenses: ["Expenses", "Business spend by category"],
+  customers: ["Customers", "The companies you quote and invoice"], vendors: ["Vendors", "The vendors and subs you buy from"],
   catalog: ["Item Catalog", "Reusable quote line items"], settings: ["Settings", "Company info and defaults"],
   reports: ["Reports", "P&L, sales tax, customers, and statements"],
   jobCosting: ["Job Costing", "Profit per job — revenue vs labor and materials"],
@@ -93,16 +95,18 @@ export default function App({ session }) {
   const [doc, setDoc] = useState(null); // {kind,doc}
   const [toastMsg, setToastMsg] = useState(null);
   const [navOpen, setNavOpen] = useState(false);
-  // toast("msg") or toast("msg", { actionLabel, onAction }) for an Undo button.
+  // toast("msg") or toast("msg", { actionLabel, onAction }) for an Undo button;
+  // { ms } holds a message up longer than the default (errors worth reading).
   const toast = useCallback((m, opts) => {
     const t = { text: m, ...(opts || {}) };
     setToastMsg(t);
-    setTimeout(() => setToastMsg(null), t.onAction ? 8000 : 2600);
+    setTimeout(() => setToastMsg(null), t.ms || (t.onAction ? 8000 : 2600));
   }, []);
   useUpdateNudge(toast);
   const { db, loading, loadError, actions } = useLedger(session, toast);
   const openDoc = (kind, d) => setDoc({ kind, doc: d });
-  const go = (v) => { setView(v); setNavOpen(false); window.scrollTo(0, 0); };
+  // "contacts" was the combined page before Customers and Vendors split; a stale link lands on Customers.
+  const go = (v) => { setView(v === "contacts" ? "customers" : v); setNavOpen(false); window.scrollTo(0, 0); };
 
   if (loading) return <div className="boot">Loading your books…</div>;
   if (loadError || !db) return <div className="boot"><div>
@@ -184,7 +188,8 @@ export default function App({ session }) {
         {activeView === "payables" && <PayablesView {...props} />}
         {activeView === "payments" && <PaymentsView {...props} />}
         {activeView === "expenses" && <ExpensesView {...props} />}
-        {activeView === "contacts" && <ContactsView {...props} />}
+        {activeView === "customers" && <ContactsView {...props} type="customer" />}
+        {activeView === "vendors" && <ContactsView {...props} type="vendor" />}
         {activeView === "catalog" && <CatalogView {...props} />}
         {activeView === "settings" && <SettingsView {...props} />}
       </div>

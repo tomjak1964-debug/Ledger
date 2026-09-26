@@ -3,8 +3,12 @@ import { uid, cls } from "../lib/helpers.js";
 import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort } from "../components/ui.jsx";
 import { termsLabel } from "../lib/terms.js";
 
-export default function ContactsView({ db, actions, toast, readOnly }) {
-  const [tab, setTab] = useState("customer");
+// One page per side of the ledger: Customers (under Customers & Sales) and
+// Vendors (under Vendors & Purchases). Both are contacts rows; `type` picks
+// the side and the form shows only the fields that side uses.
+export default function ContactsView({ db, actions, toast, readOnly, type = "customer" }) {
+  const tab = type;
+  const noun = tab === "customer" ? "Customer" : "Vendor";
   const [edit, setEdit] = useState(null);
   const list = db.contacts.filter(c => c.type === tab);
   const save = async (c) => { if (await actions.saveContact(c)) { setEdit(null); toast("Saved"); } };
@@ -13,31 +17,31 @@ export default function ContactsView({ db, actions, toast, readOnly }) {
     const rec = db.contacts.find(c => c.id === id);
     if (await actions.deleteContact(id)) toast("Deleted " + (rec?.name || "contact"), { actionLabel: "Undo", onAction: async () => { if (await actions.restoreRecord("contact", rec)) toast((rec.name || "Contact") + " restored"); } });
   };
-  const startNew = () => setEdit({ id: uid(), type: tab, name: "", contact: "", email: "", phone: "", address: "", code: "", lat: "", lng: "", terms: "", discountPct: 0, discountDays: 0, remitName: "", remitPhone: "", remitEmail: "", remitAddress: "" });
+  const startNew = () => setEdit({ id: uid(), type: tab, name: "", contact: "", email: "", phone: "", address: "", code: "", lat: "", lng: "", terms: "", discountPct: 0, discountDays: 0, remitName: "", remitPhone: "", remitEmail: "", remitAddress: "", taxId: "" });
   const { sorted: contactRows, sort, onSort } = useTableSort(list, {
-    name: c => c.name, contact: c => c.contact || "", email: c => c.email || "", phone: c => c.phone || "",
+    name: c => c.name, contact: c => c.contact || "", email: c => c.email || "", phone: c => c.phone || "", taxId: c => c.taxId || "",
   }, { key: "name", dir: "asc" });
   return <div>
     <div className="toolbar">
-      <div className="pill-tabs">
-        <button className={tab === "customer" ? "on" : ""} onClick={() => setTab("customer")}>Customers</button>
-        <button className={tab === "vendor" ? "on" : ""} onClick={() => setTab("vendor")}>Vendors</button>
-      </div>
-      {!readOnly && <button className="btn primary" style={{ marginLeft: "auto" }} onClick={startNew}><Ico d={ICONS.plus} size={15} />New {tab === "customer" ? "Customer" : "Vendor"}</button>}
+      <p className="subtle" style={{ margin: 0 }}>{tab === "customer" ? "The companies you quote and invoice." : "The vendors and subs you buy from. The Tax ID here feeds the 1099 vendor report."}</p>
+      {!readOnly && <button className="btn primary" style={{ marginLeft: "auto" }} onClick={startNew}><Ico d={ICONS.plus} size={15} />New {noun}</button>}
     </div>
     <div className="card">
       {list.length === 0
         ? <Empty icon={ICONS.contacts} title={"No " + tab + "s yet"} msg={"Add " + (tab === "customer" ? "the companies you quote and invoice." : "vendors and subs you buy from.")}
-          action={!readOnly && <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New {tab === "customer" ? "Customer" : "Vendor"}</button>} />
+          action={!readOnly && <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New {noun}</button>} />
         : <table><thead><tr>
           <SortTh label="Name" col="name" sort={sort} onSort={onSort} />
           <SortTh label="Contact" col="contact" sort={sort} onSort={onSort} />
           <SortTh label="Email" col="email" sort={sort} onSort={onSort} />
-          <SortTh label="Phone" col="phone" sort={sort} onSort={onSort} /><th></th></tr></thead>
+          <SortTh label="Phone" col="phone" sort={sort} onSort={onSort} />
+          {tab === "vendor" && <SortTh label="Tax ID" col="taxId" sort={sort} onSort={onSort} />}
+          <th></th></tr></thead>
           <tbody>{contactRows.map(c => (
             <tr key={c.id}>
               <td style={{ fontWeight: 600 }}>{c.name}</td><td className="subtle">{c.contact || "—"}</td>
               <td className="subtle">{c.email || "—"}</td><td className="mono subtle">{c.phone || "—"}</td>
+              {tab === "vendor" && <td className="mono subtle">{c.taxId || "—"}</td>}
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                 <button className="btn ghost icon" onClick={() => setEdit({ ...c })} title={readOnly ? "View" : "Edit"}><Ico d={ICONS.edit} size={15} /></button>
                 {!readOnly && <button className="btn ghost icon" onClick={() => del(c.id)} title="Delete"><Ico d={ICONS.trash} size={15} /></button>}
@@ -45,7 +49,7 @@ export default function ContactsView({ db, actions, toast, readOnly }) {
             </tr>
           ))}</tbody></table>}
     </div>
-    {edit && <Modal title={edit.name ? "Edit " + (edit.type) : "New " + (edit.type)} onClose={() => setEdit(null)}
+    {edit && <Modal title={(db.contacts.some(c => c.id === edit.id) ? "Edit " : "New ") + noun} onClose={() => setEdit(null)}
       foot={<><button className="btn" onClick={() => setEdit(null)}>Cancel</button><button className="btn primary" onClick={() => save(edit)}>Save</button></>}>
       <div className="row">
         <Field label="Company / Name"><input className="input" value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} /></Field>
@@ -81,6 +85,9 @@ export default function ContactsView({ db, actions, toast, readOnly }) {
             : toast("⚠ Location not available")}>Use current location</button>
         </div></Field>}
       {edit.type === "vendor" && <>
+        <div className="divider"></div>
+        <Field label="Tax ID (EIN or SSN)" hint="Printed on the 1099 vendor report. Kept as typed, dashes and all.">
+          <input className="input mono" style={{ maxWidth: 180 }} value={edit.taxId || ""} onChange={e => setEdit({ ...edit, taxId: e.target.value })} placeholder="12-3456789" /></Field>
         <div className="divider"></div>
         <div className="subtle" style={{ fontWeight: 700, marginBottom: 6 }}>Remittance Contact</div>
         <p className="subtle" style={{ margin: "0 0 8px" }}>Where payment paperwork goes — the A/P desk, not the sales rep. The email here is the default recipient when you email a remittance, and can still be changed on the way out.</p>

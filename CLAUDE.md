@@ -272,7 +272,7 @@ declined/overdue=red.
 **Built:** Dashboard (KPIs, pipeline, overdue callout, recent activity) · Quotes (dynamic
 line-item form, catalog insert, statuses, search, printable) · Quote→SO conversion with PO ·
 Sales Orders · SO→Invoice generation · Invoices (payments, printable) · Receivables (A/R aging) ·
-Payables (vendor bills, A/P aging, payments) · Expenses (by category) · Contacts (customers/vendors) ·
+Payables (vendor bills, A/P aging, payments) · Expenses (by category) · Customers and Vendors (one page each) ·
 Item Catalog · Settings (company, defaults, numbering, JSON export, clear/seed) · print/PDF for
 quotes and invoices.
 
@@ -531,11 +531,22 @@ Reference # field, listed with its vendor, method and subtotal before you record
 prints on the remittance advice and identifies the payment in the register — without one,
 two electronic runs to the same vendor on the same day collapse into a single register row.
 
-**Navigation groups:** the sidebar reads Overview · **Customers & Sales** (Proposals, Quotes, Sales
-Orders, Invoices, Receivables) · **Vendors & Purchases** (Purchase Orders, Payables, Payments, Expenses) ·
-**Work** (Jobs, Tasks, Field, Time Tracking) · Records. The group names are labels in `NAV`
-(`App.jsx`) only; view keys and `NAV_AREA` permissions are unchanged, so moving or renaming a page is a
-one-line edit there.
+**Navigation groups:** the sidebar reads Overview · **Customers & Sales** (Customers, Proposals, Quotes,
+Sales Orders, Invoices, Receivables) · **Vendors & Purchases** (Vendors, Purchase Orders, Payables,
+Payments, Expenses) · **Work** (Jobs, Tasks, Field, Time Tracking, Item Catalog, Machine Rates) ·
+**System** (Settings). The group names are labels in `NAV` (`App.jsx`) only, so moving or renaming a
+page is a one-line edit there. **Customers and Vendors** are the two halves of the old Contacts page
+(`views/Contacts.jsx` with a `type` prop; view keys `customers` / `vendors`, both gated by the
+`contacts` permission area, and `go("contacts")` still lands on Customers). A vendor carries a
+**Tax ID** (`contacts.tax_id`, migration 022) for the 1099 vendor report to come.
+
+**Network failures on a save:** every PostgREST request goes through `ledgerFetch()` in
+`lib/supabaseClient.js` — a request the browser could not send at all ("Failed to fetch", typically
+a PWA window waking from sleep) is sent once more after a short pause, and one the server never
+answers is abandoned after 30 seconds with a message that says so. `fail()` in `store.js` turns
+either into a plain sentence and keeps the toast up long enough to read. If one record keeps timing
+out while everything else saves, something is holding its row: `supabase/data-fixes/stuck_locks.sql`
+lists the blocking sessions and how to end them.
 
 **Remittance PDFs are named** `<Vendor> Remittance - <Reference #>` (`remittanceFileStem()` in
 `src/lib/remittance.js`; the payment date stands in when the transfer has no reference). That is the

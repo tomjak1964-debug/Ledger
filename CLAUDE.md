@@ -380,7 +380,8 @@ suggests the tab title as the file name, so it matches the Word download; `propo
 document number, so an invoice, quote or PO prints as `INV-0042.pdf` — the name `invoicePdf()` already
 gives the download.
 
-**Two kinds of proposal** (`proposals.kind`, migration 021). `machine` is the Venture Global proposal
+**Two kinds of proposal** (`proposals.kind`, migration 021) — on screen a **Fixture Proposal** (`machine`) and a
+**System Proposal** (`controls`); the code and the database keep the original kind names. `machine` is the Venture Global proposal
 exactly as it was — content counts priced off Machine Rates, the quote-chart import, the letter. `controls`
 is the **Controls Estimate**: a job for any customer, built from the standard engineering components as
 hours × rate (`src/calc/estimates.js` — `COMPONENTS`: Hardware Design, Drafting, PLC Program Development,

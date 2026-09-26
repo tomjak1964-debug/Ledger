@@ -128,7 +128,7 @@ export default function ImportLineupModal({ db, actions, toast, onClose, onDone 
       <button className="btn primary" disabled={busy || !taken.length || !customerId} onClick={run}>
         <Ico d={ICONS.plus} size={15} />{busy ? "Working…" : `Create ${taken.length} Estimate${taken.length === 1 ? "" : "s"}`}</button></>}>
 
-    <p className="subtle" style={{ marginTop: 0 }}>One controls estimate per lineup. The counts are read off the lineup's component lists and I/O tally
+    <p className="subtle" style={{ marginTop: 0 }}>One system proposal per lineup. The counts are read off the lineup's component lists and I/O tally
       and priced by the hour model; check them on the review panel and correct anything before creating.</p>
     <div className="row">
       <Field label="Lineup files" hint="PDFs as issued, or .txt — several at once">

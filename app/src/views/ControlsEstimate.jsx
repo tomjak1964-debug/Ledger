@@ -215,7 +215,7 @@ export default function ControlsEstimateEditor({ p, db, cfg, customers, onCancel
   return <div>
     <div className="toolbar">
       <button className="btn ghost" onClick={onCancel}><Ico d={ICONS.back} size={16} />Back</button>
-      <h2 style={{ fontSize: 18, marginLeft: 4 }}>{x._new ? "New Controls Estimate" : "Edit " + x.number + (revLabel(x) ? " " + revLabel(x) : "")}</h2>
+      <h2 style={{ fontSize: 18, marginLeft: 4 }}>{x._new ? "New System Proposal" : "Edit " + x.number + (revLabel(x) ? " " + revLabel(x) : "")}</h2>
       <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
         <button className="btn" onClick={onCancel}>Cancel</button>
         <button className="btn primary" disabled={saving || !x.customerId} onClick={save}><Ico d={ICONS.check} size={15} />{saving ? "Saving…" : "Save Estimate"}</button>

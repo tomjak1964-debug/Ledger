@@ -4,6 +4,9 @@ import { Ico, ICONS, Field, PasswordInput } from "../components/ui.jsx";
 import { AREAS, isAdminRole } from "../lib/permissions.js";
 import { supabase } from "../lib/supabaseClient.js";
 import FormsTab from "../components/FormsEditor.jsx";
+import { proposalConfig } from "../calc/proposals.js";
+import { ROLE_LABELS, HOUR_MODEL_LABELS } from "../calc/estimates.js";
+import { REV, BUILD, checkForUpdate, updateNow } from "../lib/version.js";
 
 export default function SettingsView({ db, actions, toast, session, readOnly, isAdmin }) {
   const [s, setS] = useState(db.settings);
@@ -14,8 +17,10 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
     ["company", "Company"],
     ["data", "Data"],
     ["forms", "Forms"],
+    ["proposals", "Proposals"],
     ...(isAdmin ? [["users", "Users & Access"], ["time", "Time Categories"], ["backups", "Backups"]] : []),
     ["activity", "Activity"],
+    ["revision", "Revision"],
     ["account", "Account"],
   ];
   const set = (k, v) => setS(p => ({ ...p, [k]: v }));
@@ -69,12 +74,13 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
       <div className="card-body">
         <div className="row">
           <Field label="Default Tax Rate (%)"><input className="input mono" type="number" step="any" value={s.taxRate} onChange={e => set("taxRate", Number(e.target.value))} /></Field>
-          <Field label="Payment Terms (days)" hint="Sets invoice & bill due dates"><input className="input mono" type="number" value={s.terms} onChange={e => set("terms", Number(e.target.value))} /></Field>
+          <Field label="Default Payment Terms (days)" hint="Used for any customer or vendor without terms of their own (Contacts)"><input className="input mono" type="number" value={s.terms} onChange={e => set("terms", Number(e.target.value))} /></Field>
         </div>
         <div className="row">
           <Field label="Quote Prefix"><input className="input" value={s.quotePrefix} onChange={e => set("quotePrefix", e.target.value)} /></Field>
           <Field label="SO Prefix"><input className="input" value={s.soPrefix} onChange={e => set("soPrefix", e.target.value)} /></Field>
           <Field label="Invoice Prefix"><input className="input" value={s.invPrefix} onChange={e => set("invPrefix", e.target.value)} /></Field>
+          <Field label="Credit Note Prefix" hint="Credit notes run in their own series"><input className="input" value={s.creditPrefix || "CM"} onChange={e => set("creditPrefix", e.target.value)} /></Field>
           <Field label="Bill Prefix"><input className="input" value={s.billPrefix} onChange={e => set("billPrefix", e.target.value)} /></Field>
         </div>
         <Field label="Default Quote Notes"><textarea className="input" value={s.quoteNotes} onChange={e => set("quoteNotes", e.target.value)} /></Field>
@@ -101,6 +107,7 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
     </div>}
 
     {tab === "forms" && <FormsTab s={s} set={set} readOnly={readOnly} saveAll={saveAll} />}
+    {tab === "proposals" && <ProposalsTab s={s} set={set} readOnly={readOnly} saveAll={saveAll} />}
 
     {tab === "users" && isAdmin && <UsersCard db={db} actions={actions} toast={toast} session={session} />}
     {tab === "time" && isAdmin && <TimeCategoriesCard db={db} actions={actions} toast={toast} />}
@@ -122,15 +129,13 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
       </div>
     </div>}
 
+    {tab === "revision" && <RevisionCard />}
+
     {tab === "account" && <div className="card">
       <div className="card-head"><h3>Account</h3></div>
       <div className="card-body">
         <div className="kv"><dt>Signed in as</dt><dd>{session.user.email}</dd></div>
-        <div className="kv"><dt>App build</dt><dd className="mono">{__BUILD__}</dd></div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
-          <button className="btn" onClick={reloadLatest}>Load Latest Version</button>
-          <span className="subtle">Clears this device's cached copy of the app and reloads. Your data isn't touched.</span>
-        </div>
+        <div className="kv"><dt>App revision</dt><dd className="mono">Rev {REV} <span className="subtle">— see the Revision tab to check for an update</span></dd></div>
         <div className="divider"></div>
         <ChangePassword toast={toast} />
       </div>
@@ -138,17 +143,38 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
   </div>;
 }
 
-// The app is a PWA, so a browser can keep serving the build it cached. This
-// throws that copy away and reloads, which is the difference between "the fix
-// isn't working" and "the fix hasn't arrived". Data lives in Supabase, so
-// nothing here is at risk.
-async function reloadLatest() {
-  try {
-    if ("serviceWorker" in navigator)
-      await Promise.all((await navigator.serviceWorker.getRegistrations()).map(r => r.unregister()));
-    if (window.caches) await Promise.all((await caches.keys()).map(k => caches.delete(k)));
-  } catch { /* private mode / storage blocked — the reload below still helps */ }
-  location.reload();
+// Settings → Revision: what is running, and whether the server has newer.
+// Update Now throws away this device's cached copy and reloads — the way a
+// home-screen install gets the latest build.
+function RevisionCard() {
+  const [check, setCheck] = useState(null);     // null = not checked · { busy } · result of checkForUpdate
+  const run = async () => { setCheck({ busy: true }); setCheck(await checkForUpdate()); };
+  const latest = check?.latest;
+  return <div className="card">
+    <div className="card-head"><h3>Revision</h3></div>
+    <div className="card-body">
+      <div className="kv"><dt>Revision</dt><dd className="mono" style={{ fontWeight: 700, fontSize: 18 }}>Rev {REV}</dd></div>
+      <div className="kv"><dt>Build</dt><dd className="mono">{BUILD}</dd></div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+        <button className="btn" disabled={!!check?.busy} onClick={run}><Ico d={ICONS.refresh} size={15} />{check?.busy ? "Checking…" : "Check for Update"}</button>
+        {check && !check.busy && (check.error
+          ? <span style={{ color: "var(--neg)" }}>Couldn't reach the server — {check.error}</span>
+          : check.updateAvailable
+            ? <span style={{ color: "var(--accent)", fontWeight: 600 }}>Rev {latest.rev} is available <span className="mono subtle" style={{ fontWeight: 400 }}>({latest.build})</span></span>
+            : <span style={{ color: "var(--pos)", fontWeight: 600 }}>You're on the latest — Rev {latest.rev}</span>)}
+      </div>
+      {check?.updateAvailable && <div style={{ marginTop: 12 }}>
+        <button className="btn primary" onClick={updateNow}><Ico d={ICONS.check} size={15} />Update Now</button>
+        <span className="subtle" style={{ marginLeft: 10 }}>Replaces this device's cached copy with Rev {latest.rev} and reloads. Your data isn't touched.</span>
+      </div>}
+      <div className="divider"></div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <button className="btn" onClick={updateNow}>Reload Latest Version</button>
+        <span className="subtle">Same thing without checking first — for a copy that seems stuck.
+          On a device too stuck to get this far, open <span className="mono">/reset</span> on this site instead.</span>
+      </div>
+    </div>
+  </div>;
 }
 
 // Self-service password change for the signed-in user.
@@ -406,4 +432,105 @@ function CreateUserForm({ actions, toast }) {
     </div>
     <p className="subtle" style={{ margin: "8px 0 0" }}>Requires the <span className="mono">admin-create-user</span> edge function to be deployed.</p>
   </div>;
+}
+
+
+// Settings → Proposals: what the machine proposal and the controls estimate
+// read from settings.proposal (calc/proposals.js proposalConfig). The rate
+// card and the hour model price a controls estimate; the letter fields go on
+// both documents.
+function ProposalsTab({ s, set, readOnly, saveAll }) {
+  const cfg = proposalConfig(s);
+  const p = s.proposal || {};
+  const setP = (k, v) => set("proposal", { ...p, [k]: v });
+  const setRate = (k, v) => setP("laborRates", { ...(p.laborRates || {}), [k]: Number(v) || 0 });
+  const setHm = (table, key, v) => setP("hourModel", { ...(p.hourModel || {}), [table]: { ...((p.hourModel || {})[table] || {}), [key]: Number(v) || 0 } });
+  const setHmScalar = (key, v) => setP("hourModel", { ...(p.hourModel || {}), [key]: Number(v) || 0 });
+  const phaseRows = (key, phases, onChange) => <div>
+    {phases.map((ph, i) => <div key={i} className="row" style={{ alignItems: "center", marginBottom: 4 }}>
+      <input className="input" value={ph.label} disabled={readOnly} onChange={e => onChange(phases.map((q, j) => j === i ? { ...q, label: e.target.value } : q))} />
+      <input className="input mono" type="number" min="0" style={{ maxWidth: 90 }} value={ph.pct} disabled={readOnly} onChange={e => onChange(phases.map((q, j) => j === i ? { ...q, pct: Number(e.target.value) || 0 } : q))} />
+      <button className="btn ghost icon" disabled={readOnly} onClick={() => onChange(phases.filter((_, j) => j !== i))}><Ico d={ICONS.trash} size={15} /></button>
+    </div>)}
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <button className="btn sm" disabled={readOnly} onClick={() => onChange([...phases, { key: key + phases.length, label: "", pct: 0 }])}><Ico d={ICONS.plus} size={14} />Add phase</button>
+      <span className="mono subtle">{phases.reduce((t, ph) => t + (Number(ph.pct) || 0), 0)}%</span>
+    </div>
+  </div>;
+  const hmKeys = ["hardwareDesign", "drafting", "plc", "hmi", "docs", "fat", "safetyVal"];
+  const hmLabels = { hardwareDesign: "Hdw Design", drafting: "Drafting", plc: "PLC", hmi: "HMI", docs: "Docs", fat: "FAT", safetyVal: "Safety Val." };
+
+  return <>
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-head"><h3>Proposal Letter</h3></div>
+      <div className="card-body">
+        <div className="row">
+          <Field label="Signer" hint="Prints under Regards,"><input className="input" value={cfg.signer} disabled={readOnly} onChange={e => setP("signer", e.target.value)} /></Field>
+          <Field label="Proposal number prefix"><input className="input mono" value={cfg.propPrefix} disabled={readOnly} onChange={e => setP("propPrefix", e.target.value)} /></Field>
+        </div>
+        <Field label="Standards line" hint="Machine proposals: “System hardware and software design will follow …”"><input className="input" value={cfg.standards} disabled={readOnly} onChange={e => setP("standards", e.target.value)} /></Field>
+        <div className="row">
+          <Field label="Default build / start-up location"><input className="input" value={cfg.location} disabled={readOnly} onChange={e => setP("location", e.target.value)} /></Field>
+          <Field label="PLC platform"><input className="input" value={cfg.plcType} disabled={readOnly} onChange={e => setP("plcType", e.target.value)} /></Field>
+          <Field label="HMI platform"><input className="input" value={cfg.hmiType} disabled={readOnly} onChange={e => setP("hmiType", e.target.value)} /></Field>
+        </div>
+        <div className="row">
+          <Field label="Offer valid for (days)"><input className="input mono" type="number" min="0" value={cfg.validityDays} disabled={readOnly} onChange={e => setP("validityDays", Number(e.target.value) || 0)} /></Field>
+          <Field label="Support rate ($/hr)" hint="Stand-by / production support beyond the scope"><input className="input mono" type="number" min="0" value={cfg.supportRate} disabled={readOnly} onChange={e => setP("supportRate", Number(e.target.value) || 0)} /></Field>
+        </div>
+      </div>
+    </div>
+
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-head"><h3>Labor Rate Card</h3><span className="subtle" style={{ marginLeft: "auto" }}>$/hour — prices a controls estimate</span></div>
+      <div className="card-body"><div className="row">
+        {Object.entries(ROLE_LABELS).map(([k, label]) => <Field key={k} label={label}>
+          <input className="input mono" type="number" min="0" step="any" value={cfg.laborRates[k] ?? 0} disabled={readOnly} onChange={e => setRate(k, e.target.value)} />
+        </Field>)}
+      </div>
+      <div className="row">
+        <Field label="Travel & living ($ per person-day)"><input className="input mono" type="number" min="0" value={cfg.travelPerDay} disabled={readOnly} onChange={e => setP("travelPerDay", Number(e.target.value) || 0)} /></Field>
+        <Field label="Hardware markup (%)"><input className="input mono" type="number" min="0" step="any" value={cfg.hardwareMarkupPct} disabled={readOnly} onChange={e => setP("hardwareMarkupPct", Number(e.target.value) || 0)} /></Field>
+        <Field label="Default contingency (%)"><input className="input mono" type="number" min="0" step="any" value={cfg.contingencyPct} disabled={readOnly} onChange={e => setP("contingencyPct", Number(e.target.value) || 0)} /></Field>
+      </div></div>
+    </div>
+
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-head"><h3>Hour Model</h3><span className="subtle" style={{ marginLeft: "auto" }}>hours a controls estimate suggests per unit of content</span></div>
+      <table><thead><tr><th>Per</th>{hmKeys.map(k => <th key={k} className="num">{hmLabels[k]}</th>)}</tr></thead>
+        <tbody>{Object.entries(HOUR_MODEL_LABELS).map(([table, label]) => <tr key={table}>
+          <td>{label}</td>
+          {hmKeys.map(k => <td key={k} className="num"><input className="input mono" type="number" min="0" step="any" style={{ width: 70 }}
+            value={cfg.hourModel[table]?.[k] ?? ""} placeholder="0" disabled={readOnly} onChange={e => setHm(table, k, e.target.value)} /></td>)}
+        </tr>)}</tbody></table>
+      <div className="card-body"><div className="row">
+        <Field label="Project management (% of engineering hours)"><input className="input mono" type="number" min="0" step="any" value={cfg.hourModel.pmPct} disabled={readOnly} onChange={e => setHmScalar("pmPct", e.target.value)} /></Field>
+        <Field label="Hours in a start-up day"><input className="input mono" type="number" min="0" step="any" value={cfg.hourModel.hoursPerDay} disabled={readOnly} onChange={e => setHmScalar("hoursPerDay", e.target.value)} /></Field>
+      </div></div>
+    </div>
+
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-head"><h3>Invoicing Schedules</h3><span className="subtle" style={{ marginLeft: "auto" }}>the splits a new proposal starts with</span></div>
+      <div className="card-body">
+        <div className="row">
+          <div style={{ flex: 1, minWidth: 260 }}><div className="subtle" style={{ fontWeight: 700, marginBottom: 6 }}>Machine proposal</div>
+            {phaseRows("m", cfg.phases, v => setP("phases", v))}</div>
+          <div style={{ flex: 1, minWidth: 260 }}><div className="subtle" style={{ fontWeight: 700, marginBottom: 6 }}>Controls — engineering only</div>
+            {phaseRows("e", cfg.controlsPhases.engineering, v => setP("controlsPhases", { ...cfg.controlsPhases, engineering: v }))}</div>
+          <div style={{ flex: 1, minWidth: 260 }}><div className="subtle" style={{ fontWeight: 700, marginBottom: 6 }}>Controls — with hardware</div>
+            {phaseRows("h", cfg.controlsPhases.hardware, v => setP("controlsPhases", { ...cfg.controlsPhases, hardware: v }))}</div>
+        </div>
+      </div>
+    </div>
+
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-head"><h3>Standard Assumptions and Exclusions</h3><span className="subtle" style={{ marginLeft: "auto" }}>one per line — a new controls estimate starts with these</span></div>
+      <div className="card-body"><div className="row">
+        <Field label="Assumptions and clarifications"><textarea className="input" rows={7} value={cfg.assumptions.join("\n")} disabled={readOnly} onChange={e => setP("assumptions", e.target.value.split("\n"))} /></Field>
+        <Field label="Exclusions"><textarea className="input" rows={7} value={cfg.exclusions.join("\n")} disabled={readOnly} onChange={e => setP("exclusions", e.target.value.split("\n"))} /></Field>
+      </div></div>
+    </div>
+
+    {!readOnly && <button className="btn primary" onClick={saveAll}><Ico d={ICONS.check} size={15} />Save Proposal Settings</button>}
+  </>;
 }

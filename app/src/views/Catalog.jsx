@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { uid, money } from "../lib/helpers.js";
-import { Ico, ICONS, Empty, Modal, Field } from "../components/ui.jsx";
+import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort } from "../components/ui.jsx";
 
 export default function CatalogView({ db, actions, toast, readOnly }) {
   const [edit, setEdit] = useState(null);
   const save = async (c) => { if (await actions.saveCatalogItem(c)) { setEdit(null); toast("Saved"); } };
   const del = async (id) => { if (await actions.deleteCatalogItem(id)) toast("Removed"); };
+  const { sorted: items, sort, onSort } = useTableSort(db.catalog, {
+    desc: c => c.desc || "", unit: c => c.unit || "", price: c => Number(c.unitPrice) || 0,
+  }, { key: "desc", dir: "asc" });
   return <div>
     <div className="toolbar">
       <p className="subtle" style={{ margin: 0 }}>Reusable line items you can drop into any quote.</p>
@@ -14,8 +17,12 @@ export default function CatalogView({ db, actions, toast, readOnly }) {
     <div className="card">
       {db.catalog.length === 0
         ? <Empty icon={ICONS.catalog} title="Empty catalog" msg="Save the services and parts you quote repeatedly with default pricing." />
-        : <table><thead><tr><th>Description</th><th>Unit</th><th className="num">Unit Price</th><th></th></tr></thead>
-          <tbody>{db.catalog.map(c => (
+        : <table><thead><tr>
+          <SortTh label="Description" col="desc" sort={sort} onSort={onSort} />
+          <SortTh label="Unit" col="unit" sort={sort} onSort={onSort} />
+          <SortTh label="Unit Price" col="price" sort={sort} onSort={onSort} num />
+          <th></th></tr></thead>
+          <tbody>{items.map(c => (
             <tr key={c.id}>
               <td>{c.desc}</td><td className="subtle">{c.unit}</td><td className="num">{money(c.unitPrice)}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>

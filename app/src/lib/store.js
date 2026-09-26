@@ -11,10 +11,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabaseClient.js";
 import * as A from "./adapters.js";
-import { uid, todayISO, addDays, pad4 } from "./helpers.js";
+import { dueDateFor } from "./terms.js";
+import { CREDIT_METHOD } from "./credits.js";
+import { uid, todayISO, addDays, pad4, money } from "./helpers.js";
 import { defaultSettings, sampleData } from "./seed.js";
 import { proposalConfig, phaseAmount } from "../calc/proposals.js";
-import { round2, lineTotals } from "../calc/ledger.js";
+import { round2, lineTotals, balance } from "../calc/ledger.js";
 import { checkNumberTaken, isCheckPayment, normRef } from "./checks.js";
 
 const SEQ_TYPES = ["quote", "so", "invoice", "bill"];
@@ -117,12 +119,19 @@ export function useLedger(session, onError) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const dbRef = useRef(null);
+  // dbRef is the source of truth, not a mirror of React's state: an action
+  // writes it synchronously and then reads it back in the same tick. Assigning
+  // it inside the state updater used to leave it one update behind — React runs
+  // the updater when it processes the update, not when setDb is called — so a
+  // follow-up like reconcileJobTask() saw the state from before its own write
+  // and left the job's task open. Applying the updater here keeps every
+  // dbRef.current read current, which matters most in the batch loops (billing
+  // several jobs, applying credits, a pay run) where nothing yields to React
+  // between iterations.
   const setDb = useCallback((updater) => {
-    setDbState(prev => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      dbRef.current = next;
-      return next;
-    });
+    const next = typeof updater === "function" ? updater(dbRef.current) : updater;
+    dbRef.current = next;
+    setDbState(next);
   }, []);
 
   const reload = useCallback(async () => {
@@ -137,12 +146,14 @@ export function useLedger(session, onError) {
         raw = await fetchAll();
       }
       setDb(assemble(raw));
-      // Ensure jobs with ready, un-invoiced lines have an open invoice task —
-      // covers 'ready' set outside the app (e.g. a bulk data import).
+      // Put every job's invoice task back in step with its lines, both ways:
+      // open one where lines are ready and un-invoiced (covers 'ready' set
+      // outside the app, e.g. a bulk import) and close one whose job has
+      // nothing left to bill (covers tasks stranded open by an earlier bug).
       for (const so of (dbRef.current?.salesOrders || [])) {
         const hasReady = (so.lineItems || []).some(li => li.ready && !li.invoiced);
         const hasTask = (dbRef.current?.tasks || []).some(t => t.salesOrderId === so.id && t.type === "create_invoice" && t.status === "open");
-        if (hasReady && !hasTask) await reconcileJobTask(so.id);
+        if (hasReady !== hasTask) await reconcileJobTask(so.id);
       }
     } catch (e) {
       setLoadError(e.message || String(e));
@@ -317,7 +328,7 @@ export function useLedger(session, onError) {
         const inv = {
           id: uid(), number,
           salesOrderId: so.id, quoteId: so.quoteId, customerId: so.customerId, poNumber: so.poNumber,
-          date, dueDate: addDays(date, d0.settings.terms),
+          date, dueDate: dueDateFor(d0, so.customerId, date),
           lineItems: [
             ...toBill.map(li => ({ id: uid(), desc: li.desc, qty: li.qty, unit: li.unit, unitPrice: li.unitPrice })),
             ...timeLines,
@@ -427,10 +438,15 @@ export function useLedger(session, onError) {
         return true;
       } catch (e) { return fail(e); }
     },
-    async markInvoicePrinted(id) {
+    // Mark invoices printed — or not — without printing them: one that went
+    // out by email, a backlog from before the flag existed, a tick made by
+    // mistake. One id or a list. Printing calls this too, with the one printed.
+    async markInvoicePrinted(ids, printed = true) {
       try {
-        th(await supabase.from("invoices").update({ printed: true }).eq("id", id));
-        setDb(d => ({ ...d, invoices: d.invoices.map(i => i.id === id ? { ...i, printed: true } : i) }));
+        const list = Array.isArray(ids) ? ids : [ids];
+        if (!list.length) return true;
+        th(await supabase.from("invoices").update({ printed }).in("id", list));
+        setDb(d => ({ ...d, invoices: d.invoices.map(i => list.includes(i.id) ? { ...i, printed } : i) }));
         return true;
       } catch (e) { return fail(e); }
     },
@@ -530,7 +546,11 @@ export function useLedger(session, onError) {
         // re-generating a number for one already issued would burn a sequence number
         // and rename a document the customer has already seen.
         if (isNew && isAutoNumber(manual)) {
-          inv.number = await claimInvoiceNumber(inv.customerId, inv.date);
+          // Credit notes are numbered in their own series (CM-0001); invoices
+          // keep the customer-code-and-date scheme.
+          inv.number = inv.kind === "credit"
+            ? (dbRef.current.settings.creditPrefix || "CM") + "-" + pad4(await claimNumber("credit"))
+            : await claimInvoiceNumber(inv.customerId, inv.date);
         } else {
           if (!manual) throw new Error("An invoice number is required.");
           if (dbRef.current.invoices.some(x => x.id !== inv.id && (x.number || "").trim().toLowerCase() === manual.toLowerCase()))
@@ -685,6 +705,46 @@ export function useLedger(session, onError) {
       } catch (e) { return fail(e); }
     },
 
+    // Apply an open credit to one or more of that customer's invoices. No cash
+    // moves: every allocation writes a pair — +amount on the invoice, −amount on
+    // the credit — so the invoice settles, the credit is used up, and the two
+    // cancel out in every cash figure. They share a date, method and reference,
+    // so the register shows them as one entry worth nothing, expandable to the
+    // documents it moved between.
+    async applyCredit(creditId, allocations, meta = {}) {
+      try {
+        const d0 = dbRef.current;
+        const credit = d0.invoices.find(i => i.id === creditId);
+        if (!credit) throw new Error("That credit is no longer on file.");
+        const available = round2(-balance(credit));
+        if (available <= 0.005) throw new Error(`${credit.number} has nothing left to apply.`);
+        const rows = (allocations || [])
+          .map(a => ({ invoiceId: a.invoiceId, amount: round2(Number(a.amount) || 0) }))
+          .filter(a => a.amount > 0.005);
+        if (!rows.length) throw new Error("Enter an amount to apply.");
+        const total = round2(rows.reduce((s, a) => s + a.amount, 0));
+        if (total > available + 0.005)
+          throw new Error(`That applies ${money(total)}, but ${credit.number} only has ${money(available)} left.`);
+        for (const a of rows) {
+          const inv = d0.invoices.find(i => i.id === a.invoiceId);
+          if (!inv) throw new Error("That invoice is no longer on file.");
+          if (inv.id === credit.id) throw new Error("A credit can't be applied to itself.");
+          if (inv.customerId !== credit.customerId)
+            throw new Error(`${inv.number} belongs to a different customer than ${credit.number}.`);
+          if (a.amount > round2(balance(inv)) + 0.005)
+            throw new Error(`${money(a.amount)} is more than ${inv.number} still owes (${money(balance(inv))}).`);
+        }
+        const date = meta.date || todayISO();
+        const ref = meta.ref || credit.number;
+        const entries = rows.flatMap(a => [
+          { parentType: "invoice", parentId: a.invoiceId, payment: { id: uid(), amount: a.amount, discount: 0, date, method: CREDIT_METHOD, ref } },
+          { parentType: "invoice", parentId: credit.id, payment: { id: uid(), amount: -a.amount, discount: 0, date, method: CREDIT_METHOD, ref } },
+        ]);
+        const written = await actions.recordPayments(entries);
+        return written ? { applied: total, count: rows.length } : false;
+      } catch (e) { return fail(e); }
+    },
+
     // Edit a whole receipt or vendor payment — not just one line of it. The
     // payment keeps its identity (same date / method / reference on every line,
     // so it stays one group in the register); documents added to it get new
@@ -797,7 +857,7 @@ export function useLedger(session, onError) {
         if (d0.bills.some(b => b.purchaseOrderId === po.id)) throw new Error(`A bill was already created from ${po.number}.`);
         const bill = {
           id: uid(), number: (d0.settings.billPrefix || "BILL") + "-" + pad4(await claimNumber("bill")),
-          vendorId: po.vendorId, date: todayISO(), dueDate: addDays(todayISO(), d0.settings.terms),
+          vendorId: po.vendorId, date: todayISO(), dueDate: dueDateFor(d0, po.vendorId, todayISO()),
           amount: round2(lineTotals(po.lineItems, po.taxRate).total), ref: po.number, notes: `From PO ${po.number}`,
           salesOrderId: po.salesOrderId || "", purchaseOrderId: po.id, payments: [],
         };
@@ -1006,12 +1066,19 @@ export function useLedger(session, onError) {
         return true;
       } catch (e) { return fail(e); }
     },
+    // Add rate cards, skipping any name already set up — so it both seeds an
+    // empty list and tops it up with a type a quote chart names. Returns the
+    // rows actually added.
     async seedMachineRates(rates) {
       try {
-        const rows = rates.map((r, i) => ({ ...r, id: uid(), sort: i }));
+        const key = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        const have = new Set(dbRef.current.machineTypes.map(m => key(m.name)));
+        const start = dbRef.current.machineTypes.reduce((n, m) => Math.max(n, Number(m.sort) || 0), -1) + 1;
+        const rows = rates.filter(r => !have.has(key(r.name))).map((r, i) => ({ ...r, id: uid(), sort: start + i }));
+        if (!rows.length) return [];
         th(await supabase.from("machine_types").insert(rows.map(A.machineTypeToRow)));
         setDb(d => ({ ...d, machineTypes: [...d.machineTypes, ...rows] }));
-        return true;
+        return rows;
       } catch (e) { return fail(e); }
     },
     async saveContactPerson(p) {
@@ -1033,8 +1100,8 @@ export function useLedger(session, onError) {
     async saveProposal(p) {
       try {
         const isNew = !!p._new;
-        const prop = { ...p }; delete prop._new;
-        if (isNew) {
+        const prop = { ...p, kind: p.kind || "machine", rev: Number(p.rev) || 0 }; delete prop._new;
+        if (isNew && !prop.number?.startsWith(proposalConfig(dbRef.current.settings).propPrefix)) {
           const cfg = proposalConfig(dbRef.current.settings);
           const ymd = (prop.date || todayISO()).slice(2).replace(/-/g, "");
           const n = await claimNumber("prop:" + ymd);
@@ -1065,13 +1132,22 @@ export function useLedger(session, onError) {
     async winProposal(p, po) {
       try {
         const d0 = dbRef.current;
+        // A controls estimate lands on the SO as one line per group it priced,
+        // so the job reads the way it was sold; a machine proposal is one lot.
+        const pr = p.pricing || {};
+        const groups = p.kind === "controls" ? [
+          ["Controls Engineering", pr.engineeringTotal], ["Control Hardware", pr.hardwareTotal],
+          ["Field Services — Start-Up / Debug", pr.fieldTotal], ["Contingency", pr.contingency],
+        ].filter(([, amt]) => Number(amt) > 0) : [];
         const so = {
           id: uid(), number: d0.settings.soPrefix + "-" + pad4(await claimNumber("so")),
           quoteId: "", customerId: p.customerId, poNumber: po, date: todayISO(), status: "open",
-          taxRate: 0, lineItems: [{
-            id: uid(), desc: `Turnkey Controls — ${p.description} (${p.number})`,
-            qty: 1, unit: "lot", unitPrice: Number(p.pricing?.total) || 0,
-          }],
+          taxRate: 0, lineItems: groups.length
+            ? groups.map(([label, amt]) => ({ id: uid(), desc: `${label} — ${p.description} (${p.number})`, qty: 1, unit: "lot", unitPrice: Number(amt) || 0 }))
+            : [{
+              id: uid(), desc: `Turnkey Controls — ${p.description} (${p.number})`,
+              qty: 1, unit: "lot", unitPrice: Number(p.pricing?.total) || 0,
+            }],
         };
         th(await supabase.from("sales_orders").insert(A.soToRow(so)));
         await replaceLineItems("sales_order_line_items", "sales_order_id", so.id, so.lineItems, A.soLineItemsToRows);
@@ -1082,6 +1158,20 @@ export function useLedger(session, onError) {
           proposals: d.proposals.map(x => x.id === p.id ? { ...x, status: "won", poNumber: po, salesOrderId: so.id } : x),
         }));
         return so;
+      } catch (e) { return fail(e); }
+    },
+    // A re-quote: the same number at rev + 1 as a fresh draft, and the row it
+    // replaces marked superseded with everything it had left intact.
+    async reviseProposal(p) {
+      try {
+        const next = {
+          ...p, id: uid(), rev: (Number(p.rev) || 0) + 1, status: "draft", date: todayISO(),
+          poNumber: "", salesOrderId: "", phases: (p.phases || []).map(({ invoiceId, ...ph }) => ph),
+        };
+        th(await supabase.from("proposals").insert(A.proposalToRow(next)));
+        th(await supabase.from("proposals").update({ status: "superseded" }).eq("id", p.id));
+        setDb(d => ({ ...d, proposals: [...d.proposals.map(x => x.id === p.id ? { ...x, status: "superseded" } : x), next] }));
+        return next;
       } catch (e) { return fail(e); }
     },
     // Bill one or more phases of a won proposal on a single invoice.
@@ -1095,7 +1185,7 @@ export function useLedger(session, onError) {
           id: uid(), number: await claimInvoiceNumber(p.customerId, todayISO()),
           salesOrderId: p.salesOrderId || "", quoteId: "", customerId: p.customerId,
           contactPersonId: p.contactPersonId || "", proposalId: p.id, poNumber: p.poNumber,
-          date: todayISO(), dueDate: addDays(todayISO(), d0.settings.terms),
+          date: todayISO(), dueDate: dueDateFor(d0, p.customerId, todayISO()),
           taxRate: 0, notes: "", payments: [],
           // Billed phases carry qty 1 + amount; remaining unbilled phases print
           // as qty-0 reference lines (Sage-style, per the Invoice Example PDF)

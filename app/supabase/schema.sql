@@ -50,6 +50,11 @@ create table if not exists contacts (
   email       text not null default '',
   phone       text not null default '',
   address     text not null default '',   -- multiline, \n separated
+  -- payment terms (migration 019). terms null = use the company default;
+  -- discount_pct/days are the early-payment term ("2/10 Net 30")
+  terms         int,
+  discount_pct  numeric(6,3) not null default 0,
+  discount_days int not null default 0,
   -- vendor remittance (A/P) contact — where payment paperwork and checks go
   remit_name    text not null default '',
   remit_phone   text not null default '',
@@ -133,6 +138,7 @@ create table if not exists invoices (
   id             uuid primary key default gen_random_uuid(),
   user_id        uuid not null default auth.uid(),
   number         text not null,
+  kind           text not null default 'invoice' check (kind in ('invoice','credit')),  -- credit notes are A/R documents too (migration 020)
   sales_order_id uuid,
   quote_id       uuid,
   customer_id    uuid,

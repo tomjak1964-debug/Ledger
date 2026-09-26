@@ -251,6 +251,15 @@ declined/overdue=red.
 - New list module = a `card` with a `table`; empty state uses `<Empty>`; row actions are
   `btn ghost icon` buttons on the right. Editors are either an inline editor (like `QuoteEditor`)
   or a `<Modal>` (like bills/expenses/contacts).
+- **Every list sorts on every column heading.** Build the table with `useTableSort` +
+  `<SortTh>` (`src/components/ui.jsx`): one accessor per column, `num` on money and counts,
+  and map the rows the hook returns rather than the raw array. This is not optional on a new
+  list page — a column a user can see is a column they can sort by. Only three kinds of table
+  are exempt: line-item **editors** (order is the document's own), the **dashboard** (ordered
+  by what it is reporting), and a **customer statement** (a running balance is chronological by
+  definition). Where the view exports CSV, export the sorted rows so the file matches the
+  screen. Hooks go above any early `return`, and a hook can't live inside a conditional block —
+  hoist the rows it sorts (see `TimeTracking.jsx`).
 - Every mutation goes through `setDb(d => ...)`. Show a `toast("…")` on success.
 - Copy style: active voice, sentence case, name things by what the user does. Buttons say exactly
   what happens ("Generate Invoice", "Record Payment").
@@ -281,7 +290,7 @@ delete/correction · **check register** (`src/lib/checks.js` — next check numb
 overridable, duplicate numbers refused, voiding a check reopens its bills and frees the number) ·
 **guided payment flow** (record → print → confirm the check printed → email/save → every dialog
 closes; a misprinted check is reversed in one click) · **payments & receipts register**
-(`src/components/PaymentRegister.jsx`, shown as Spend → Payments and Receivables → Receipts:
+(`src/components/PaymentRegister.jsx`, shown as Vendors & Purchases → Payments and Receivables → Receipts:
 search, date range, edit, delete, void a whole check; both sides list one row per
 check/transfer, expandable to the invoices or bills it covered — `receiptGroups()` in
 `src/calc/reports.js` does the grouping) · **whole receipts and payments are editable**
@@ -295,6 +304,201 @@ date, method and reference, and both documents re-settle themselves · vendor **
 number / email / remit-to address, migration 017 — the email default when sending a remittance,
 and the mail-to block on printed checks and remittances) · installable PWA (manifest + icons +
 service worker; Supabase never cached).
+
+**Issuing a credit note** (`src/components/CreditNoteModal.jsx`, migration 020): a credit note is an
+A/R document of its own — **New Credit Note** in Receivables writes one, and the pencil on a credit row
+edits it. Amounts are typed **positive** (what you are crediting) and stored negative, so the document
+carries a negative total and lands in Receivables as an open credit; the due date is the credit date,
+because a credit is not owed. Credit notes number from their own series — `settings.creditPrefix`
+(default `CM`) plus `next_doc_number('credit')`, so they never consume an invoice number. What makes a
+document a credit is now `invoices.kind` (`'invoice'` | `'credit'`, migration 020 — the migration
+backfills existing negative invoices); `isCreditMemo()` still falls back to the negative-total rule for
+anything typed before the column existed. Editing refuses to cut a credit below what has already been
+applied to invoices. Printed and PDF'd it reads **CREDIT MEMO** — positive amounts, "Credit Note #",
+"Credit memo" in the terms box, and Total Credit / Applied to invoices / **CREDIT REMAINING**.
+
+**Applying a credit** (`src/lib/credits.js`, `src/components/ApplyCreditModal.jsx`, `applyCredit()` in
+`store.js`): a credit note carries a negative total, so it already sits in Receivables with a
+negative balance. **Apply Credit** — on the credit's own row, or on any open invoice for a customer who
+has one — opens a dialog listing that customer's open invoices oldest first, with **Oldest first** to
+spend the credit down the list in a click. Nothing is applied until an amount is typed, what is left
+stays on the credit, and the dialog refuses to apply more than an invoice owes (the precise complaint)
+or more than the credit holds.
+
+**No cash moves.** Each allocation writes a *pair* of payment rows with method `Credit` and the credit's
+number as the reference: **+amount on the invoice, −amount on the credit**. The invoice settles against
+`settled()` and the credit is consumed by its own negative total, while `paid()` — which is cash (§6) —
+nets to zero across the pair, so the registers and the cash-basis P&L are untouched. The pair shares a
+date, method and reference, so the register groups it as one entry worth nothing, expandable to the two
+documents; voiding that group unwinds both sides at once.
+
+**Invoicing several jobs at once:** Tasks tick-selects the open *create invoice* tasks and bills them
+two ways (`src/views/Tasks.jsx`). **Create N Invoices** shows what each job would bill — lines, approved
+unbilled time (a tick turns time off for the whole run), and what the invoice comes to — then writes them
+sequentially, so each claims its own number; a job the store refuses is reported and its task stays open
+rather than stopping the run. **Review One by One** opens the normal `InvoiceFromSOModal` per job with a
+`queue` prop: it shows *2 of 5*, Cancel reads **Skip**, and **Stop** ends the run. Either way the run ends
+on a list of what was created, with a Print button per invoice. The dialog closes itself after a
+successful generate, so the queue advances in `onClose` and nowhere else — advancing in `onGenerate` too
+skips a job.
+
+**`dbRef.current` is the state, not a copy of it.** `setDb` applies the updater against the ref and
+writes it before calling `setState`, because an action writes state and then reads it back in the same
+tick — `reconcileJobTask()` right after `generateInvoice()`'s write, for one. Assigning the ref inside
+the React updater left it an update behind (React runs the updater when it processes the update, not
+when `setDb` is called), which a single action got away with and a batch did not: a run that billed
+three jobs wrote all three invoices and left two of the three tasks open. Anything that loops over
+documents — billing several jobs, applying credits, a pay run — depends on this. `reload()` also
+reconciles job tasks **both ways** now, so a task stranded open by that bug closes itself on the next
+load.
+
+**Importing a quote chart** (`src/lib/quoteChart.js`, `src/components/ImportProposalsModal.jsx`): the
+shop keeps one row per machine in a quote chart, and **Import Quote Chart** in Proposals turns that
+chart into proposals — an `.xlsx` straight out of Excel, a `.csv`, or rows pasted from a sheet. The
+`.xlsx` reader is the trick `tools/reconcile.mjs` uses (a zip of XML, inflated with
+`DecompressionStream`), so there is no library to add. Columns are matched by heading, so column order
+doesn't matter and the chart's working columns — the weighted point count and its division — are
+ignored, because `ioBlocks()` recomputes them; the chart's I/O block figure only rides along as an
+override when it disagrees with the formula. There is deliberately no bare `quote` heading in the
+column map: a chart with both *QUOTE NUMBER* and an empty *QUOTE* column would otherwise blank the
+number. The preview prices every row, pre-matches the machine type by name (*Sonuc* reads as *Sonic*),
+and gives any row it can't match a dropdown — rates are never invented. Where the chart names a type
+from the TMJ rate card that isn't set up yet, one button adds it: `seedMachineRates()` skips names
+already present, so it both seeds an empty list and tops one up. Proposals are written one at a time so
+each claims its own number; the chart's quote number and end user go in the notes.
+
+**A printable document overlay belongs outside `.main`.** Printing hides the app behind the document
+with `body.doc-open .main{display:none}` (`styles.css`), which needs both halves: the overlay adds
+`doc-open` to the body, and it sits *outside* `.main` so that rule doesn't hide it too. `DocumentView`
+is rendered by `App` as a sibling of `.main`; `ProposalDoc` lives inside `ProposalsView`, so it
+portals itself to `document.body` (`createPortal`) and sets the same flag. Rendered in place it did
+neither, and a printed proposal came out with the proposals list on the sheet ahead of it. The print
+rules also drop `.app`'s `min-height:100vh` while a document is open: with its children hidden and the
+document portalled outside it, that empty container printed as a blank first sheet. While a proposal is open, `document.title` is the file name — Print / Save PDF
+suggests the tab title as the file name, so it matches the Word download; `proposalFileStem()` in
+`src/lib/proposalDocx.js` is the one place that name is built. `DocumentView` does the same with the
+document number, so an invoice, quote or PO prints as `INV-0042.pdf` — the name `invoicePdf()` already
+gives the download.
+
+**Two kinds of proposal** (`proposals.kind`, migration 021). `machine` is the Venture Global proposal
+exactly as it was — content counts priced off Machine Rates, the quote-chart import, the letter. `controls`
+is the **Controls Estimate**: a job for any customer, built from the standard engineering components as
+hours × rate (`src/calc/estimates.js` — `COMPONENTS`: Hardware Design, Drafting, PLC Program Development,
+HMI Development, Start-Up/Debug, and optional Project Management, Documentation & Training, FAT, Safety
+Validation), with hardware **optional** (a toggle; off, the document has no hardware section at all) and
+the field work — trips × days × people — as Field Services with travel & living. An hour model suggests
+hours from the job's content (I/O, drives, servo axes, stations, steps, screens, alarms, recipes, safety
+system, vision, data collection); the estimator overrides any of them and the override prices. Standard
+control elements (`STANDARD_ELEMENTS`) quick-add hardware lines with a description and a typical qty —
+**never a price**. The editor, the document content and the on-screen body live in
+`src/views/ControlsEstimate.jsx`; the Word export branches on `kind` in `proposalDocx.js`; `Proposals.jsx`
+routes on `kind` everywhere else. The document carries the sections a general quote needs — header block
+with number/rev/valid-through, Scope of Work per component with deliverables, Assumptions & Clarifications,
+Exclusions, Pricing by group, Options priced separately, Schedule, Invoicing Schedule, Terms (payment
+terms from the contact, validity, support rate) and an Acceptance block. **Everything it reads is in
+Settings → Proposals** (`settings.proposal`, read through `proposalConfig()`): the letter fields that used
+to be code-only defaults, the labor rate card, the hour model, the three invoicing splits (machine,
+controls engineering-only, controls with hardware — toggling hardware swaps the split while it is still a
+stock one), and the standard assumptions/exclusions. Hour and rate defaults are trade-standard starting
+points, not the shop's own numbers. **Revisions:** New Revision writes the same number at `rev + 1` as a
+fresh draft and marks the row it replaces `superseded` (a fifth status); the rev prints as *Rev A* on the
+document and in the file name. A won controls estimate lands on the sales order as one line per group it
+priced (Engineering / Hardware / Field Services / Contingency) rather than one lot.
+
+**Estimating from a lineup** (`src/lib/lineup.js`, `src/components/ImportLineupModal.jsx`): an integrator's
+*Electrical Engineering Line-up* — one document per fixture with a header (job #, end user, fixture, PLC, HMI,
+runoff), the sequence of operations, the components on the machine with `(xN)` quantities, the valve manifold
+and sensors, and an I/O tally — is what a controls estimate is priced from. **Import Lineup** in Proposals
+reads the PDFs (pdf.js, loaded on demand; text can be pasted instead) and `parseLineup()` turns each into the
+counts the hour model reads: the header fields, the I/O totals, and one keyword rule per device
+(`RULES`: cylinders, vacuum zones, sensors, operator stations, HMIs, VFDs, servo/electric actuators, robots,
+torque controllers and P-sets, vision systems, dispensing systems, scanners, remote I/O blocks, networked
+devices, E-stops, light curtains, other safety devices, analog/IO-Link points), plus stations, sequence steps
+and part types. Devices are counted in the component lists only — the per-station tooling detail and the I/O
+drawings that follow repeat them — and a sub-item (`o (x1) VS smart camera – Part #…`) is the item above it
+in more detail, so it is skipped except under a valve or a torque tool. The parser is keyword-driven on
+purpose: `(x31) Part present sensor` is 31 sensors whoever wrote the lineup, so another customer's format
+parses too, and the review panel shows every count with the line it came from so the estimator corrects it
+before anything is written. The customer is guessed from the name on the page; a start-up at a customer in
+the same state as the shop is local, so travel & living is off unless the estimator turns it on.
+
+The estimate's **Job Content** (`calc/estimates.js`) now has the lineup's vocabulary: `DEVICE_FIELDS` each carry
+the discrete I/O they imply (`derivedIo()` — a clamp is two switches and two solenoids), so the I/O field can
+be left blank and derived, and the hour model prices each device *beyond* its points (`perCylinder`,
+`perRobot`, `perTorque`… in Settings → Proposals) with the points still priced per I/O. `reusePct` takes a
+share off Hardware Design / Drafting / PLC / HMI when the lineup names a reference job; `travelIncluded:
+false` drops Travel & Living. `specs.lineup` holds the header (`LINEUP_FIELDS`) and prints on the document
+and in the Word export as **Basis of Estimate**, with `contentSummary()` ("197 discrete I/O · 23 pneumatic
+cylinders · 1 robot…") under it, so the customer sees what the price was built on. Estimates saved before
+this keep working: a missing device count is zero, a `vision: true` tick still prices as one vision system.
+
+**Payment terms live on the contact** (`src/lib/terms.js`, migration 019). Each customer and vendor
+carries `terms` (days), `discountPct` and `discountDays`; `terms` blank means "use the company default"
+in Settings, so nothing changes for a contact nobody has set up. `termsLabel()` renders them the way the
+trade writes them — *2/10 Net 30*, *Net 30*, *Due on receipt* — and that string prints in the invoice's
+Payment Terms box, on screen and in the PDF. **Re-dating a document re-dates it:** changing the date or
+the party on a bill or an invoice recomputes the due date through `dueDateFor()`, and so does every
+place the store creates one (SO → invoice, PO → bill, proposal phases). A due date typed by hand stays
+put until the date or the party changes again.
+
+**Early-payment discounts are offered, never taken automatically.** `discountOffer(db, doc, partyId,
+onDate)` answers what the term is worth *on that payment date* — a percentage of the document total,
+capped at what is still outstanding — and says `expired` once the window has closed. The Pay / Receive
+dialog shows the offer with a **Take $X** button and withdraws it if you move the payment date past the
+window; the Pay Bills run offers **Take N available discounts** plus a per-row button. Taking one fills
+the Discount column, which drops the cash by the same amount — `settled = paid + discounts` still closes
+the document (§6).
+
+**Line-item descriptions are multi-line.** Enter starts a new line in the description field
+(`AutoTextarea` in `src/components/ui.jsx`, used by `LineItemsEditor` and the ad-hoc lines in
+`InvoiceFromSOModal`); the field grows as you type and the breaks print. Displays that show a
+description use `white-space: pre-line`. " — " used to be the way to fake a second line, so it still
+breaks — but only in a description that has no real line break of its own, leaving em dashes alone
+in anything typed since.
+
+**Invoices print as full pages.** `src/lib/invoiceLayout.js` owns pagination — description wrapping
+(52 chars, the Description column at 9pt), how many lines a page holds (13 single-line rows on the
+page carrying the totals, 19 on a "continued" page) and the split into pages. Both renderers read it,
+so the printable invoice (`DocumentView`) and the PDF (`invoicePdf`, emailed and downloaded) break in
+the same places. Each page carries the full frame — company block, Bill To / Ship To, info grid,
+"Page: n of m" — the items box is ruled down to the bottom however few lines it holds, and the totals
+box sits on the last page only. Changing the frame's height means re-measuring `PAGE_LINES` /
+`PAGE_LINES_FULL` against the printable invoice, which is the tighter of the two renderers.
+
+**Public landing page:** `/` is a static page (`app/index.html`) that says whose site this is and what
+the software does; the app itself lives at **`/app`** (`app/app/index.html`, the Vite entry that loads
+`src/main.jsx`). Two reputation services blocked the domain — a bare credential form on a new domain
+with "ledger" in the name reads as wallet phishing — so the root now presents a real business page with
+no login form on it, and the sign-in page sits one click away. The build is a Vite multi-page build
+(`build.rollupOptions.input` in `vite.config.js`); `vercel.json` and `netlify.toml` route `/app` and
+`/app/*` to the app shell and everything else to the landing page. The service worker's
+`navigateFallback` is `/app/index.html` and its denylist covers `/` and `/reset`, so the app shell never
+answers for the landing page. The PWA's `start_url` is `/app`; installs made before this keep
+`start_url: '/'`, so the landing page forwards anything opened in standalone mode (or carrying an auth
+token in the URL) straight to `/app`. The footer carries the shop's real address and phone number, and
+the same details go out as schema.org `Organization` JSON-LD — a contactable business is the single
+strongest signal against a false-positive listing, so keep both in step if they ever change.
+
+**Revision and updates:** the app carries **Rev X.yy** from `app/version.json` — bump `yy` for each
+shipped change the shop can see, `X` for a big one — and a **build** stamp (`__BUILD__`: build time plus
+the commit sha on Vercel) that vite fills in. `vite.config.js` also writes both to **`/version.json`** in
+the build output and serves it in dev; it is in the service worker's `globIgnores` and routed explicitly
+in `vercel.json` / `netlify.toml`, so a fetch of it always says what the server has right now.
+`src/lib/version.js` — `checkForUpdate()` compares the served build stamp to the running one (a hot-fix
+without a rev bump still counts), `updateNow()` unregisters the worker, clears the caches and reloads,
+and `useUpdateNudge(toast)` runs the check once a few seconds after load and offers **Update now** on
+the toast. **Settings → Revision** shows the rev and build, **Check for Update**, **Update Now** when
+there is one, and *Reload Latest Version* for a copy that seems stuck.
+
+**Unsticking a cached copy:** the app is a PWA, so a browser can keep serving the build it cached.
+Settings → Revision shows the running rev and build and *Reload Latest Version* / *Update Now*
+unregister the service worker and clear the caches. For a device too stuck to reach that button,
+**`/reset`** (`app/public/reset.html`) does the same from a standalone page and reports what it
+cleared. It is deliberately outside the service worker's reach — `globIgnores` keeps it out of the
+precache and `navigateFallbackDenylist` stops the SPA fallback answering for it (`vite.config.js`) —
+and both `vercel.json` and `netlify.toml` route `/reset` to it ahead of the SPA catch-all. A worker
+installed *before* this change has no such denylist, so on a device still running an older build the
+reset page can itself be intercepted; clearing the site's data in the browser is the fallback.
 
 **Print forms:** Settings → Forms holds the named layouts Ledger prints from (`src/lib/forms.js`,
 `src/components/FormsEditor.jsx`). Each document type — checks, remittances, invoices — names the form
@@ -315,7 +519,7 @@ amount and ticks the row), the whole-receipt/payment editor, and the register's 
 A discount-only line is legitimate and settles its document with no cash.
 
 **Emailing a remittance:** from the pay-run confirmation (one Email per electronic group,
-vendor by vendor) and from any non-check row in Spend → Payments, as well as the single-bill
+vendor by vendor) and from any non-check row in Vendors & Purchases → Payments, as well as the single-bill
 Pay dialog it was already in. The advice covers the whole payment — every bill the transfer
 settled — and goes to the vendor's A/P remittance contact. Checks are excluded: they carry
 their own printed stub.
@@ -326,6 +530,26 @@ consecutive numbers from the Starting Check #; each electronic group gets its ow
 Reference # field, listed with its vendor, method and subtotal before you record. The reference
 prints on the remittance advice and identifies the payment in the register — without one,
 two electronic runs to the same vendor on the same day collapse into a single register row.
+
+**Navigation groups:** the sidebar reads Overview · **Customers & Sales** (Proposals, Quotes, Sales
+Orders, Invoices, Receivables) · **Vendors & Purchases** (Purchase Orders, Payables, Payments, Expenses) ·
+**Work** (Jobs, Tasks, Field, Time Tracking) · Records. The group names are labels in `NAV`
+(`App.jsx`) only; view keys and `NAV_AREA` permissions are unchanged, so moving or renaming a page is a
+one-line edit there.
+
+**Remittance PDFs are named** `<Vendor> Remittance - <Reference #>` (`remittanceFileStem()` in
+`src/lib/remittance.js`; the payment date stands in when the transfer has no reference). That is the
+attachment name when one is emailed, and it is also written into the PDF's Title metadata, which is
+what Chrome's viewer offers in the Save / Print dialog for a PDF opened from a blob URL — the URL itself
+has no name to suggest. A pay-run's combined file is named the same way for one vendor and
+`Remittances - <date>` for several.
+
+**Marking an invoice printed by hand:** the Invoices list has a **Printed** column — a tick per row
+that is the control, not just the status. Ticking marks an invoice printed without printing it (one that
+went out by email, or was printed before the flag existed); unticking undoes a slip. With the *Unprinted*
+filter on, **Mark all N as printed** does the lot in one write. `markInvoicePrinted(ids, printed)` takes
+one id or a list and either value; printing still calls it with the one it printed. Invoices are the only
+document with a printed flag.
 
 **Show/hide settled documents:** Payables → Vendor Bills and Receivables → Customer Invoices each
 carry a "Show paid" tick with a count, and a Paid column giving the settlement date. Receivables
@@ -342,7 +566,12 @@ payments. `tools/so-report-sql.py` turns a Sage Sales Order Report PDF into a SQ
 (kept in `app/supabase/data-fixes/`) that fills blank PO numbers and brings each SO line's
 invoiced / closed state into line with Sage's shipped / remaining quantities. See `tools/README.md`.
 
-**Not built (candidates for next work):** credit notes / refunds · partial invoicing of an SO ·
+**Sortable lists:** every list view — Quotes, Sales Orders, Invoices, Receivables, Payables,
+Purchase Orders, Expenses, Contacts, Catalog, Jobs, Tasks, Proposals, Machine Rates, Job Costing,
+Time Tracking, the Payments/Receipts register, and the report tables — sorts on any column heading,
+ascending then descending. See §7 for the convention new pages follow.
+
+**Not built (candidates for next work):** refunds (returning cash rather than crediting) · partial invoicing of an SO ·
 recurring invoices · email sending · attachments / receipt photos · quote line-item reordering ·
 multi-user roles · bank import / reconciliation · double-entry GL · undo · automated tests ·
 Capacitor store apps (PWA covers home-screen install today).

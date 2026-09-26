@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { uid, money, fmtDate, todayISO, nameOf } from "../lib/helpers.js";
-import { Ico, ICONS, Empty, Field, Badge } from "../components/ui.jsx";
+import { Ico, ICONS, Empty, Field, Badge, SortTh, useTableSort } from "../components/ui.jsx";
 
 // Log time against a job. Pick the job, add one or more lines (date, category,
 // hours, description), and save. The category's flat rate is snapshotted onto
@@ -38,6 +38,20 @@ export default function TimeTrackingView({ db, actions, toast, readOnly, session
   const catName = id => (db.timeCategories || []).find(c => c.id === id)?.name || "—";
   const jobNo = id => db.salesOrders.find(s => s.id === id)?.number || "—";
 
+  // Both lists sort on any heading. The hooks sit above the early return below
+  // so they run on every render, whatever the categories look like.
+  const pending = (db.timeEntries || []).filter(t => !t.invoiceId && !t.approved);
+  const amountOf = t => (Number(t.hours) || 0) * (Number(t.rate) || 0);
+  const { sorted: pendingRows, sort: pSort, onSort: pOnSort } = useTableSort(pending, {
+    date: t => t.date || "", who: t => t.userEmail || "", job: t => jobNo(t.salesOrderId),
+    category: t => catName(t.categoryId), hours: t => Number(t.hours) || 0, amount: amountOf,
+  });
+  const { sorted: mineRows, sort: mSort, onSort: mOnSort } = useTableSort(mine, {
+    date: t => t.date || "", job: t => jobNo(t.salesOrderId), category: t => catName(t.categoryId),
+    description: t => t.description || "", hours: t => Number(t.hours) || 0, amount: amountOf,
+    status: t => (t.invoiceId ? "invoiced" : t.approved ? "approved" : "pending"),
+  });
+
   if (cats.length === 0) return <div className="card"><Empty icon={ICONS.clock} title="No time categories yet"
     msg="An admin needs to set up time categories and rates first (Settings → Time Categories)." /></div>;
 
@@ -70,13 +84,19 @@ export default function TimeTrackingView({ db, actions, toast, readOnly, session
     </div>}
 
     {isAdmin && (() => {
-      const pending = (db.timeEntries || []).filter(t => !t.invoiceId && !t.approved);
       return <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-head"><h3>Time Awaiting Approval</h3>{pending.length > 0 && <span className="count" style={{ marginLeft: 8 }}>{pending.length}</span>}</div>
         {pending.length === 0
           ? <div className="card-body"><p className="subtle" style={{ margin: 0 }}>Nothing pending — all logged time is approved.</p></div>
-          : <table><thead><tr><th>Date</th><th>Who</th><th>Job</th><th>Category</th><th className="num">Hours</th><th className="num">Amount</th><th></th></tr></thead>
-            <tbody>{pending.map(t => <tr key={t.id}>
+          : <table><thead><tr>
+            <SortTh label="Date" col="date" sort={pSort} onSort={pOnSort} />
+            <SortTh label="Who" col="who" sort={pSort} onSort={pOnSort} />
+            <SortTh label="Job" col="job" sort={pSort} onSort={pOnSort} />
+            <SortTh label="Category" col="category" sort={pSort} onSort={pOnSort} />
+            <SortTh label="Hours" col="hours" sort={pSort} onSort={pOnSort} num />
+            <SortTh label="Amount" col="amount" sort={pSort} onSort={pOnSort} num />
+            <th></th></tr></thead>
+            <tbody>{pendingRows.map(t => <tr key={t.id}>
               <td className="subtle">{fmtDate(t.date)}</td>
               <td className="subtle">{t.userEmail}</td>
               <td className="doc-id">{jobNo(t.salesOrderId)}</td>
@@ -92,8 +112,16 @@ export default function TimeTrackingView({ db, actions, toast, readOnly, session
       <div className="card-head"><h3>My Recent Time</h3></div>
       {mine.length === 0
         ? <Empty icon={ICONS.clock} title="No time logged yet" msg="Your logged hours will appear here." />
-        : <table><thead><tr><th>Date</th><th>Job</th><th>Category</th><th>Description</th><th className="num">Hours</th><th className="num">Amount</th><th>Status</th><th></th></tr></thead>
-          <tbody>{mine.map(t => <tr key={t.id}>
+        : <table><thead><tr>
+          <SortTh label="Date" col="date" sort={mSort} onSort={mOnSort} />
+          <SortTh label="Job" col="job" sort={mSort} onSort={mOnSort} />
+          <SortTh label="Category" col="category" sort={mSort} onSort={mOnSort} />
+          <SortTh label="Description" col="description" sort={mSort} onSort={mOnSort} />
+          <SortTh label="Hours" col="hours" sort={mSort} onSort={mOnSort} num />
+          <SortTh label="Amount" col="amount" sort={mSort} onSort={mOnSort} num />
+          <SortTh label="Status" col="status" sort={mSort} onSort={mOnSort} />
+          <th></th></tr></thead>
+          <tbody>{mineRows.map(t => <tr key={t.id}>
             <td className="subtle">{fmtDate(t.date)}</td>
             <td className="doc-id">{jobNo(t.salesOrderId)}</td>
             <td>{catName(t.categoryId)}</td>

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex" />
+<title>Reset Ledger on this device</title>
+<style>
+  :root{--ink:#13233B;--canvas:#EDF0F4;--surface:#fff;--line:#D9DFE7;--muted:#5B6B80;--accent:#1F6FEB;--pos:#197A56;--neg:#B23A2E}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--canvas);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;
+    display:flex;justify-content:center;padding:32px 18px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    box-shadow:0 1px 2px rgba(19,35,59,.08),0 8px 24px rgba(19,35,59,.06);
+    max-width:520px;width:100%;padding:26px 24px}
+  h1{font-size:20px;margin:0 0 6px}
+  p{margin:0 0 14px;color:var(--muted)}
+  ul{margin:0 0 16px;padding-left:20px}
+  li{margin:4px 0}
+  .state{font-weight:600}
+  .ok{color:var(--pos)} .bad{color:var(--neg)}
+  .btn{display:inline-block;background:var(--accent);color:#fff;border:0;border-radius:8px;
+    padding:11px 18px;font:inherit;font-weight:600;cursor:pointer;text-decoration:none}
+  .btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--line);margin-left:8px}
+  .foot{margin-top:18px;font-size:13px;color:var(--muted)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Reset Ledger on this device</h1>
+    <p>This throws away the copy of the app your browser is holding and loads the current
+      one from the server. It does not touch your books — quotes, invoices, payments and
+      bills all live in Supabase — and it leaves you signed in.</p>
+    <ul>
+      <li>Service workers: <span id="sw" class="state">working…</span></li>
+      <li>Cached app files: <span id="caches" class="state">working…</span></li>
+    </ul>
+    <p id="done" style="display:none"></p>
+    <a class="btn" id="go" href="/">Open Ledger</a>
+    <button class="btn ghost" id="again" style="display:none">Run again</button>
+    <div class="foot">Still on the old version after this? The browser itself is caching the page.
+      On iPad: Settings → Apps → Safari → Advanced → Website Data → <strong>Show All Sites</strong> →
+      delete <code>tmjledger.com</code>, then force-quit Safari.</div>
+  </div>
+<script>
+  var set = function (id, text, cls) {
+    var el = document.getElementById(id);
+    el.textContent = text;
+    el.className = "state " + (cls || "");
+  };
+
+  async function reset() {
+    var cleared = 0;
+    try {
+      if ("serviceWorker" in navigator) {
+        var regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(function (r) { return r.unregister(); }));
+        set("sw", regs.length ? "unregistered " + regs.length : "none registered", "ok");
+        cleared += regs.length;
+      } else {
+        set("sw", "not supported here", "ok");
+      }
+    } catch (e) {
+      set("sw", "couldn't clear (" + e.message + ")", "bad");
+    }
+    try {
+      if (window.caches) {
+        var keys = await caches.keys();
+        var files = 0;
+        for (var i = 0; i < keys.length; i++) {
+          var c = await caches.open(keys[i]);
+          files += (await c.keys()).length;
+          await caches.delete(keys[i]);
+        }
+        set("caches", keys.length ? "deleted " + files + " file" + (files === 1 ? "" : "s") : "nothing cached", "ok");
+        cleared += keys.length;
+      } else {
+        set("caches", "not supported here", "ok");
+      }
+    } catch (e) {
+      set("caches", "couldn't clear (" + e.message + ")", "bad");
+    }
+    var done = document.getElementById("done");
+    done.style.display = "";
+    done.textContent = cleared
+      ? "Cleared. Open Ledger below — it will be fetched fresh."
+      : "Nothing was cached on this device, so the copy you are being served is the current one. If it still looks wrong, the cache is the browser's own or something between you and the server (a VPN or content filter).";
+    document.getElementById("again").style.display = "";
+  }
+
+  // A timestamp on the way back so the browser's own HTTP cache can't hand
+  // back the page it was already holding.
+  document.getElementById("go").addEventListener("click", function (e) {
+    e.preventDefault();
+    location.replace("/?fresh=" + Date.now());
+  });
+  document.getElementById("again").addEventListener("click", function () {
+    set("sw", "working…"); set("caches", "working…");
+    document.getElementById("done").style.display = "none";
+    reset();
+  });
+  reset();
+</script>
+</body>
+</html>

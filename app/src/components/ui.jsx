@@ -1,5 +1,5 @@
 // UI primitives, ported verbatim from ledger.html.
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useLayoutEffect } from "react";
 import { cls } from "../lib/helpers.js";
 
 // Click-to-sort table support. `accessors` maps a column key to a value getter;
@@ -27,6 +27,20 @@ export function SortTh({ label, col, sort, onSort, num, style }) {
     style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap", ...style }} title="Sort">
     {label}<span style={{ opacity: active ? 0.9 : 0.25, fontSize: 11 }}> {active ? (sort.dir === "asc" ? "▲" : "▼") : "↕"}</span>
   </th>;
+}
+
+// A textarea that grows with its content — line-item descriptions are typed
+// here, and Enter starts a new line rather than doing nothing.
+export function AutoTextarea({ value, onChange, placeholder, className, style, rows = 1 }) {
+  const ref = useRef();
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  }, [value]);
+  return <textarea ref={ref} rows={rows} className={(className || "input") + " grow"} style={style}
+    value={value ?? ""} placeholder={placeholder} onChange={onChange} />;
 }
 
 export const Ico = ({ d, size = 17 }) => <svg className="ico" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>;
@@ -76,7 +90,7 @@ export function Badge({ status }) {
     draft: ["gray", "Draft"], sent: ["blue", "Sent"], accepted: ["green", "Accepted"], declined: ["red", "Declined"],
     open: ["blue", "Open"], invoiced: ["green", "Invoiced"], fulfilled: ["green", "Fulfilled"],
     unpaid: ["amber", "Unpaid"], partial: ["blue", "Partial"], paid: ["green", "Paid"], overdue: ["red", "Overdue"],
-    submitted: ["blue", "Submitted"], won: ["green", "Won"], lost: ["red", "Lost"],
+    submitted: ["blue", "Submitted"], won: ["green", "Won"], lost: ["red", "Lost"], superseded: ["gray", "Superseded"],
     credit: ["blue", "Credit"],
     received: ["green", "Received"], closed: ["gray", "Closed"], cancelled: ["red", "Cancelled"],
     ready: ["blue", "Ready"],

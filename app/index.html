@@ -3,17 +3,180 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ledger — Quote to Cash</title>
+    <title>Ledger — quote-to-cash software for TMJ Engineering, INC.</title>
+    <meta name="description" content="Ledger is the private business system TMJ Engineering, INC. uses to run quotes, sales orders, invoicing, payables and reporting. Staff accounts only — there is no public sign-up." />
     <meta name="theme-color" content="#13233B" />
+    <link rel="canonical" href="https://www.tmjledger.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Ledger — quote-to-cash software for TMJ Engineering, INC." />
+    <meta property="og:description" content="The private business system TMJ Engineering uses to run quotes, sales orders, invoicing, payables and reporting." />
+    <meta property="og:url" content="https://www.tmjledger.com/" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="icon" href="/logo.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      :root{
+        --ink:#13233B;--ink-soft:#1D3350;--canvas:#EDF0F4;--surface:#fff;--line:#D9DFE7;
+        --accent:#1F6FEB;--muted:#5B6B80;--radius:12px;
+      }
+      *{box-sizing:border-box}
+      body{margin:0;background:var(--canvas);color:var(--ink);
+        font:16px/1.6 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+      a{color:var(--accent)}
+      .wrap{max-width:960px;margin:0 auto;padding:0 22px}
+      header{background:var(--ink);color:#fff}
+      .bar{display:flex;align-items:center;gap:12px;padding:16px 0}
+      .mark{width:34px;height:34px;border-radius:9px;flex:none;display:grid;place-items:center;
+        background:linear-gradient(135deg,var(--accent),#5B9BFF);color:#fff;
+        font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:17px}
+      .name{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:17px;line-height:1.1}
+      .sub{font-size:11px;letter-spacing:.10em;text-transform:uppercase;color:#8FA1B8}
+      .spacer{margin-left:auto}
+      .btn{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;font-weight:600;
+        padding:10px 18px;border-radius:9px;white-space:nowrap}
+      .btn.on-dark{background:#fff;color:var(--ink)}
+      .btn:focus-visible{outline:3px solid #9DC0FF;outline-offset:2px}
+      .hero{background:var(--ink);color:#fff;padding:44px 0 58px}
+      .hero h1{font-family:"Space Grotesk",sans-serif;font-size:34px;line-height:1.2;margin:0 0 14px;max-width:22ch}
+      .hero p{color:#C6D2E2;font-size:17px;max-width:62ch;margin:0 0 26px}
+      .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin:-30px 0 0}
+      .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px;
+        box-shadow:0 1px 2px rgba(19,35,59,.06),0 8px 24px rgba(19,35,59,.06)}
+      .card h2{font-family:"Space Grotesk",sans-serif;font-size:16px;margin:0 0 8px}
+      .card p{margin:0;color:var(--muted);font-size:14.5px}
+      section.about{padding:44px 0 10px}
+      section.about h2{font-family:"Space Grotesk",sans-serif;font-size:21px;margin:0 0 10px}
+      section.about p{max-width:70ch;color:var(--ink-soft)}
+      .note{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--accent);
+        border-radius:10px;padding:16px 18px;margin:22px 0 0;max-width:70ch}
+      .note strong{font-weight:600}
+      footer{margin-top:46px;border-top:1px solid var(--line);padding:26px 0 40px;color:var(--muted);font-size:14px}
+      footer .row{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-top:22px}
+      footer .contact{display:flex;gap:56px;flex-wrap:wrap}
+      footer .ch{font-family:"Space Grotesk",sans-serif;font-weight:600;color:var(--ink);font-size:14px;margin-bottom:4px}
+      footer address{font-style:normal;line-height:1.6}
+      footer p{margin:0}
+      @media (max-width:760px){
+        .cards{grid-template-columns:1fr;margin-top:-20px}
+        .hero{padding:34px 0 46px}
+        .hero h1{font-size:27px}
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <header>
+      <div class="wrap bar">
+        <div class="mark">L</div>
+        <div>
+          <div class="name">Ledger</div>
+          <div class="sub">TMJ Engineering, INC.</div>
+        </div>
+        <div class="spacer"></div>
+        <a class="btn on-dark" href="/app">Sign in</a>
+      </div>
+    </header>
+
+    <div class="hero">
+      <div class="wrap">
+        <h1>Quote-to-cash software for TMJ Engineering, INC.</h1>
+        <p>Ledger is the in-house business system TMJ Engineering uses to run the full cycle —
+          quotes and proposals, sales orders, invoicing and collections, vendor bills and payments,
+          job costing and reporting. It is used by our staff, not sold or offered to the public.</p>
+        <a class="btn" href="/app">Open Ledger</a>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <div class="cards">
+        <div class="card">
+          <h2>Quote → cash</h2>
+          <p>Quotes become sales orders when a PO lands, sales orders become invoices, and payments
+            settle them. Every document carries forward from the one before it.</p>
+        </div>
+        <div class="card">
+          <h2>Payables &amp; payments</h2>
+          <p>Vendor bills, aging, pay runs with printed checks and remittance advice, a check register,
+            and early-payment discounts recorded against the bills they settle.</p>
+        </div>
+        <div class="card">
+          <h2>Reporting</h2>
+          <p>Cash-basis profit and loss, sales tax invoiced and collected, A/R and A/P aging, customer
+            statements, and receipt and payment registers over any date range.</p>
+        </div>
+      </div>
+
+      <section class="about">
+        <h2>About this site</h2>
+        <p>This domain hosts a single private application for one company. There is no public sign-up,
+          no storefront and nothing to purchase here. Accounts are created by an administrator at
+          TMJ Engineering and issued directly to employees; the sign-in page is reached from the
+          buttons above and is only useful to someone who already has an account.</p>
+        <p>Company records are stored in a hosted Postgres database (Supabase) with row-level security,
+          reachable only by an authenticated account. The site loads no third-party trackers,
+          advertising or analytics.</p>
+        <div class="note">
+          <strong>Security researchers and reputation services:</strong> if this site has been flagged,
+          it is a false positive — it is an internal accounting application for a single industrial-controls
+          business, not a consumer financial service or a cryptocurrency product, and it holds no
+          accounts for the public. We are happy to answer questions — the company's address and
+          telephone number are at the foot of this page.
+        </div>
+      </section>
+
+      <footer>
+        <div class="contact">
+          <div>
+            <div class="ch">TMJ Engineering, INC.</div>
+            <address>
+              43800 Van Dyke Ave<br />
+              Sterling Heights, MI 48314<br />
+              United States
+            </address>
+          </div>
+          <div>
+            <div class="ch">Contact</div>
+            <p><a href="tel:+15862026273">586.202.6273</a></p>
+          </div>
+        </div>
+        <div class="row">
+          <span>© <span id="year">2026</span> TMJ Engineering, INC. · Sterling Heights, Michigan</span>
+          <span class="spacer"></span>
+          <a href="/app">Sign in</a>
+        </div>
+      </footer>
+    </div>
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "TMJ Engineering, INC.",
+        "url": "https://www.tmjledger.com/",
+        "description": "Industrial controls engineering. This site hosts Ledger, the company's private quote-to-cash business system, for staff use only.",
+        "telephone": "+1-586-202-6273",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "43800 Van Dyke Ave",
+          "addressLocality": "Sterling Heights",
+          "addressRegion": "MI",
+          "postalCode": "48314",
+          "addressCountry": "US"
+        }
+      }
+    </script>
+    <script>
+      document.getElementById("year").textContent = new Date().getFullYear();
+      // Anyone who installed Ledger to a home screen before this page existed
+      // starts at "/" — send them straight on to the app, and carry any auth
+      // token in the URL through with them.
+      try {
+        var standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
+        var hasToken = /access_token|refresh_token|type=recovery/.test(location.hash) || /[?&]code=/.test(location.search);
+        if (standalone || hasToken) location.replace("/app" + location.search + location.hash);
+      } catch (e) { /* a plain visit, nothing to forward */ }
+    </script>
   </body>
 </html>

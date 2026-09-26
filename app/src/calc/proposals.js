@@ -3,6 +3,7 @@
 // formula weights and phase splits come from settings.proposal with these
 // defaults (the exact rules used in the VGE quote spreadsheet).
 import { round2 } from "./ledger.js";
+import { DEFAULT_LABOR_RATES, DEFAULT_HOUR_MODEL, CONTROLS_PHASES, DEFAULT_ASSUMPTIONS, DEFAULT_EXCLUSIONS, DEFAULT_SCHEDULE } from "./estimates.js";
 
 export const SPEC_FIELDS = [
   ["nests", "Nests"], ["generators", "Sonic Generators"], ["welds", "Welds"],
@@ -33,7 +34,31 @@ export function proposalConfig(settings) {
     signer: p.signer ?? "",
     plcType: p.plcType ?? "Allen Bradley CompactLogix",
     hmiType: p.hmiType ?? "Allen Bradley PanelView Plus",
+    // the controls estimate (calc/estimates.js) — every default editable in Settings → Proposals
+    laborRates: { ...DEFAULT_LABOR_RATES, ...(p.laborRates || {}) },
+    hourModel: mergeHourModel(DEFAULT_HOUR_MODEL, p.hourModel || {}),
+    controlsPhases: {
+      engineering: p.controlsPhases?.engineering || CONTROLS_PHASES.engineering,
+      hardware: p.controlsPhases?.hardware || CONTROLS_PHASES.hardware,
+    },
+    assumptions: p.assumptions || DEFAULT_ASSUMPTIONS,
+    exclusions: p.exclusions || DEFAULT_EXCLUSIONS,
+    schedule: p.schedule || DEFAULT_SCHEDULE,
+    validityDays: p.validityDays ?? 30,
+    supportRate: p.supportRate ?? 70,
+    travelPerDay: p.travelPerDay ?? 350,
+    hardwareMarkupPct: p.hardwareMarkupPct ?? 20,
+    contingencyPct: p.contingencyPct ?? 0,
   };
+}
+
+// The hour model is a table of tables; a saved override fills in per cell.
+function mergeHourModel(base, over) {
+  const out = {};
+  for (const k of Object.keys(base)) {
+    out[k] = typeof base[k] === "object" ? { ...base[k], ...(over[k] || {}) } : (over[k] ?? base[k]);
+  }
+  return out;
 }
 
 const n = v => Number(v) || 0;
@@ -84,8 +109,11 @@ export const proposalTotal = p => n(p.pricing?.total);
 // TMJ Costing.xlsx defaults for the Machine Rates seed
 export const TMJ_DEFAULT_RATES = [
   { name: "Big Sonic",   engBase: 3900, cameraRate: 200, panelBudget: 26000, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 2500, runoff: 560, remoteHmi: 0 },
+  // Small Sonic is a Big Sonic on a smaller panel; Clip is a Check by another name.
+  { name: "Small Sonic", engBase: 3900, cameraRate: 200, panelBudget: 23000, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 2500, runoff: 560, remoteHmi: 0 },
   { name: "Robot Sonic", engBase: 3900, cameraRate: 200, panelBudget: 23000, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 2500, runoff: 560, remoteHmi: 2500 },
   { name: "Check",       engBase: 2900, cameraRate: 200, panelBudget: 21500, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 1700, runoff: 560, remoteHmi: 0 },
+  { name: "Clip",        engBase: 2900, cameraRate: 200, panelBudget: 21500, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 1700, runoff: 560, remoteHmi: 0 },
   { name: "Screw",       engBase: 2900, cameraRate: 200, panelBudget: 21500, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 1700, runoff: 560, remoteHmi: 0 },
   { name: "Insert",      engBase: 2900, cameraRate: 200, panelBudget: 21500, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 1700, runoff: 560, remoteHmi: 0 },
   { name: "Limiter",     engBase: 2900, cameraRate: 200, panelBudget: 21500, ioFirst: 1300, ioAddl: 650, dnCheckout: 560, dnMaterial: 900, fieldWiring: 1700, runoff: 560, remoteHmi: 0 },

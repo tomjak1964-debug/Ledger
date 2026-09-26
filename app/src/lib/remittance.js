@@ -4,16 +4,32 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { money, fmtDate } from "./helpers.js";
 
-export function remittancePdf(args) {
-  const doc = new jsPDF({ unit: "pt", format: "letter" });
-  drawRemit(doc, args);
-  const filename = `Remittance ${args.vendor?.name || ""} ${args.payment.date}.pdf`.replace(/[\\/:*?"<>|]/g, "-");
-  return { blob: doc.output("blob"), filename };
+// The file name a remittance goes out under: "<Vendor> Remittance - <Reference #>",
+// falling back to the payment date when the transfer has no reference. It is
+// the attachment name when emailed and, because it is also written into the
+// PDF's Title, what the browser's Save / Print dialog offers when the PDF is
+// opened in a tab — a blob URL has no name of its own to suggest.
+export function remittanceFileStem({ vendor, payment }) {
+  const who = (vendor?.name || "Vendor").trim();
+  const ref = String(payment?.ref || "").trim() || fmtDate(payment?.date);
+  return `${who} Remittance - ${ref}`.replace(/[\\/:*?"<>|]/g, "-").replace(/\s+/g, " ").trim();
 }
 
-// One PDF, one page per vendor — for Pay Bills runs.
+export function remittancePdf(args) {
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  const stem = remittanceFileStem(args);
+  doc.setProperties({ title: stem, subject: "Remittance advice", creator: args.settings?.company || "" });
+  drawRemit(doc, args);
+  return { blob: doc.output("blob"), filename: stem + ".pdf" };
+}
+
+// One PDF, one page per vendor — for Pay Bills runs. A run to a single vendor
+// is named like a single remittance; several vendors share one dated file.
 export function remittancesPdf(list) {
   const doc = new jsPDF({ unit: "pt", format: "letter" });
+  const stem = list.length === 1 ? remittanceFileStem(list[0])
+    : `Remittances - ${fmtDate(list[0]?.payment?.date)}`.replace(/[\\/:*?"<>|]/g, "-");
+  doc.setProperties({ title: stem, subject: "Remittance advice", creator: list[0]?.settings?.company || "" });
   list.forEach((args, i) => { if (i) doc.addPage(); drawRemit(doc, args); });
   return doc.output("blob");
 }

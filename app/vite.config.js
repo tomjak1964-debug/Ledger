@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -7,11 +9,35 @@ import { VitePWA } from 'vite-plugin-pwa';
 // answers it at a glance. Vercel exports the commit sha; local builds get a date.
 const sha = (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 7);
 const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC' + (sha ? ' · ' + sha : '');
+// Rev X.yy is kept by hand in version.json (see the note in it). Both facts go
+// into the bundle and into /version.json on the server, so a running copy can
+// ask whether a newer build exists — see src/lib/version.js.
+const rev = JSON.parse(readFileSync(resolve(__dirname, 'version.json'), 'utf8')).rev;
+const versionInfo = JSON.stringify({ rev, build: stamp, sha, builtAt: new Date().toISOString() });
+const versionJson = {
+  name: 'version-json',
+  generateBundle() { this.emitFile({ type: 'asset', fileName: 'version.json', source: versionInfo }); },
+  configureServer(server) {       // the dev server answers it too, so the check can be tried locally
+    server.middlewares.use('/version.json', (_req, res) => { res.setHeader('Content-Type', 'application/json'); res.end(versionInfo); });
+  },
+};
 
 export default defineConfig({
-  define: { __BUILD__: JSON.stringify(stamp) },
+  define: { __BUILD__: JSON.stringify(stamp), __REV__: JSON.stringify(rev) },
+  // Two pages: a public landing page at / that says what this site is (reputation
+  // scanners kept flagging a bare credential form on a new domain), and the app
+  // itself at /app.
+  build: {
+    rollupOptions: {
+      input: {
+        landing: resolve(__dirname, 'index.html'),
+        app: resolve(__dirname, 'app/index.html'),
+      },
+    },
+  },
   plugins: [
     react(),
+    versionJson,
     VitePWA({
       registerType: 'autoUpdate',            // new deploys refresh the cached shell automatically
       includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png', 'logo.svg'],
@@ -22,7 +48,7 @@ export default defineConfig({
         theme_color: '#13233B',
         background_color: '#EDF0F4',
         display: 'standalone',
-        start_url: '/',
+        start_url: '/app',
         icons: [
           { src: 'pwa-64x64.png', sizes: '64x64', type: 'image/png' },
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
@@ -31,8 +57,20 @@ export default defineConfig({
         ],
       },
       // Precache only the built app shell. Supabase requests are NOT cached,
-      // so the books are always live.
-      workbox: { globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'] },
+      // so the books are always live. /reset is deliberately left out of both
+      // the precache and the SPA fallback: it is the page that throws this
+      // cache away, so it must always come from the server.
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globIgnores: ['reset.html', 'version.json'],   // version.json must always come from the server
+        // The app shell answers for /app...; the landing page and /reset are
+        // served as themselves.
+        navigateFallback: '/app/index.html',
+        navigateFallbackDenylist: [/^\/reset/, /^\/$/],
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
+      },
     }),
   ],
   server: { host: true, port: 5173 }, // host:true exposes it on the LAN for phone testing

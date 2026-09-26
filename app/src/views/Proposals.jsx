@@ -1,9 +1,14 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { uid, money, fmtDate, todayISO, nameOf, cls } from "../lib/helpers.js";
 import { proposalConfig, priceProposal, ioBlocks, phaseAmount, SPEC_FIELDS, DEFAULT_PHASES } from "../calc/proposals.js";
-import { Ico, ICONS, Badge, Empty, Field, MenuItem, Modal } from "../components/ui.jsx";
-import { downloadProposalDocx, proposalDocxBlob } from "../lib/proposalDocx.js";
+import { Ico, ICONS, Badge, Empty, Field, MenuItem, Modal, SortTh, useTableSort } from "../components/ui.jsx";
+import { downloadProposalDocx, proposalDocxBlob, proposalFileStem } from "../lib/proposalDocx.js";
 import EmailModal from "../components/EmailModal.jsx";
+import ImportProposalsModal from "../components/ImportProposalsModal.jsx";
+import ImportLineupModal from "../components/ImportLineupModal.jsx";
+import ControlsEstimateEditor, { buildControlsContent, ControlsDocBody, revLabel } from "./ControlsEstimate.jsx";
+import { newEstimate, priceEstimate } from "../calc/estimates.js";
 
 // Shared by the print view and the Word export — the proposal letter content.
 export function buildProposalContent(p, db) {
@@ -65,16 +70,30 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
   const [doc, setDoc] = useState(null);
   const [phasesFor, setPhasesFor] = useState(null);
   const [search, setSearch] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importingLineup, setImportingLineup] = useState(false);
   const customers = db.contacts.filter(c => c.type === "customer");
   const cfg = proposalConfig(db.settings);
 
   const filtered = db.proposals.filter(p => {
     const s = search.toLowerCase(); if (!s) return true;
-    return [p.number, p.jobNumber, p.description, nameOf(db, p.customerId), p.status].join(" ").toLowerCase().includes(s);
+    return [p.number, p.jobNumber, p.description, nameOf(db, p.customerId), p.status, p.kind].join(" ").toLowerCase().includes(s);
   });
 
+  const { sorted: propRows, sort, onSort } = useTableSort(filtered.slice().reverse(), {
+    number: p => p.number, job: p => p.jobNumber || "", customer: p => nameOf(db, p.customerId),
+    desc: p => p.description || "", type: p => p.kind === "controls" ? "Controls Estimate" : (db.machineTypes.find(m => m.id === p.machineTypeId)?.name || ""),
+    date: p => p.date || "", status: p => p.status || "", total: p => Number(p.pricing?.total) || 0,
+  });
+
+  const startNewControls = () => setEdit({
+    id: uid(), _new: true, kind: "controls", rev: 0, number: "(assigned at save)", customerId: customers[0]?.id || "",
+    contactPersonId: "", contactName: customers[0]?.contact || "", date: todayISO(), status: "draft", jobNumber: "", description: "",
+    location: "", machineTypeId: "", specs: newEstimate(cfg), pricing: {},
+    phases: cfg.controlsPhases.engineering.map(ph => ({ ...ph })), notes: "",
+  });
   const startNew = () => setEdit({
-    id: uid(), _new: true, number: "(assigned at save)", customerId: customers[0]?.id || "",
+    id: uid(), _new: true, kind: "machine", rev: 0, number: "(assigned at save)", customerId: customers[0]?.id || "",
     contactPersonId: "", contactName: customers[0]?.contact || "", date: todayISO(), status: "draft", jobNumber: "", description: "",
     location: cfg.location, machineTypeId: db.machineTypes[0]?.id || "",
     specs: { ...emptySpecs(), dataNational: true, ioBlocks: "" },
@@ -83,7 +102,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
 
   const save = async (p) => {
     const mt = db.machineTypes.find(m => m.id === p.machineTypeId);
-    const pricing = priceProposal(mt, p.specs, cfg);
+    const pricing = p.kind === "controls" ? priceEstimate(p.specs, cfg) : priceProposal(mt, p.specs, cfg);
     const saved = await actions.saveProposal({ ...p, pricing });
     if (saved) { setEdit(null); toast(p._new ? "Proposal " + saved.number + " created" : "Proposal saved"); }
   };
@@ -95,8 +114,14 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
     const so = await actions.winProposal(p, po);
     if (so) toast(`Won — sales order ${so.number} created`);
   };
+  const revise = async (p) => {
+    const next = await actions.reviseProposal(p);
+    if (next) { toast(`${next.number} ${revLabel(next)} started — ${p.number}${revLabel(p) ? " " + revLabel(p) : ""} is superseded`); setEdit({ ...next, specs: { ...next.specs } }); }
+  };
 
-  if (db.machineTypes.length === 0) return <div className="card">
+  if (edit?.kind === "controls") return <ControlsEstimateEditor p={edit} db={db} cfg={cfg} customers={customers} onCancel={() => setEdit(null)} onSave={save} />;
+
+  if (db.machineTypes.length === 0 && db.proposals.every(p => p.kind !== "controls")) return <div className="card">
     <Empty icon={ICONS.so} title="Set up machine rates first" msg="Proposals price themselves from your machine-type rates. Load the TMJ defaults (from TMJ Costing.xlsx) or add types under Machine Rates." action={
       !readOnly && <button className="btn primary" onClick={async () => {
         const { TMJ_DEFAULT_RATES } = await import("../calc/proposals.js");
@@ -109,39 +134,57 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
   return <div>
     <div className="toolbar">
       <div className="search"><Ico d={ICONS.search} size={15} /><input className="input" placeholder="Search proposals…" value={search} onChange={e => setSearch(e.target.value)} /></div>
-      {!readOnly && <button className="btn primary" style={{ marginLeft: "auto" }} onClick={startNew}><Ico d={ICONS.plus} size={15} />New Proposal</button>}
+      {!readOnly && <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setImportingLineup(true)}>
+        <Ico d={ICONS.quote} size={15} />Import Lineup</button>}
+      {!readOnly && <button className="btn" onClick={() => setImporting(true)}>
+        <Ico d={ICONS.quote} size={15} />Import Quote Chart</button>}
+      {!readOnly && <button className="btn" onClick={startNewControls}><Ico d={ICONS.plus} size={15} />New Controls Estimate</button>}
+      {!readOnly && <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Machine Proposal</button>}
     </div>
     <div className="card">
       {db.proposals.length === 0
         ? <Empty icon={ICONS.quote} title="No proposals yet" msg="Enter the machine details — type, welds, clamps, cameras — and the app prices it, generates the proposal document, and tracks it to PO."
-          action={!readOnly && <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Proposal</button>} />
-        : <table><thead><tr><th>Proposal</th><th>Job #</th><th>Customer</th><th>Description</th><th>Type</th><th>Date</th><th>Status</th><th className="num">Total</th><th></th></tr></thead>
-          <tbody>{filtered.slice().reverse().map(p => {
+          action={!readOnly && <span style={{ display: "inline-flex", gap: 8 }}>
+            <button className="btn" onClick={startNewControls}><Ico d={ICONS.plus} size={15} />New Controls Estimate</button>
+            <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Machine Proposal</button></span>} />
+        : <table><thead><tr>
+          <SortTh label="Proposal" col="number" sort={sort} onSort={onSort} />
+          <SortTh label="Job #" col="job" sort={sort} onSort={onSort} />
+          <SortTh label="Customer" col="customer" sort={sort} onSort={onSort} />
+          <SortTh label="Description" col="desc" sort={sort} onSort={onSort} />
+          <SortTh label="Type" col="type" sort={sort} onSort={onSort} />
+          <SortTh label="Date" col="date" sort={sort} onSort={onSort} />
+          <SortTh label="Status" col="status" sort={sort} onSort={onSort} />
+          <SortTh label="Total" col="total" sort={sort} onSort={onSort} num />
+          <th></th></tr></thead>
+          <tbody>{propRows.map(p => {
             const mt = db.machineTypes.find(m => m.id === p.machineTypeId);
             const billed = (p.phases || []).filter(ph => ph.invoiceId).length;
             return <tr key={p.id}>
-              <td className="doc-id">{p.number}</td>
+              <td className="doc-id">{p.number}{revLabel(p) && <span className="subtle" style={{ marginLeft: 6, fontSize: 12 }}>{revLabel(p)}</span>}</td>
               <td className="mono subtle">{p.jobNumber || "—"}</td>
               <td>{nameOf(db, p.customerId)}</td>
               <td>{p.description || "—"}</td>
-              <td className="subtle">{mt?.name || "—"}</td>
+              <td className="subtle">{p.kind === "controls" ? "Controls Estimate" : (mt?.name || "—")}</td>
               <td className="subtle">{fmtDate(p.date)}</td>
               <td><Badge status={p.status} />{p.status === "won" && billed > 0 && <span className="subtle" style={{ marginLeft: 6 }}>{billed}/{p.phases.length} billed</span>}</td>
               <td className="num" style={{ fontWeight: 600 }}>{money(Number(p.pricing?.total) || 0)}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                 <button className="btn ghost icon" title="View / Print" onClick={() => setDoc(p)}><Ico d={ICONS.print} size={16} /></button>
                 {!readOnly && <button className="btn ghost icon" title="Edit" onClick={() => setEdit({ ...p, specs: { ...p.specs } })}><Ico d={ICONS.edit} size={16} /></button>}
-                {!readOnly && <PropMenu p={p} setStatus={setStatus} win={win} del={del} onPhases={() => setPhasesFor(p)} />}
+                {!readOnly && <PropMenu p={p} setStatus={setStatus} win={win} del={del} revise={revise} onPhases={() => setPhasesFor(p)} />}
               </td>
             </tr>;
           })}</tbody></table>}
     </div>
+    {importing && <ImportProposalsModal db={db} actions={actions} toast={toast} onClose={() => setImporting(false)} />}
+    {importingLineup && <ImportLineupModal db={db} actions={actions} toast={toast} onClose={() => setImportingLineup(false)} />}
     {doc && <ProposalDoc p={doc} db={db} onClose={() => setDoc(null)} toast={toast} />}
     {phasesFor && <PhasesModal p={db.proposals.find(x => x.id === phasesFor.id) || phasesFor} db={db} actions={actions} toast={toast} onClose={() => setPhasesFor(null)} />}
   </div>;
 }
 
-function PropMenu({ p, setStatus, win, del, onPhases }) {
+function PropMenu({ p, setStatus, win, del, revise, onPhases }) {
   const [open, setOpen] = useState(false);
   const ref = useRef();
   useEffect(() => { const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }; document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h); }, []);
@@ -150,9 +193,10 @@ function PropMenu({ p, setStatus, win, del, onPhases }) {
     <button className="btn ghost icon" onClick={() => setOpen(o => !o)} title="More">⋯</button>
     {open && <div style={{ position: "absolute", right: 0, top: "100%", background: "#fff", border: "1px solid var(--line)", borderRadius: 9, boxShadow: "var(--shadow)", zIndex: 30, minWidth: 200, padding: 6, textAlign: "left" }}>
       {p.status === "draft" && item("Mark as Submitted", () => setStatus(p.id, "submitted"))}
-      {p.status !== "won" && item("Won — PO received →", () => win(p), { accent: true })}
+      {p.status !== "won" && p.status !== "superseded" && item("Won — PO received →", () => win(p), { accent: true })}
       {p.status === "won" && item("Invoice Phases…", onPhases, { accent: true })}
-      {p.status !== "lost" && p.status !== "won" && item("Mark as Lost", () => setStatus(p.id, "lost"))}
+      {p.status !== "superseded" && item("New Revision", () => revise(p))}
+      {p.status !== "lost" && p.status !== "won" && p.status !== "superseded" && item("Mark as Lost", () => setStatus(p.id, "lost"))}
       {item("Delete", () => del(p.id), { danger: true })}
     </div>}
   </span>;
@@ -277,17 +321,29 @@ function PhasesModal({ p, db, actions, toast, onClose }) {
 }
 
 function ProposalDoc({ p, db, onClose, toast }) {
-  const c = buildProposalContent(p, db);
+  const c = p.kind === "controls" ? buildControlsContent(p, db) : buildProposalContent(p, db);
   const s = db.settings;
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState(false);
+  // Same two moves DocumentView makes, and for the same reason: the overlay is
+  // portalled out of the page so it isn't inside .main, and the body is flagged
+  // so printing hides .main. Rendered in place it printed the proposals list on
+  // the sheets ahead of the proposal. The tab title becomes the file name while
+  // the document is open: Print / Save PDF offers document.title as the file
+  // name, so it matches the Word download instead of reading "Ledger".
+  useEffect(() => {
+    const title = document.title;
+    document.body.classList.add("doc-open");
+    document.title = proposalFileStem(p);
+    return () => { document.body.classList.remove("doc-open"); document.title = title; };
+  }, [p]);
   const word = async () => {
     setBusy(true);
     try { await downloadProposalDocx(p, db); }
     catch (e) { toast("⚠ Word export failed: " + (e.message || e)); }
     setBusy(false);
   };
-  return <div className="doc-screen">
+  return createPortal(<div className="doc-screen">
     <div className="doc-bar">
       <button className="btn" onClick={onClose}><Ico d={ICONS.back} size={16} />Close</button>
       <button className="btn" onClick={() => setEmail(true)}><Ico d={ICONS.mail} size={15} />Email…</button>
@@ -297,11 +353,11 @@ function ProposalDoc({ p, db, onClose, toast }) {
     {email && <EmailModal
       title={"Email · " + p.number}
       defaultTo={c.person?.email || c.customer?.email || ""}
-      defaultSubject={`Proposal ${p.number} — ${[p.jobNumber, p.description].filter(Boolean).join(" – ")}`}
+      defaultSubject={`Proposal ${p.number}${revLabel(p) ? " " + revLabel(p) : ""} — ${[p.jobNumber, p.description].filter(Boolean).join(" – ")}`}
       defaultBody={`${c.salutation.replace(/:$/, ",")}\n\nPlease find attached proposal ${p.number} for ${p.description || "the machine"}.\n\nRegards,\n${c.cfg.signer || s.company}`}
       buildAttachment={() => proposalDocxBlob(p, db)}
       onClose={() => setEmail(false)} toast={toast} />}
-    <div className="printable prop-doc">
+    {p.kind === "controls" ? <ControlsDocBody p={p} db={db} /> : <div className="printable prop-doc">
       <div style={{ textAlign: "center", marginBottom: 26 }}><img src="/tmj-logo.png" alt="TMJ Engineering" style={{ width: 170 }} /></div>
       <p>{fmtDate(p.date)}</p>
       <p style={{ whiteSpace: "pre-line" }}>{[c.person?.name, c.customer?.name, c.customer?.address].filter(Boolean).join("\n")}</p>
@@ -340,6 +396,6 @@ function ProposalDoc({ p, db, onClose, toast }) {
       <p style={{ marginBottom: 34 }}>Regards,</p>
       <p>{c.cfg.signer || s.company}</p>
       <div className="doc-foot">{[s.companyAddress?.replace(/\n/g, ", "), s.companyPhone].filter(Boolean).join(" - ")}</div>
-    </div>
-  </div>;
+    </div>}
+  </div>, document.body);
 }

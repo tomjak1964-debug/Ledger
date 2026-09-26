@@ -1,6 +1,6 @@
 import { money, nameOf } from "../lib/helpers.js";
 import { lineTotals } from "../calc/ledger.js";
-import { Ico, ICONS, Empty } from "../components/ui.jsx";
+import { Ico, ICONS, Empty, SortTh, useTableSort } from "../components/ui.jsx";
 
 // Profitability per job (sales order): invoiced revenue minus labor cost (logged
 // time × cost rate) and materials (expenses + bills tagged to the job). Only
@@ -21,6 +21,11 @@ export default function JobCostingView({ db }) {
 
   const tot = rows.reduce((a, r) => ({ revenue: a.revenue + r.revenue, labor: a.labor + r.labor, materials: a.materials + r.materials, cost: a.cost + r.cost, margin: a.margin + r.margin }),
     { revenue: 0, labor: 0, materials: 0, cost: 0, margin: 0 });
+  const { sorted: costRows, sort, onSort } = useTableSort(rows, {
+    job: r => r.so.number, customer: r => nameOf(db, r.so.customerId), revenue: r => r.revenue,
+    labor: r => r.labor, materials: r => r.materials, cost: r => r.cost, margin: r => r.margin,
+    pct: r => (r.pct === null ? -Infinity : r.pct), unbilled: r => r.unbilled,
+  });
   const marginColor = m => m > 0.005 ? "var(--pos)" : m < -0.005 ? "var(--neg)" : undefined;
 
   return <div>
@@ -35,10 +40,13 @@ export default function JobCostingView({ db }) {
       {rows.length === 0
         ? <Empty icon={ICONS.job} title="No job costs yet" msg="Bill a job, log time against it, or tag expenses/bills to a sales order — profitability shows up here." />
         : <table><thead><tr>
-          <th>Job</th><th>Customer</th><th className="num">Revenue</th><th className="num">Labor</th><th className="num">Materials</th>
-          <th className="num">Total Cost</th><th className="num">Margin</th><th className="num">Margin %</th><th className="num">Unbilled time</th>
+          <SortTh label="Job" col="job" sort={sort} onSort={onSort} />
+          <SortTh label="Customer" col="customer" sort={sort} onSort={onSort} />
+          {[["revenue", "Revenue"], ["labor", "Labor"], ["materials", "Materials"], ["cost", "Total Cost"],
+            ["margin", "Margin"], ["pct", "Margin %"], ["unbilled", "Unbilled time"]]
+            .map(([col, label]) => <SortTh key={col} label={label} col={col} sort={sort} onSort={onSort} num />)}
         </tr></thead>
-          <tbody>{rows.map(r => <tr key={r.so.id}>
+          <tbody>{costRows.map(r => <tr key={r.so.id}>
             <td className="doc-id">{r.so.number}</td>
             <td>{nameOf(db, r.so.customerId)}</td>
             <td className="num mono">{money(r.revenue)}</td>

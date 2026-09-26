@@ -3,5 +3,11 @@
   "installCommand": "npm --prefix app install",
   "buildCommand": "npm --prefix app run build",
   "outputDirectory": "app/dist",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/reset", "destination": "/reset.html" },
+    { "source": "/version.json", "destination": "/version.json" },
+    { "source": "/app", "destination": "/app/index.html" },
+    { "source": "/app/(.*)", "destination": "/app/index.html" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }

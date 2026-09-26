@@ -9,8 +9,11 @@ const dateOrNull = v => (v ? v : null);
 const num = v => Number(v) || 0;
 
 /* ---- contacts ---- */
-export const contactToRow = c => ({ id: c.id, type: c.type, name: c.name ?? "", contact: c.contact ?? "", email: c.email ?? "", phone: c.phone ?? "", address: c.address ?? "", code: c.code ?? "", lat: c.lat === "" || c.lat == null ? null : Number(c.lat), lng: c.lng === "" || c.lng == null ? null : Number(c.lng), remit_name: c.remitName ?? "", remit_phone: c.remitPhone ?? "", remit_email: c.remitEmail ?? "", remit_address: c.remitAddress ?? "" });
-export const contactFromRow = r => ({ id: r.id, type: r.type, name: r.name, contact: r.contact, email: r.email, phone: r.phone, address: r.address, code: r.code || "", lat: r.lat ?? null, lng: r.lng ?? null, remitName: r.remit_name || "", remitPhone: r.remit_phone || "", remitEmail: r.remit_email || "", remitAddress: r.remit_address || "" });
+// terms null means "use the company default" — an empty box has to stay empty
+// on the way to the database, not become a 0-day term.
+const intOrNull = v => (v === "" || v == null ? null : Math.trunc(Number(v)) || 0);
+export const contactToRow = c => ({ id: c.id, type: c.type, name: c.name ?? "", contact: c.contact ?? "", email: c.email ?? "", phone: c.phone ?? "", address: c.address ?? "", code: c.code ?? "", lat: c.lat === "" || c.lat == null ? null : Number(c.lat), lng: c.lng === "" || c.lng == null ? null : Number(c.lng), terms: intOrNull(c.terms), discount_pct: num(c.discountPct), discount_days: num(c.discountDays), remit_name: c.remitName ?? "", remit_phone: c.remitPhone ?? "", remit_email: c.remitEmail ?? "", remit_address: c.remitAddress ?? "" });
+export const contactFromRow = r => ({ id: r.id, type: r.type, name: r.name, contact: r.contact, email: r.email, phone: r.phone, address: r.address, code: r.code || "", lat: r.lat ?? null, lng: r.lng ?? null, terms: r.terms ?? "", discountPct: num(r.discount_pct), discountDays: num(r.discount_days), remitName: r.remit_name || "", remitPhone: r.remit_phone || "", remitEmail: r.remit_email || "", remitAddress: r.remit_address || "" });
 
 /* ---- catalog ---- */
 export const catalogToRow = c => ({ id: c.id, description: c.desc ?? "", unit: c.unit ?? "", unit_price: num(c.unitPrice) });
@@ -75,13 +78,13 @@ export const soFromRow = (r, items) => ({
 
 /* ---- invoices ---- */
 export const invoiceToRow = i => ({
-  id: i.id, number: i.number, sales_order_id: idOrNull(i.salesOrderId), quote_id: idOrNull(i.quoteId),
+  id: i.id, number: i.number, kind: i.kind === "credit" ? "credit" : "invoice", sales_order_id: idOrNull(i.salesOrderId), quote_id: idOrNull(i.quoteId),
   customer_id: idOrNull(i.customerId), po_number: i.poNumber ?? "", date: dateOrNull(i.date),
   due_date: dateOrNull(i.dueDate), tax_rate: num(i.taxRate), notes: i.notes ?? "",
   proposal_id: idOrNull(i.proposalId), contact_person_id: idOrNull(i.contactPersonId), printed: !!i.printed,
 });
 export const invoiceFromRow = (r, items, payments) => ({
-  id: r.id, number: r.number, salesOrderId: r.sales_order_id || "", quoteId: r.quote_id || "",
+  id: r.id, number: r.number, kind: r.kind || "invoice", salesOrderId: r.sales_order_id || "", quoteId: r.quote_id || "",
   customerId: r.customer_id || "", poNumber: r.po_number, date: r.date || "", dueDate: r.due_date || "",
   taxRate: num(r.tax_rate), notes: r.notes || "", proposalId: r.proposal_id || "",
   contactPersonId: r.contact_person_id || "", printed: !!r.printed, lineItems: items || [], payments: payments || [],
@@ -107,14 +110,16 @@ export const machineTypeFromRow = r => ({
 
 /* ---- proposals ---- */
 export const proposalToRow = p => ({
-  id: p.id, number: p.number, customer_id: idOrNull(p.customerId), contact_person_id: idOrNull(p.contactPersonId),
+  id: p.id, number: p.number, kind: p.kind || "machine", rev: Number(p.rev) || 0,
+  customer_id: idOrNull(p.customerId), contact_person_id: idOrNull(p.contactPersonId),
   date: dateOrNull(p.date), status: p.status, job_number: p.jobNumber ?? "", description: p.description ?? "",
   location: p.location ?? "", machine_type_id: idOrNull(p.machineTypeId), specs: p.specs || {},
   pricing: p.pricing || {}, phases: p.phases || [], notes: p.notes ?? "", po_number: p.poNumber ?? "",
   sales_order_id: idOrNull(p.salesOrderId), contact_name: p.contactName ?? "",
 });
 export const proposalFromRow = r => ({
-  id: r.id, number: r.number, customerId: r.customer_id || "", contactPersonId: r.contact_person_id || "",
+  id: r.id, number: r.number, kind: r.kind || "machine", rev: Number(r.rev) || 0,
+  customerId: r.customer_id || "", contactPersonId: r.contact_person_id || "",
   contactName: r.contact_name || "", date: r.date || "", status: r.status, jobNumber: r.job_number, description: r.description,
   location: r.location, machineTypeId: r.machine_type_id || "", specs: r.specs || {},
   pricing: r.pricing || {}, phases: r.phases || [], notes: r.notes, poNumber: r.po_number,

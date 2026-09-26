@@ -1,12 +1,23 @@
 import { useEffect } from "react";
 import { money, fmtDate } from "../lib/helpers.js";
 import { lineTotals, paid, balance } from "../calc/ledger.js";
+import { invoicePages } from "../lib/invoiceLayout.js";
+import { termsLabel } from "../lib/terms.js";
+import { isCreditMemo } from "../lib/credits.js";
 import { Ico, ICONS } from "./ui.jsx";
 
 export default function DocumentView({ kind, doc, contact, settings, onClose, onPrinted }) {
   // While a document overlay is open, flag the body so print hides the app
-  // content behind it (otherwise the list page prints along with the document).
-  useEffect(() => { document.body.classList.add("doc-open"); return () => document.body.classList.remove("doc-open"); }, []);
+  // content behind it (otherwise the list page prints along with the document),
+  // and make the tab title the document number: Print / Save PDF offers the
+  // title as the file name, so it comes out as INV-0001.pdf — the same name
+  // the PDF download uses — instead of Ledger.pdf.
+  useEffect(() => {
+    const title = document.title;
+    document.body.classList.add("doc-open");
+    if (doc?.number) document.title = doc.number;
+    return () => { document.body.classList.remove("doc-open"); document.title = title; };
+  }, [doc?.number]);
   const print = () => { onPrinted?.(); window.print(); };
   if (kind === "invoice") return <InvoiceDoc inv={doc} contact={contact} settings={settings} onClose={onClose} print={print} />;
   const t = lineTotals(doc.lineItems, doc.taxRate);
@@ -46,7 +57,7 @@ export default function DocumentView({ kind, doc, contact, settings, onClose, on
       </tr></thead><tbody>
         {doc.lineItems.map((it, i) => (
           <tr key={i}>
-            <td>{it.desc || "—"}</td>
+            <td style={{ whiteSpace: "pre-line" }}>{it.desc || "—"}</td>
             <td className="r mono">{it.qty}{it.unit ? " " + it.unit : ""}</td>
             <td className="r mono">{money(Number(it.unitPrice) || 0)}</td>
             <td className="r mono">{money((Number(it.qty) || 0) * (Number(it.unitPrice) || 0))}</td>
@@ -66,69 +77,86 @@ export default function DocumentView({ kind, doc, contact, settings, onClose, on
 }
 
 // Sage-style invoice layout, matching Examples/Invoice Example.pdf.
-// qty-0 lines are unbilled-phase reference lines: unit price, no amount.
+// Always prints full pages: the items box is ruled to the bottom however few
+// lines there are, and lines that don't fit carry onto an identically framed
+// page. qty-0 lines are unbilled-phase reference lines: unit price, no amount.
 function InvoiceDoc({ inv, contact, settings, onClose, print }) {
-  const t = lineTotals(inv.lineItems, inv.taxRate);
-  const p = paid(inv);
+  // A credit note is stored negative so the ledger maths work; it prints the
+  // way a credit memo reads — positive amounts under a CREDIT MEMO heading.
+  const isCredit = isCreditMemo(inv);
+  const flip = isCredit ? -1 : 1;
+  const doc = isCredit
+    ? { ...inv, lineItems: (inv.lineItems || []).map(li => ({ ...li, unitPrice: -(Number(li.unitPrice) || 0) })) }
+    : inv;
+  const t = lineTotals(doc.lineItems, doc.taxRate);
+  const p = paid(inv) * flip;   // what has been applied off the credit
+  const L = isCredit
+    ? { title: "CREDIT MEMO", number: "Credit Note #:", total: "Total Credit", applied: "Applied to invoices", grand: "CREDIT REMAINING" }
+    : { title: "INVOICE", number: "Invoice Number:", total: "Total Invoice Amount", applied: "Payment/Credit Applied", grand: "TOTAL" };
   const addr = [contact?.name, ...(contact?.address || "").split("\n")].filter(Boolean).join("\n");
   const fmt2 = n => (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const pages = invoicePages(doc.lineItems);
+  const notes = inv.notes || settings.invoiceNotes;
   return <div className="doc-screen">
     <div className="doc-bar">
       <button className="btn" onClick={onClose}><Ico d={ICONS.back} size={16} />Close</button>
       <button className="btn primary" onClick={print}><Ico d={ICONS.print} size={16} />Print / Save PDF</button>
     </div>
-    <div className="printable inv-doc">
-      <div className="inv-top">
-        <div>
-          <h2>{settings.company}</h2>
-          <div className="co">{settings.companyAddress}</div>
-          {settings.companyPhone && <div className="co" style={{ marginTop: 14 }}>Voice:  {settings.companyPhone}</div>}
+    {pages.map((rows, pi) => {
+      const last = pi === pages.length - 1;
+      return <div className="printable inv-doc inv-page" key={pi}>
+        <div className="inv-top">
+          <div>
+            <h2>{settings.company}</h2>
+            <div className="co">{settings.companyAddress}</div>
+            {settings.companyPhone && <div className="co" style={{ marginTop: 14 }}>Voice:  {settings.companyPhone}</div>}
+          </div>
+          <div className="inv-title">
+            <div className="t">{L.title}</div>
+            <table className="hdr"><tbody>
+              <tr><td>{L.number}</td><td>{inv.number}</td></tr>
+              <tr><td>{isCredit ? "Credit Date:" : "Invoice Date:"}</td><td>{fmtDate(inv.date)}</td></tr>
+              <tr><td>Page:</td><td>{pages.length > 1 ? `${pi + 1} of ${pages.length}` : "1"}</td></tr>
+            </tbody></table>
+          </div>
         </div>
-        <div className="inv-title">
-          <div className="t">INVOICE</div>
-          <table className="hdr"><tbody>
-            <tr><td>Invoice Number:</td><td>{inv.number}</td></tr>
-            <tr><td>Invoice Date:</td><td>{fmtDate(inv.date)}</td></tr>
-            <tr><td>Page:</td><td>1</td></tr>
+        <div className="inv-boxes">
+          <div className="box"><div className="bh">Bill To:</div><div className="bb">{addr}</div></div>
+          <div className="box"><div className="bh">Ship to:</div><div className="bb">{addr}</div></div>
+        </div>
+        <table className="inv-grid"><tbody>
+          <tr className="h"><td>Customer ID</td><td>Customer PO</td><td colSpan={2}>Payment Terms</td></tr>
+          <tr><td>&nbsp;</td><td>{inv.poNumber || " "}</td><td colSpan={2}>{isCredit ? "Credit memo" : termsLabel(contact, settings)}</td></tr>
+          <tr className="h"><td>Sales Rep ID</td><td>Shipping Method</td><td>Ship Date</td><td>{isCredit ? "Credit Date" : "Due Date"}</td></tr>
+          <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>{fmtDate(isCredit ? inv.date : inv.dueDate)}</td></tr>
+        </tbody></table>
+        <div className="inv-body">
+          <table className="inv-items"><thead><tr>
+            <th style={{ width: 70 }}>Quantity</th><th style={{ width: 80 }}>Item</th><th>Description</th>
+            <th style={{ width: 90 }}>Unit Price</th><th style={{ width: 95 }}>Amount</th>
+          </tr></thead><tbody>
+            {rows.map((r, i) => <tr key={i}>
+              <td className="r">{r.billed ? r.qty.toFixed(2) : ""}</td><td></td>
+              <td className="desc">{r.lines.join("\n")}</td>
+              <td className="r">{r.price == null ? "" : fmt2(r.price)}</td>
+              <td className="r">{r.billed ? fmt2(r.amount) : ""}</td>
+            </tr>)}
           </tbody></table>
         </div>
-      </div>
-      <div className="inv-boxes">
-        <div className="box"><div className="bh">Bill To:</div><div className="bb">{addr}</div></div>
-        <div className="box"><div className="bh">Ship to:</div><div className="bb">{addr}</div></div>
-      </div>
-      <table className="inv-grid"><tbody>
-        <tr className="h"><td>Customer ID</td><td>Customer PO</td><td colSpan={2}>Payment Terms</td></tr>
-        <tr><td>&nbsp;</td><td>{inv.poNumber || " "}</td><td colSpan={2}>Net {settings.terms} Days</td></tr>
-        <tr className="h"><td>Sales Rep ID</td><td>Shipping Method</td><td>Ship Date</td><td>Due Date</td></tr>
-        <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>{fmtDate(inv.dueDate)}</td></tr>
-      </tbody></table>
-      <table className="inv-items"><thead><tr>
-        <th style={{ width: 70 }}>Quantity</th><th style={{ width: 80 }}>Item</th><th>Description</th>
-        <th style={{ width: 90 }}>Unit Price</th><th style={{ width: 95 }}>Amount</th>
-      </tr></thead><tbody>
-        {inv.lineItems.map((it, i) => {
-          const qty = Number(it.qty) || 0;
-          return <tr key={i}>
-            <td className="r">{qty > 0 ? qty.toFixed(2) : ""}</td><td></td>
-            <td style={{ whiteSpace: "pre-line" }}>{(it.desc || "—").replace(/ — /g, "\n")}</td>
-            <td className="r">{fmt2(it.unitPrice)}</td>
-            <td className="r">{qty > 0 ? fmt2(qty * (Number(it.unitPrice) || 0)) : ""}</td>
-          </tr>;
-        })}
-        <tr className="fill"><td colSpan={5}></td></tr>
-      </tbody></table>
-      <div className="inv-foot">
-        <div className="memo">Check/Credit Memo No:</div>
-        <table className="totals"><tbody>
-          <tr><td>Subtotal</td><td className="r">{fmt2(t.sub)}</td></tr>
-          <tr><td>Sales Tax</td><td className="r">{t.tax ? fmt2(t.tax) : ""}</td></tr>
-          <tr><td>Total Invoice Amount</td><td className="r">{fmt2(t.total)}</td></tr>
-          <tr><td>Payment/Credit Applied</td><td className="r">{p ? fmt2(p) : ""}</td></tr>
-          <tr className="grand"><td>TOTAL</td><td className="r">{fmt2(p ? balance(inv) : t.total)}</td></tr>
-        </tbody></table>
-      </div>
-      {(inv.notes || settings.invoiceNotes) && <div className="doc-notes">{inv.notes || settings.invoiceNotes}</div>}
-    </div>
+        {last ? <>
+          <div className="inv-foot">
+            <div className="memo">{isCredit ? "Apply this credit to any open invoice." : "Check/Credit Memo No:"}</div>
+            <table className="totals"><tbody>
+              <tr><td>Subtotal</td><td className="r">{fmt2(t.sub)}</td></tr>
+              <tr><td>Sales Tax</td><td className="r">{t.tax ? fmt2(t.tax) : ""}</td></tr>
+              <tr><td>{L.total}</td><td className="r">{fmt2(t.total)}</td></tr>
+              <tr><td>{L.applied}</td><td className="r">{p ? fmt2(p) : ""}</td></tr>
+              <tr className="grand"><td>{L.grand}</td><td className="r">{fmt2(p ? balance(inv) * flip : t.total)}</td></tr>
+            </tbody></table>
+          </div>
+          {notes && <div className="doc-notes">{notes}</div>}
+        </> : <div className="inv-cont">Continued on page {pi + 2}</div>}
+      </div>;
+    })}
   </div>;
 }

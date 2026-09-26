@@ -86,7 +86,7 @@ const TITLES = {
   catalog: ["Item Catalog", "Reusable quote line items"], settings: ["Settings", "Company info and defaults"],
   reports: ["Reports", "P&L, sales tax, customers, and statements"],
   jobCosting: ["Job Costing", "Profit per job — revenue vs labor and materials"],
-  proposals: ["Proposals", "Machine proposals — priced, tracked, and documented"],
+  proposals: ["Proposals", "Fixture and system proposals — priced, tracked, and documented"],
   machineRates: ["Machine Rates", "The costing table behind proposal pricing"],
 };
 

@@ -468,7 +468,7 @@ function ProposalsTab({ s, set, readOnly, saveAll }) {
           <Field label="Signer" hint="Prints under Regards,"><input className="input" value={cfg.signer} disabled={readOnly} onChange={e => setP("signer", e.target.value)} /></Field>
           <Field label="Proposal number prefix"><input className="input mono" value={cfg.propPrefix} disabled={readOnly} onChange={e => setP("propPrefix", e.target.value)} /></Field>
         </div>
-        <Field label="Standards line" hint="Machine proposals: “System hardware and software design will follow …”"><input className="input" value={cfg.standards} disabled={readOnly} onChange={e => setP("standards", e.target.value)} /></Field>
+        <Field label="Standards line" hint="Fixture proposals: “System hardware and software design will follow …”"><input className="input" value={cfg.standards} disabled={readOnly} onChange={e => setP("standards", e.target.value)} /></Field>
         <div className="row">
           <Field label="Default build / start-up location"><input className="input" value={cfg.location} disabled={readOnly} onChange={e => setP("location", e.target.value)} /></Field>
           <Field label="PLC platform"><input className="input" value={cfg.plcType} disabled={readOnly} onChange={e => setP("plcType", e.target.value)} /></Field>
@@ -482,7 +482,7 @@ function ProposalsTab({ s, set, readOnly, saveAll }) {
     </div>
 
     <div className="card" style={{ marginBottom: 16 }}>
-      <div className="card-head"><h3>Labor Rate Card</h3><span className="subtle" style={{ marginLeft: "auto" }}>$/hour — prices a controls estimate</span></div>
+      <div className="card-head"><h3>Labor Rate Card</h3><span className="subtle" style={{ marginLeft: "auto" }}>$/hour — prices a system proposal</span></div>
       <div className="card-body"><div className="row">
         {Object.entries(ROLE_LABELS).map(([k, label]) => <Field key={k} label={label}>
           <input className="input mono" type="number" min="0" step="any" value={cfg.laborRates[k] ?? 0} disabled={readOnly} onChange={e => setRate(k, e.target.value)} />
@@ -496,7 +496,7 @@ function ProposalsTab({ s, set, readOnly, saveAll }) {
     </div>
 
     <div className="card" style={{ marginBottom: 16 }}>
-      <div className="card-head"><h3>Hour Model</h3><span className="subtle" style={{ marginLeft: "auto" }}>hours a controls estimate suggests per unit of content</span></div>
+      <div className="card-head"><h3>Hour Model</h3><span className="subtle" style={{ marginLeft: "auto" }}>hours a system proposal suggests per unit of content</span></div>
       <table><thead><tr><th>Per</th>{hmKeys.map(k => <th key={k} className="num">{hmLabels[k]}</th>)}</tr></thead>
         <tbody>{Object.entries(HOUR_MODEL_LABELS).map(([table, label]) => <tr key={table}>
           <td>{label}</td>
@@ -513,7 +513,7 @@ function ProposalsTab({ s, set, readOnly, saveAll }) {
       <div className="card-head"><h3>Invoicing Schedules</h3><span className="subtle" style={{ marginLeft: "auto" }}>the splits a new proposal starts with</span></div>
       <div className="card-body">
         <div className="row">
-          <div style={{ flex: 1, minWidth: 260 }}><div className="subtle" style={{ fontWeight: 700, marginBottom: 6 }}>Machine proposal</div>
+          <div style={{ flex: 1, minWidth: 260 }}><div className="subtle" style={{ fontWeight: 700, marginBottom: 6 }}>Fixture proposal</div>
             {phaseRows("m", cfg.phases, v => setP("phases", v))}</div>
           <div style={{ flex: 1, minWidth: 260 }}><div className="subtle" style={{ fontWeight: 700, marginBottom: 6 }}>Controls — engineering only</div>
             {phaseRows("e", cfg.controlsPhases.engineering, v => setP("controlsPhases", { ...cfg.controlsPhases, engineering: v }))}</div>
@@ -524,7 +524,7 @@ function ProposalsTab({ s, set, readOnly, saveAll }) {
     </div>
 
     <div className="card" style={{ marginBottom: 16 }}>
-      <div className="card-head"><h3>Standard Assumptions and Exclusions</h3><span className="subtle" style={{ marginLeft: "auto" }}>one per line — a new controls estimate starts with these</span></div>
+      <div className="card-head"><h3>Standard Assumptions and Exclusions</h3><span className="subtle" style={{ marginLeft: "auto" }}>one per line — a new system proposal starts with these</span></div>
       <div className="card-body"><div className="row">
         <Field label="Assumptions and clarifications"><textarea className="input" rows={7} value={cfg.assumptions.join("\n")} disabled={readOnly} onChange={e => setP("assumptions", e.target.value.split("\n"))} /></Field>
         <Field label="Exclusions"><textarea className="input" rows={7} value={cfg.exclusions.join("\n")} disabled={readOnly} onChange={e => setP("exclusions", e.target.value.split("\n"))} /></Field>

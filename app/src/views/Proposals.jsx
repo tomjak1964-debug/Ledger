@@ -82,7 +82,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
 
   const { sorted: propRows, sort, onSort } = useTableSort(filtered.slice().reverse(), {
     number: p => p.number, job: p => p.jobNumber || "", customer: p => nameOf(db, p.customerId),
-    desc: p => p.description || "", type: p => p.kind === "controls" ? "Controls Estimate" : (db.machineTypes.find(m => m.id === p.machineTypeId)?.name || ""),
+    desc: p => p.description || "", type: p => p.kind === "controls" ? "System Proposal" : (db.machineTypes.find(m => m.id === p.machineTypeId)?.name || ""),
     date: p => p.date || "", status: p => p.status || "", total: p => Number(p.pricing?.total) || 0,
   });
 
@@ -138,15 +138,15 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
         <Ico d={ICONS.quote} size={15} />Import Lineup</button>}
       {!readOnly && <button className="btn" onClick={() => setImporting(true)}>
         <Ico d={ICONS.quote} size={15} />Import Quote Chart</button>}
-      {!readOnly && <button className="btn" onClick={startNewControls}><Ico d={ICONS.plus} size={15} />New Controls Estimate</button>}
-      {!readOnly && <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Machine Proposal</button>}
+      {!readOnly && <button className="btn" onClick={startNewControls}><Ico d={ICONS.plus} size={15} />New System Proposal</button>}
+      {!readOnly && <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Fixture Proposal</button>}
     </div>
     <div className="card">
       {db.proposals.length === 0
         ? <Empty icon={ICONS.quote} title="No proposals yet" msg="Enter the machine details — type, welds, clamps, cameras — and the app prices it, generates the proposal document, and tracks it to PO."
           action={!readOnly && <span style={{ display: "inline-flex", gap: 8 }}>
-            <button className="btn" onClick={startNewControls}><Ico d={ICONS.plus} size={15} />New Controls Estimate</button>
-            <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Machine Proposal</button></span>} />
+            <button className="btn" onClick={startNewControls}><Ico d={ICONS.plus} size={15} />New System Proposal</button>
+            <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Fixture Proposal</button></span>} />
         : <table><thead><tr>
           <SortTh label="Proposal" col="number" sort={sort} onSort={onSort} />
           <SortTh label="Job #" col="job" sort={sort} onSort={onSort} />
@@ -165,7 +165,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
               <td className="mono subtle">{p.jobNumber || "—"}</td>
               <td>{nameOf(db, p.customerId)}</td>
               <td>{p.description || "—"}</td>
-              <td className="subtle">{p.kind === "controls" ? "Controls Estimate" : (mt?.name || "—")}</td>
+              <td className="subtle">{p.kind === "controls" ? "System Proposal" : (mt?.name || "—")}</td>
               <td className="subtle">{fmtDate(p.date)}</td>
               <td><Badge status={p.status} />{p.status === "won" && billed > 0 && <span className="subtle" style={{ marginLeft: 6 }}>{billed}/{p.phases.length} billed</span>}</td>
               <td className="num" style={{ fontWeight: 600 }}>{money(Number(p.pricing?.total) || 0)}</td>
@@ -216,7 +216,7 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
   return <div>
     <div className="toolbar">
       <button className="btn ghost" onClick={onCancel}><Ico d={ICONS.back} size={16} />Back</button>
-      <h2 style={{ fontSize: 18, marginLeft: 4 }}>{x._new ? "New Proposal" : "Edit " + x.number}</h2>
+      <h2 style={{ fontSize: 18, marginLeft: 4 }}>{x._new ? "New Fixture Proposal" : "Edit " + x.number}</h2>
       <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
         <button className="btn" onClick={onCancel}>Cancel</button>
         <button className="btn primary" disabled={saving} onClick={save}><Ico d={ICONS.check} size={15} />{saving ? "Saving…" : "Save Proposal"}</button>

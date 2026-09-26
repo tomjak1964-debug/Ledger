@@ -31,7 +31,7 @@ export default function GlobalSearch({ db, member, go }) {
     if (can("payables")) db.bills.forEach(x => hit(x.number, x.ref, nameOf(db, x.vendorId)) && push("payables", x.number, nameOf(db, x.vendorId), "Bill"));
     if (can("payables")) (db.purchaseOrders || []).forEach(x => hit(x.number, nameOf(db, x.vendorId)) && push("purchaseOrders", x.number, nameOf(db, x.vendorId), "PO"));
     if (can("proposals")) db.proposals.forEach(x => hit(x.number, x.jobNumber, x.description, nameOf(db, x.customerId)) && push("proposals", x.number, x.description || nameOf(db, x.customerId), "Proposal"));
-    if (can("contacts")) db.contacts.forEach(x => hit(x.name, x.email, x.contact) && push("contacts", x.name, x.type, "Contact"));
+    if (can("contacts")) db.contacts.forEach(x => hit(x.name, x.email, x.contact) && push(x.type === "vendor" ? "vendors" : "customers", x.name, x.type, x.type === "vendor" ? "Vendor" : "Customer"));
   }
   const shown = results.slice(0, 12);
   const pick = (r) => { setOpen(false); setQ(""); go(r.view); };

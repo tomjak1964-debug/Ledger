@@ -165,7 +165,21 @@ export function useLedger(session, onError) {
 
   /* ------------ internals ------------ */
 
-  const fail = (e) => { onError("⚠ " + (e?.message || "Something went wrong — change not saved")); return null; };
+  // A failed write is reported and the action returns null so the editor
+  // stays open. A network-level failure (the browser could not send the
+  // request, or the server never answered — see ledgerFetch in
+  // supabaseClient.js) is put in plain words and left up long enough to read;
+  // the raw "Failed to fetch" told nobody what to do next.
+  const NETWORK = /failed to fetch|load failed|networkerror|network request failed/i;
+  const fail = (e) => {
+    const m = e?.message || "Something went wrong — change not saved";
+    if (NETWORK.test(m))
+      onError("⚠ Couldn't reach the server, so the change was not saved. Check the connection and try again; if it keeps happening, refresh the app.", { ms: 8000 });
+    else if (/didn't answer/.test(m))
+      onError("⚠ " + m + " — the change was not saved. Try again; if this one record keeps timing out, something else is holding it (see supabase/data-fixes/stuck_locks.sql).", { ms: 10000 });
+    else onError("⚠ " + m);
+    return null;
+  };
 
   // No two checks may carry the same number. A number only frees up when the
   // check that used it is voided (its payments deleted). `allowIds` are the

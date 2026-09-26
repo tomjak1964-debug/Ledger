@@ -50,7 +50,7 @@ export default function FieldView({ db, actions, toast, session }) {
           </button>)}
         </div>}
     </div>
-    <p className="subtle" style={{ marginTop: 10, textAlign: "center" }}>Set a customer's site location (Contacts → the customer) to enable distance sorting.</p>
+    <p className="subtle" style={{ marginTop: 10, textAlign: "center" }}>Set a customer's site location (Customers & Sales → Customers) to enable distance sorting.</p>
   </div>;
 }
 

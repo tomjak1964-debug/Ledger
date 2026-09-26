@@ -1,5 +1,6 @@
 // UI primitives, ported verbatim from ledger.html.
-import { useState, useMemo, useRef, useLayoutEffect } from "react";
+import { useState, useMemo, useRef, useLayoutEffect, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { cls } from "../lib/helpers.js";
 
 // Click-to-sort table support. `accessors` maps a column key to a value getter;
@@ -20,13 +21,55 @@ export function useTableSort(rows, accessors, initial) {
   return { sorted, sort, onSort };
 }
 
-// A clickable, sortable column header. `col` is the accessor key.
+// A clickable, sortable column header. `col` is the accessor key. The label
+// wraps (to three lines at most — .th-label in styles.css) when the table is
+// squeezed, so a long heading never decides the width of a narrow column.
 export function SortTh({ label, col, sort, onSort, num, style }) {
   const active = sort.key === col;
   return <th className={num ? "num" : ""} onClick={() => onSort(col)}
-    style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap", ...style }} title="Sort">
-    {label}<span style={{ opacity: active ? 0.9 : 0.25, fontSize: 11 }}> {active ? (sort.dir === "asc" ? "▲" : "▼") : "↕"}</span>
+    style={{ cursor: "pointer", userSelect: "none", ...style }} title="Sort">
+    <span className="th-label">{label}<span style={{ opacity: active ? 0.9 : 0.25, fontSize: 11, whiteSpace: "nowrap" }}> {active ? (sort.dir === "asc" ? "▲" : "▼") : "↕"}</span></span>
   </th>;
+}
+
+// A row's "⋯" menu. The panel is portalled to the body and positioned from the
+// button, because a card scrolls sideways when its table is wider than the
+// page, and a panel absolutely positioned inside the card would be clipped by
+// that scrolling box. `children` is a function of close().
+export function ActionMenu({ children, title = "More", minWidth = 180 }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const btn = useRef();
+  const panel = useRef();
+  const close = () => setOpen(false);
+  const toggle = () => {
+    if (open) return close();
+    const r = btn.current.getBoundingClientRect();
+    setPos({ top: r.bottom + 4, right: Math.max(8, window.innerWidth - r.right) });
+    setOpen(true);
+  };
+  useEffect(() => {
+    if (!open) return;
+    const away = e => { if (!panel.current?.contains(e.target) && !btn.current?.contains(e.target)) close(); };
+    const key = e => { if (e.key === "Escape") close(); };
+    document.addEventListener("mousedown", away);
+    window.addEventListener("keydown", key);
+    // the page area scrolls on its own; a panel pinned to the viewport must go with the button
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      window.removeEventListener("keydown", key);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [open]);
+  return <>
+    <button ref={btn} className="btn ghost icon" onClick={toggle} title={title}>⋯</button>
+    {open && pos && createPortal(<div ref={panel} className="action-menu" style={{ top: pos.top, right: pos.right, minWidth }}>
+      {typeof children === "function" ? children(close) : children}
+    </div>, document.body)}
+  </>;
 }
 
 // A textarea that grows with its content — line-item descriptions are typed

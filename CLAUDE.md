@@ -382,7 +382,7 @@ gives the download.
 
 **Two kinds of proposal** (`proposals.kind`, migration 021) — on screen a **Fixture Proposal** (`machine`) and a
 **System Proposal** (`controls`); the code and the database keep the original kind names. `machine` is the Venture Global proposal
-exactly as it was — content counts priced off Machine Rates, the quote-chart import, the letter. `controls`
+exactly as it was — content counts priced off Fixture Rates, the quote-chart import, the letter. `controls`
 is the **Controls Estimate**: a job for any customer, built from the standard engineering components as
 hours × rate (`src/calc/estimates.js` — `COMPONENTS`: Hardware Design, Drafting, PLC Program Development,
 HMI Development, Start-Up/Debug, and optional Project Management, Documentation & Training, FAT, Safety
@@ -534,12 +534,31 @@ two electronic runs to the same vendor on the same day collapse into a single re
 
 **Navigation groups:** the sidebar reads Overview · **Customers & Sales** (Customers, Proposals, Quotes,
 Sales Orders, Invoices, Receivables) · **Vendors & Purchases** (Vendors, Purchase Orders, Payables,
-Payments, Expenses) · **Work** (Jobs, Tasks, Field, Time Tracking, Item Catalog, Machine Rates) ·
+Payments, Expenses) · **Work** (Jobs, Tasks, Field, Time Tracking, Item Catalog, Fixture Rates) ·
 **System** (Settings). The group names are labels in `NAV` (`App.jsx`) only, so moving or renaming a
 page is a one-line edit there. **Customers and Vendors** are the two halves of the old Contacts page
 (`views/Contacts.jsx` with a `type` prop; view keys `customers` / `vendors`, both gated by the
 `contacts` permission area, and `go("contacts")` still lands on Customers). A vendor carries a
 **Tax ID** (`contacts.tax_id`, migration 022) for the 1099 vendor report to come.
+
+**Fixture Rates** (`views/MachineRates.jsx`, the `machine_types` table — the code and the database keep the
+old name) is the costing table behind a fixture proposal, one row per fixture type. Per-unit adders —
+`camera_rate`, `torque_rate`, `io_link_rate` (migration 023) — multiply by the count on the proposal
+(`specs.cameras` / `torque` / `ioLink`) and roll into the Engineering/Start-Up line; `remote_hmi` and
+`remote_sonic` (migration 023) are base-pricing lines of their own with a scope bullet each. **A rate of 0
+is left off the proposal**: `priceProposal()` drops any line worth nothing (a 0 rate, an unchecked Data
+National, a fixture with no I/O blocks), `buildProposalContent()` drops them again from a pricing snapshot
+saved before that rule, and both the printable and the Word export skip the Premium Pricing section when
+nothing is in it.
+
+**The page area scrolls on its own.** `.app` is one viewport tall and never scrolls; the sidebar stays put
+and `.main` is the scroll box, so `go()` scrolls `.main` (and the window, for good measure) to the top.
+Printing undoes that (`height:auto; overflow:visible`) or a report would print as one screen. **A wide
+table scrolls sideways inside its card** (`.card{overflow-x:auto}`) rather than running off the white,
+which is why a row's "⋯" menu is `ActionMenu` (`components/ui.jsx`): the panel is portalled to the body
+and pinned from the button's rectangle, because a panel absolutely positioned inside a scrolling card is
+clipped by it. **Column headings wrap** (to three lines, `.th-label`) when a table is squeezed, so a long
+heading never sets the width of a narrow column; `SortTh` no longer forces `nowrap`.
 
 **Network failures on a save:** every PostgREST request goes through `ledgerFetch()` in
 `lib/supabaseClient.js` — a request the browser could not send at all ("Failed to fetch", typically
@@ -579,7 +598,7 @@ payments. `tools/so-report-sql.py` turns a Sage Sales Order Report PDF into a SQ
 invoiced / closed state into line with Sage's shipped / remaining quantities. See `tools/README.md`.
 
 **Sortable lists:** every list view — Quotes, Sales Orders, Invoices, Receivables, Payables,
-Purchase Orders, Expenses, Contacts, Catalog, Jobs, Tasks, Proposals, Machine Rates, Job Costing,
+Purchase Orders, Expenses, Customers, Vendors, Catalog, Jobs, Tasks, Proposals, Fixture Rates, Job Costing,
 Time Tracking, the Payments/Receipts register, and the report tables — sorts on any column heading,
 ascending then descending. See §7 for the convention new pages follow.
 

@@ -137,8 +137,9 @@ const COLUMNS = {
   pp: "pp", pickpoints: "pp", clamps: "clamps", clips: "clips", tabs: "tabs",
   shuttle: "shuttle", shuttles: "shuttle", platen: "platen", platens: "platen",
   cameras: "cameras", ioblks: "ioBlocks", ioblocks: "ioBlocks", datanat: "dataNational",
+  torque: "torque", torquetools: "torque", iolink: "ioLink", iolinkdevices: "ioLink",
 };
-const SPEC_KEYS = ["nests", "generators", "welds", "pp", "clamps", "clips", "tabs", "shuttle", "platen", "cameras"];
+const SPEC_KEYS = ["nests", "generators", "welds", "pp", "clamps", "clips", "tabs", "shuttle", "platen", "cameras", "torque", "ioLink"];
 
 // The heading row is whichever row names the most columns we know — the chart
 // may carry a title line above it.

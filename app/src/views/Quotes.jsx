@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { uid, money, fmtDate, todayISO, addDays, nameOf } from "../lib/helpers.js";
 import { lineTotals } from "../calc/ledger.js";
 import { useFilters } from "../components/useFilters.jsx";
-import { Ico, ICONS, Badge, Empty, Field, MenuItem, SortTh, useTableSort } from "../components/ui.jsx";
+import { Ico, ICONS, Badge, Empty, Field, MenuItem, ActionMenu, SortTh, useTableSort } from "../components/ui.jsx";
 import LineItemsEditor from "../components/LineItemsEditor.jsx";
 
 export default function QuotesView({ db, actions, toast, openDoc, readOnly }) {
@@ -87,20 +87,14 @@ export default function QuotesView({ db, actions, toast, openDoc, readOnly }) {
 }
 
 function QuoteMenu({ q, setStatus, convert, del }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef();
-  useEffect(() => { const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }; document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h); }, []);
-  return <span style={{ position: "relative", display: "inline-block" }} ref={ref}>
-    <button className="btn ghost icon" onClick={() => setOpen(o => !o)} title="More">⋯</button>
-    {open && <div style={{ position: "absolute", right: 0, top: "100%", background: "#fff", border: "1px solid var(--line)", borderRadius: 9, boxShadow: "var(--shadow)", zIndex: 30, minWidth: 180, padding: 6, textAlign: "left" }}>
-      {q.status !== "sent" && <MenuItem onClick={() => { setStatus(q.id, "sent"); setOpen(false); }}>Mark as Sent</MenuItem>}
-      {q.status !== "accepted" && <MenuItem onClick={() => { setStatus(q.id, "accepted"); setOpen(false); }}>Mark as Accepted</MenuItem>}
-      {q.status !== "declined" && <MenuItem onClick={() => { setStatus(q.id, "declined"); setOpen(false); }}>Mark as Declined</MenuItem>}
-      {!q.salesOrderId && <MenuItem accent onClick={() => { convert(q); setOpen(false); }}>Convert to Sales Order →</MenuItem>}
-      {q.salesOrderId && <div style={{ padding: "7px 10px", fontSize: 12, color: "var(--muted)" }}>Converted to SO ✓</div>}
-      <MenuItem danger onClick={() => { del(q.id); setOpen(false); }}>Delete</MenuItem>
-    </div>}
-  </span>;
+  return <ActionMenu>{close => <>
+    {q.status !== "sent" && <MenuItem onClick={() => { setStatus(q.id, "sent"); close(); }}>Mark as Sent</MenuItem>}
+    {q.status !== "accepted" && <MenuItem onClick={() => { setStatus(q.id, "accepted"); close(); }}>Mark as Accepted</MenuItem>}
+    {q.status !== "declined" && <MenuItem onClick={() => { setStatus(q.id, "declined"); close(); }}>Mark as Declined</MenuItem>}
+    {!q.salesOrderId && <MenuItem accent onClick={() => { convert(q); close(); }}>Convert to Sales Order →</MenuItem>}
+    {q.salesOrderId && <div style={{ padding: "7px 10px", fontSize: 12, color: "var(--muted)" }}>Converted to SO ✓</div>}
+    <MenuItem danger onClick={() => { del(q.id); close(); }}>Delete</MenuItem>
+  </>}</ActionMenu>;
 }
 
 function QuoteEditor({ quote, customers, catalog, onCancel, onSave }) {

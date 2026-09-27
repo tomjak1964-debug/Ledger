@@ -7,6 +7,8 @@ import {
   agedReceivables, agedPayables, incomeExpenseByMonth, receiptGroups,
 } from "../calc/reports.js";
 import { Ico, ICONS, Badge, Empty, SortTh, useTableSort } from "../components/ui.jsx";
+import { generalLedger, trialBalance, incomeStatement, vendor1099, ledgerAccounts, TEN99_LIMIT } from "../calc/gl.js";
+import { ten99Label, accountLabel } from "../calc/accounts.js";
 import FilterBar, { rangeLabel } from "../components/FilterBar.jsx";
 
 /* ---------- CSV export ---------- */
@@ -37,14 +39,18 @@ const REPORTS = {
   ap: { label: "Aged Payables", blurb: "What you owe each vendor, bucketed by how late it is.", party: "vendor", asOf: true, Render: AgedPayablesReport },
   payments: { label: "Payments Register", blurb: "Every payment made, by check or reference, with the bills it covered.", party: "vendor", Render: PaymentsReport },
   expenses: { label: "Expenses by Category", blurb: "Where the money went, grouped by category.", party: null, Render: ExpenseReport },
+  gl: { label: "General Ledger", blurb: "Every posting by account, with a running balance.", party: null, Render: GeneralLedgerReport },
+  tb: { label: "Trial Balance", blurb: "Debits and credits by account as of the end of the range — the two columns agree.", party: null, asOf: true, Render: TrialBalanceReport },
+  is: { label: "Income Statement", blurb: "The standard statement: revenues, cost of sales, gross profit, expenses and net income by account, for the range and year to date.", party: null, Render: IncomeStatementReport },
+  v1099: { label: "1099 Vendor Report", blurb: "Every 1099 vendor with each payment made in the year, the total, and whether the $600 limit was met.", party: "vendor", Render: Vendor1099Report },
 };
 
 const CATEGORIES = [
   { key: "ar", label: "Accounts Receivable", icon: ICONS.ar, blurb: "Customers, what they owe, what they've paid, and sales tax.", reports: ["ar", "customers", "receipts", "statement", "tax"] },
-  { key: "ap", label: "Accounts Payable", icon: ICONS.ap, blurb: "Vendors, open bills, and the checks that paid them.", reports: ["ap", "payments"] },
+  { key: "ap", label: "Accounts Payable", icon: ICONS.ap, blurb: "Vendors, open bills, the checks that paid them, and the 1099s.", reports: ["ap", "payments", "v1099"] },
   { key: "payroll", label: "Payroll", icon: ICONS.contacts, blurb: "Wages and payroll taxes.", reports: [] },
-  { key: "gl", label: "General Ledger", icon: ICONS.catalog, blurb: "Account activity and journal detail.", reports: [] },
-  { key: "financial", label: "Financial Statements", icon: ICONS.reports, blurb: "Profit and loss, and cash in versus cash out.", reports: ["pl", "ie"] },
+  { key: "gl", label: "General Ledger", icon: ICONS.catalog, blurb: "Account activity and the trial balance, posted from the documents.", reports: ["gl", "tb"] },
+  { key: "financial", label: "Financial Statements", icon: ICONS.reports, blurb: "The income statement, cash-basis profit and loss, and cash in versus cash out.", reports: ["is", "pl", "ie"] },
   { key: "inventory", label: "Inventory", icon: ICONS.catalog, blurb: "Stock on hand and item movement.", reports: [] },
   { key: "jobs", label: "Job Reports", icon: ICONS.job, blurb: "Cost and profit per job.", reports: [] },
   { key: "recon", label: "Account Reconciliation", icon: ICONS.check, blurb: "Bank statements against the register.", reports: [] },
@@ -438,4 +444,186 @@ function Statements({ db, partyId }) {
         <tr><td colSpan={5} style={{ fontWeight: 700 }}>Total Due</td><td className="num" style={{ fontWeight: 700 }}>{money(r.totalDue)}</td></tr>
       </tbody></table>
   </div>;
+}
+
+
+/* ---------- General Ledger ----------
+   Posted from the documents (calc/gl.js): one block per account with activity,
+   an opening balance from everything before the range, and a running balance.
+   Pick one account or see them all. */
+function GeneralLedgerReport({ db, from, to, rangeLabel: label }) {
+  const [account, setAccount] = useState("");
+  const chart = ledgerAccounts(db);
+  const r = generalLedger(db, { from, to, account });
+  const exportCSV = () => downloadCSV("general-ledger",
+    ["Account", "Description", "Date", "Memo", "Party", "Debit", "Credit", "Balance"],
+    r.blocks.flatMap(b => [
+      [b.account.number, b.account.name, from || "", "Opening balance", "", "", "", b.opening.toFixed(2)],
+      ...b.rows.map(x => [b.account.number, b.account.name, x.date, x.memo, x.party, x.debit ? x.debit.toFixed(2) : "", x.credit ? x.credit.toFixed(2) : "", x.balance.toFixed(2)]),
+    ]));
+  return <>
+    <div className="toolbar no-print" style={{ marginBottom: 12 }}>
+      <span className="subtle">Account</span>
+      <select className="select" style={{ maxWidth: 360 }} value={account} onChange={e => setAccount(e.target.value)}>
+        <option value="">All accounts with activity</option>
+        {chart.map(a => <option key={a.number} value={a.number}>{a.number} · {a.name}</option>)}
+      </select>
+      <button className="btn sm" style={{ marginLeft: "auto" }} onClick={exportCSV}>Export CSV</button>
+    </div>
+    {r.blocks.length === 0
+      ? <div className="card"><Empty icon={ICONS.catalog} title="Nothing posted in this range" msg="Invoices, bills, expenses and payments post to the ledger as they are entered. Widen the range, or load a chart of accounts under System → Chart of Accounts to name the accounts." /></div>
+      : r.blocks.map(b => <ReportCard key={b.account.number} title={`${b.account.number} · ${b.account.name}`} rangeLabel={label}
+        right={<span className="mono" style={{ fontWeight: 700 }}>{money(b.closing)}</span>}>
+        <table><thead><tr><th>Date</th><th>Memo</th><th>Party</th><th className="num">Debit</th><th className="num">Credit</th><th className="num">Balance</th></tr></thead>
+          <tbody>
+            <tr><td className="subtle">{from ? fmtDate(from) : "—"}</td><td className="subtle" colSpan={2}>Opening balance</td><td colSpan={2}></td><td className="num subtle">{money(b.opening)}</td></tr>
+            {b.rows.map((x, i) => <tr key={i}>
+              <td className="subtle">{fmtDate(x.date)}</td><td>{x.memo}</td><td className="subtle">{x.party || "—"}</td>
+              <td className="num">{x.debit ? money(x.debit) : ""}</td><td className="num">{x.credit ? money(x.credit) : ""}</td>
+              <td className="num" style={{ fontWeight: 600 }}>{money(x.balance)}</td>
+            </tr>)}
+            <tr><td style={{ fontWeight: 700 }} colSpan={3}>Period totals</td>
+              <td className="num" style={{ fontWeight: 700 }}>{money(b.debits)}</td><td className="num" style={{ fontWeight: 700 }}>{money(b.credits)}</td>
+              <td className="num" style={{ fontWeight: 700 }}>{money(b.closing)}</td></tr>
+          </tbody></table>
+      </ReportCard>)}
+  </>;
+}
+
+/* ---------- Trial Balance ---------- */
+function TrialBalanceReport({ db, asOf }) {
+  const r = trialBalance(db, asOf);
+  const { sorted: tbRows, sort, onSort } = useTableSort(r.rows, {
+    number: x => x.account.number, name: x => x.account.name || "", type: x => x.account.type || "", debit: x => x.debit, credit: x => x.credit,
+  }, { key: "number", dir: "asc" });
+  const exportCSV = () => downloadCSV("trial-balance", ["Account", "Description", "Type", "Debit", "Credit"],
+    [...tbRows.map(x => [x.account.number, x.account.name, x.account.type, x.debit ? x.debit.toFixed(2) : "", x.credit ? x.credit.toFixed(2) : ""]), ["TOTAL", "", "", r.debits.toFixed(2), r.credits.toFixed(2)]]);
+  const balanced = Math.abs(r.debits - r.credits) < 0.01;
+  return <ReportCard title="Trial Balance" rangeLabel={"As of " + fmtDate(asOf)}
+    right={<><span className={"badge " + (balanced ? "green" : "red")}><span className="dot"></span>{balanced ? "In balance" : "Out of balance"}</span>
+      <button className="btn sm no-print" onClick={exportCSV}>Export CSV</button></>}>
+    {r.rows.length === 0
+      ? <Empty icon={ICONS.catalog} title="Nothing posted yet" msg="The trial balance fills in as invoices, bills, expenses and payments are entered." />
+      : <table><thead><tr>
+        <SortTh label="Account" col="number" sort={sort} onSort={onSort} />
+        <SortTh label="Description" col="name" sort={sort} onSort={onSort} />
+        <SortTh label="Type" col="type" sort={sort} onSort={onSort} />
+        <SortTh label="Debit" col="debit" sort={sort} onSort={onSort} num />
+        <SortTh label="Credit" col="credit" sort={sort} onSort={onSort} num /></tr></thead>
+        <tbody>
+          {tbRows.map(x => <tr key={x.account.number}>
+            <td className="mono" style={{ fontWeight: 600 }}>{x.account.number}</td><td>{x.account.name}</td><td className="subtle">{x.account.type}</td>
+            <td className="num">{x.debit ? money(x.debit) : ""}</td><td className="num">{x.credit ? money(x.credit) : ""}</td>
+          </tr>)}
+          <tr><td style={{ fontWeight: 700 }} colSpan={3}>Total</td>
+            <td className="num" style={{ fontWeight: 700 }}>{money(r.debits)}</td><td className="num" style={{ fontWeight: 700 }}>{money(r.credits)}</td></tr>
+        </tbody></table>}
+  </ReportCard>;
+}
+
+/* ---------- Income Statement (standard layout) ----------
+   Revenues, Cost of Sales, Gross Profit, Expenses, Net Income — every income,
+   cost and expense account in the chart, zeros included, for the selected range
+   and the year to date at its end, each with its share of total revenues. */
+function IncomeStatementReport({ db, from, to, rangeLabel: label }) {
+  const r = incomeStatement(db, from, to);
+  const pct = v => (Math.abs(v) < 0.005 ? "0.00" : v.toFixed(2));
+  const line = (name, v, opts = {}) => <tr key={name + (opts.key || "")} style={opts.bold ? { fontWeight: 700 } : undefined}>
+    <td style={{ paddingLeft: opts.indent ? 28 : undefined, ...(opts.top ? { borderTop: "2px solid var(--ink)" } : {}) }} className={opts.indent && !opts.bold ? "subtle" : ""}>{name}</td>
+    <td className="num" style={opts.top ? { borderTop: "2px solid var(--ink)" } : undefined}>{money(v.period)}</td>
+    <td className="num subtle" style={opts.top ? { borderTop: "2px solid var(--ink)" } : undefined}>{pct(r.pct.period(v.period))}</td>
+    <td className="num" style={opts.top ? { borderTop: "2px solid var(--ink)" } : undefined}>{money(v.ytd)}</td>
+    <td className="num subtle" style={opts.top ? { borderTop: "2px solid var(--ink)" } : undefined}>{pct(r.pct.ytd(v.ytd))}</td>
+  </tr>;
+  const section = (title, rows, total, totalLabel) => [
+    <tr key={title}><td colSpan={5} style={{ fontWeight: 700, paddingTop: 16 }}>{title}</td></tr>,
+    ...rows.map(x => line(x.account.name || x.account.number, x, { indent: true, key: x.account.number })),
+    line(totalLabel, total, { bold: true, indent: true }),
+  ];
+  const exportCSV = () => downloadCSV("income-statement", ["Line", "Range", "% of Revenue", "Year to Date", "% of Revenue"],
+    [["Revenues"], ...r.revenues.map(x => [x.account.name, x.period.toFixed(2), pct(r.pct.period(x.period)), x.ytd.toFixed(2), pct(r.pct.ytd(x.ytd))]),
+     ["Total Revenues", r.totRev.period.toFixed(2), "", r.totRev.ytd.toFixed(2), ""],
+     ["Cost of Sales"], ...r.cos.map(x => [x.account.name, x.period.toFixed(2), pct(r.pct.period(x.period)), x.ytd.toFixed(2), pct(r.pct.ytd(x.ytd))]),
+     ["Total Cost of Sales", r.totCos.period.toFixed(2), "", r.totCos.ytd.toFixed(2), ""],
+     ["Gross Profit", r.gross.period.toFixed(2), pct(r.pct.period(r.gross.period)), r.gross.ytd.toFixed(2), pct(r.pct.ytd(r.gross.ytd))],
+     ["Expenses"], ...r.expenses.map(x => [x.account.name, x.period.toFixed(2), pct(r.pct.period(x.period)), x.ytd.toFixed(2), pct(r.pct.ytd(x.ytd))]),
+     ["Total Expenses", r.totExp.period.toFixed(2), "", r.totExp.ytd.toFixed(2), ""],
+     ["Net Income", r.net.period.toFixed(2), pct(r.pct.period(r.net.period)), r.net.ytd.toFixed(2), pct(r.pct.ytd(r.net.ytd))]]);
+  const ytdLabel = r.ytdFrom ? `${fmtDate(r.ytdFrom)} – ${fmtDate(r.end)}` : "Year to date";
+  return <ReportCard title={"Income Statement" + (db.settings.company ? " — " + db.settings.company : "")} rangeLabel={label}
+    right={<button className="btn sm no-print" onClick={exportCSV}>Export CSV</button>}>
+    {!(db.accounts || []).length && <div className="card-body subtle" style={{ paddingBottom: 0 }}>No chart of accounts is loaded, so only accounts with activity are listed. Load the chart under System → Chart of Accounts for the full statement.</div>}
+    <table><thead><tr><th></th><th className="num">{label}</th><th className="num">%</th><th className="num">{ytdLabel}</th><th className="num">%</th></tr></thead>
+      <tbody>
+        {section("Revenues", r.revenues, r.totRev, "Total Revenues")}
+        {section("Cost of Sales", r.cos, r.totCos, "Total Cost of Sales")}
+        {line("Gross Profit", r.gross, { bold: true, top: true })}
+        {section("Expenses", r.expenses, r.totExp, "Total Expenses")}
+        {line("Net Income", r.net, { bold: true, top: true })}
+      </tbody></table>
+    <div className="card-body subtle" style={{ paddingTop: 10 }}>
+      Accrual basis: invoices count when issued and bills when entered, posted to the accounts on the documents (or the customer's / vendor's default). Percentages are of total revenues. For management purposes only.
+    </div>
+  </ReportCard>;
+}
+
+/* ---------- 1099 Vendor Report ----------
+   For the calendar year the range ends in: every vendor marked 1099-NEC or
+   1099-MISC, its address and tax id, each payment made that year with its
+   check or reference number, the total, and whether the $600 limit was met. */
+function Vendor1099Report({ db, to, partyId }) {
+  const year = (to || todayISO()).slice(0, 4);
+  const r0 = vendor1099(db, year);
+  const rows = partyId ? r0.rows.filter(x => x.vendor.id === partyId) : r0.rows;
+  const [detail, setDetail] = useState(true);
+  const exportCSV = () => downloadCSV("1099-vendors-" + year,
+    ["Vendor ID", "Vendor", "Address", "1099 Type", "Tax ID", "Date", "Trans No", "Amount", "Total", "Limit Met"],
+    rows.flatMap(x => x.lines.length
+      ? x.lines.map((l, i) => [x.vendor.code || "", x.vendor.name, (x.vendor.address || "").replace(/\n/g, ", "), ten99Label(x.vendor.ten99), x.vendor.taxId || "", l.date, l.ref, l.amount.toFixed(2), i === 0 ? x.total.toFixed(2) : "", i === 0 ? (x.limitMet ? "Yes" : "No") : ""])
+      : [[x.vendor.code || "", x.vendor.name, (x.vendor.address || "").replace(/\n/g, ", "), ten99Label(x.vendor.ten99), x.vendor.taxId || "", "", "", "", "0.00", "No"]]));
+  const setup = db.contacts.filter(c => c.type === "vendor" && (c.ten99 === "nec" || c.ten99 === "misc")).length;
+  return <>
+    <div className="grid" style={{ gridTemplateColumns: "repeat(3,1fr)", marginBottom: 16 }}>
+      <div className="stat"><div className="lbl">Year</div><div className="val mono">{year}</div><div className="meta">the year the date range ends in</div></div>
+      <div className="stat"><div className="lbl">1099 Vendors</div><div className="val mono">{rows.length}</div><div className="meta">{rows.filter(x => x.limitMet).length} at or over {money(TEN99_LIMIT)}</div></div>
+      <div className="stat"><div className="lbl">Paid</div><div className="val mono neg">{money(rows.reduce((t, x) => t + x.total, 0))}</div><div className="meta">cash paid to 1099 vendors in {year}</div></div>
+    </div>
+    <ReportCard title={"1099 Vendor Report — " + year} rangeLabel={"For the year " + year} right={<>
+      <div className="pill-tabs no-print">
+        <button className={detail ? "" : "on"} onClick={() => setDetail(false)}>Summary</button>
+        <button className={detail ? "on" : ""} onClick={() => setDetail(true)}>Detail</button>
+      </div>
+      <button className="btn sm no-print" onClick={exportCSV}>Export CSV</button></>}>
+      {rows.length === 0
+        ? <Empty icon={ICONS.contacts} title={setup ? "No 1099 vendor matches the filter" : "No vendors are marked for 1099s"}
+          msg={setup ? "Clear the vendor filter above." : "Set 1099 Type to NEC or MISC on each vendor under Vendors & Purchases → Vendors, and they appear here with every payment made to them."} />
+        : <table><thead><tr>
+          <th>Vendor ID</th><th>Vendor</th><th>1099 Type</th><th>Tax ID</th><th>Box</th>
+          {detail && <><th>Date</th><th>Trans No</th><th className="num">Amount</th></>}
+          <th className="num">Total</th><th>Limit Met?</th></tr></thead>
+          <tbody>{rows.map(x => {
+            const v = x.vendor;
+            const head = <>
+              <td className="mono" style={{ fontWeight: 600, verticalAlign: "top" }}>{v.code || "—"}</td>
+              <td style={{ verticalAlign: "top" }}><div style={{ fontWeight: 600 }}>{v.name}</div><div className="subtle" style={{ whiteSpace: "pre-line" }}>{v.address || ""}</div></td>
+              <td className="subtle" style={{ verticalAlign: "top" }}>{ten99Label(v.ten99)}</td>
+              <td className="mono subtle" style={{ verticalAlign: "top" }}>{v.taxId || <span style={{ color: "var(--neg)" }}>missing</span>}</td>
+              <td className="subtle" style={{ verticalAlign: "top" }}>Nonemployee compensation</td>
+            </>;
+            if (!detail || !x.lines.length) return <tr key={v.id}>{head}
+              {detail && <><td className="subtle">—</td><td></td><td className="num"></td></>}
+              <td className="num" style={{ fontWeight: 700, verticalAlign: "top" }}>{money(x.total)}</td>
+              <td style={{ verticalAlign: "top", fontWeight: 600, color: x.limitMet ? "var(--pos)" : "var(--muted)" }}>{x.limitMet ? "Yes" : "No"}</td></tr>;
+            return x.lines.map((l, i) => <tr key={v.id + i} className={i ? "sub-row" : ""}>
+              {i === 0 ? head : <td colSpan={5}></td>}
+              <td className="subtle">{fmtDate(l.date)}</td><td className="mono">{l.ref || "—"}</td><td className="num">{money(l.amount)}</td>
+              {i === 0 ? <><td className="num" style={{ fontWeight: 700, verticalAlign: "top" }}>{money(x.total)}</td>
+                <td style={{ verticalAlign: "top", fontWeight: 600, color: x.limitMet ? "var(--pos)" : "var(--muted)" }}>{x.limitMet ? "Yes" : "No"}</td></> : <td colSpan={2}></td>}
+            </tr>);
+          })}</tbody></table>}
+      <div className="card-body subtle" style={{ paddingTop: 10 }}>
+        Cash paid in {year}: every bill payment to the vendor plus any expense entry whose payee is the vendor's name. Discounts taken are not payments. Limit met at {money(TEN99_LIMIT)}.
+      </div>
+    </ReportCard>
+  </>;
 }

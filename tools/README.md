@@ -115,3 +115,19 @@ matched, what it was, what it is now, the linked invoice, and a note. Look for:
   or import the invoice, then rerun apply to link it.
 - **unlinked invoice …** — Sage still shows the line open, but Ledger had an
   invoice on it. Check which side is right before applying.
+
+## sage-lists-sql.py
+
+Turns the Sage **Vendor List** (`.xlsx`) and **Customer List** (`.pdf`) into a SQL data fix
+that fills each contact's posting account:
+
+```
+python3 tools/sage-lists-sql.py "Import/Vendor List.xlsx" "Import/Customer List 09272026.pdf" \
+    > app/supabase/data-fixes/2026-09-27_contact_accounts.sql
+```
+
+Run the result in the Supabase SQL editor **after migration 024**. Vendors get their expense
+account, 1099 type, and tax id / vendor id (where blank); customers get their sales account.
+Contacts are matched on name with case, spaces and punctuation ignored, and the last statement
+lists any contact on file the lists did not name, so those can be set by hand. Needs
+`pdfplumber` for the customer list.

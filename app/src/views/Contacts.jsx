@@ -2,6 +2,8 @@ import { useState } from "react";
 import { uid, cls } from "../lib/helpers.js";
 import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort } from "../components/ui.jsx";
 import { termsLabel } from "../lib/terms.js";
+import AccountSelect from "../components/AccountSelect.jsx";
+import { TEN99_TYPES, ten99Label, accountLabel } from "../calc/accounts.js";
 
 // One page per side of the ledger: Customers (under Customers & Sales) and
 // Vendors (under Vendors & Purchases). Both are contacts rows; `type` picks
@@ -17,9 +19,10 @@ export default function ContactsView({ db, actions, toast, readOnly, type = "cus
     const rec = db.contacts.find(c => c.id === id);
     if (await actions.deleteContact(id)) toast("Deleted " + (rec?.name || "contact"), { actionLabel: "Undo", onAction: async () => { if (await actions.restoreRecord("contact", rec)) toast((rec.name || "Contact") + " restored"); } });
   };
-  const startNew = () => setEdit({ id: uid(), type: tab, name: "", contact: "", email: "", phone: "", address: "", code: "", lat: "", lng: "", terms: "", discountPct: 0, discountDays: 0, remitName: "", remitPhone: "", remitEmail: "", remitAddress: "", taxId: "" });
+  const startNew = () => setEdit({ id: uid(), type: tab, name: "", contact: "", email: "", phone: "", address: "", code: "", lat: "", lng: "", terms: "", discountPct: 0, discountDays: 0, remitName: "", remitPhone: "", remitEmail: "", remitAddress: "", taxId: "", salesAccount: "", expenseAccount: "", ten99: "" });
   const { sorted: contactRows, sort, onSort } = useTableSort(list, {
     name: c => c.name, contact: c => c.contact || "", email: c => c.email || "", phone: c => c.phone || "", taxId: c => c.taxId || "",
+    account: c => (tab === "customer" ? c.salesAccount : c.expenseAccount) || "", ten99: c => ten99Label(c.ten99),
   }, { key: "name", dir: "asc" });
   return <div>
     <div className="toolbar">
@@ -35,12 +38,16 @@ export default function ContactsView({ db, actions, toast, readOnly, type = "cus
           <SortTh label="Contact" col="contact" sort={sort} onSort={onSort} />
           <SortTh label="Email" col="email" sort={sort} onSort={onSort} />
           <SortTh label="Phone" col="phone" sort={sort} onSort={onSort} />
+          <SortTh label={tab === "customer" ? "Sales Account" : "Expense Account"} col="account" sort={sort} onSort={onSort} />
+          {tab === "vendor" && <SortTh label="1099" col="ten99" sort={sort} onSort={onSort} />}
           {tab === "vendor" && <SortTh label="Tax ID" col="taxId" sort={sort} onSort={onSort} />}
           <th></th></tr></thead>
           <tbody>{contactRows.map(c => (
             <tr key={c.id}>
               <td style={{ fontWeight: 600 }}>{c.name}</td><td className="subtle">{c.contact || "—"}</td>
               <td className="subtle">{c.email || "—"}</td><td className="mono subtle">{c.phone || "—"}</td>
+              <td className="mono subtle">{accountLabel(db, tab === "customer" ? c.salesAccount : c.expenseAccount) || "—"}</td>
+              {tab === "vendor" && <td className="subtle">{c.ten99 ? ten99Label(c.ten99) : "—"}</td>}
               {tab === "vendor" && <td className="mono subtle">{c.taxId || "—"}</td>}
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                 <button className="btn ghost icon" onClick={() => setEdit({ ...c })} title={readOnly ? "View" : "Edit"}><Ico d={ICONS.edit} size={15} /></button>
@@ -56,6 +63,18 @@ export default function ContactsView({ db, actions, toast, readOnly, type = "cus
         <Field label="Contact Person"><input className="input" value={edit.contact} onChange={e => setEdit({ ...edit, contact: e.target.value })} /></Field>
         {edit.type === "customer" && <Field label="Invoice Code" hint="Numbers this customer's invoices, e.g. VG → VG260728-01">
           <input className="input mono" style={{ maxWidth: 110 }} value={edit.code || ""} onChange={e => setEdit({ ...edit, code: e.target.value.toUpperCase() })} /></Field>}
+        {edit.type === "vendor" && <Field label="Vendor ID" hint="Short code, as on the Sage vendor list">
+          <input className="input mono" style={{ maxWidth: 140 }} value={edit.code || ""} onChange={e => setEdit({ ...edit, code: e.target.value })} /></Field>}
+      </div>
+      <div className="row">
+        {edit.type === "customer"
+          ? <Field label="Sales Account" hint="Where this customer's invoices post. Blank uses the default income account in Settings → Accounts">
+              <AccountSelect db={db} value={edit.salesAccount} onChange={v => setEdit({ ...edit, salesAccount: v })} types={["Income"]} /></Field>
+          : <Field label="Expense Account" hint="Where this vendor's bills post. Blank uses the default expense account in Settings → Accounts">
+              <AccountSelect db={db} value={edit.expenseAccount} onChange={v => setEdit({ ...edit, expenseAccount: v })} groups={["expense", "cos", "liability", "asset"]} /></Field>}
+        {edit.type === "vendor" && <Field label="1099 Type" hint="Vendors marked here appear on the 1099 Vendor Report">
+          <select className="select" value={edit.ten99 || ""} onChange={e => setEdit({ ...edit, ten99: e.target.value })}>
+            {TEN99_TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>}
       </div>
       <div className="row">
         <Field label="Email"><input className="input" value={edit.email} onChange={e => setEdit({ ...edit, email: e.target.value })} /></Field>

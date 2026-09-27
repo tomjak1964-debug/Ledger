@@ -15,6 +15,9 @@ export function defaultSettings() {
     // Check printing: field positions (Settings → Check Printing) plus the
     // number the check stack starts at.
     check: { start: 1001 },
+    // General ledger: the accounts the app posts to on its own (chart numbers;
+    // calc/accounts.js has the fallbacks if one is blank).
+    accounts: { ar: "1100", ap: "2000", cash: "1020", salesTax: "2310", salesDiscount: "4900", purchaseDiscount: "6900", income: "4000", expense: "6750" },
   };
 }
 

@@ -11,6 +11,8 @@ import EmailModal from "../components/EmailModal.jsx";
 import InvoiceFromSOModal from "../components/InvoiceFromSOModal.jsx";
 import Attachments from "../components/Attachments.jsx";
 import { invoicePdf } from "../lib/invoicePdf.js";
+import AccountSelect from "../components/AccountSelect.jsx";
+import { incomeAccountOf, accountLabel } from "../calc/accounts.js";
 
 export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) {
   const [pay, setPay] = useState(null);
@@ -144,7 +146,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
       defaultBody={`Please find attached invoice ${email.number}.\n\nThank you for your business.\n\n${db.settings.company}\n${db.settings.companyPhone || ""}`}
       buildAttachment={() => invoicePdf(email, db)}
       onClose={() => setEmail(null)} toast={toast} />}
-    {pay && <PaymentModal doc={pay} onClose={() => setPay(null)}
+    {pay && <PaymentModal db={db} doc={pay} onClose={() => setPay(null)}
       offerFor={d => discountOffer(db, pay, pay.customerId, d)}
       onSave={async (p) => {
         if (!await actions.recordPayment("invoice", pay.id, p)) return false;
@@ -209,6 +211,8 @@ function InvoiceEditor({ invoice, customers, catalog, onCancel, onSave, db, acti
         <Field label="Due Date" hint={inv.customerId ? "From " + termsLabelFor(db, inv.customerId) : undefined}>
           <input className="input" type="date" value={inv.dueDate} onChange={e => setInv(p => ({ ...p, dueDate: e.target.value }))} /></Field>
         <Field label="Customer PO #"><input className="input mono" value={inv.poNumber || ""} onChange={e => set("poNumber", e.target.value)} /></Field>
+        <Field label="Income Account" hint={inv.incomeAccount ? "Where this invoice posts" : "Default: " + (accountLabel(db, incomeAccountOf(db, inv)) || "none set")}>
+          <AccountSelect db={db} value={inv.incomeAccount} onChange={v => setInv(p => ({ ...p, incomeAccount: v }))} types={["Income"]} blank="— customer's default —" /></Field>
       </div>
       {numErr && <p className="subtle" style={{ margin: "0 0 8px", color: "var(--neg)" }}>{numErr}</p>}
       <div className="divider"></div>

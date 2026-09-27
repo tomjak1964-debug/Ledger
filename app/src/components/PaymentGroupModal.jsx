@@ -3,6 +3,7 @@ import { money, fmtDate, todayISO } from "../lib/helpers.js";
 import { lineTotals, balance, paid, round2, billBalance } from "../calc/ledger.js";
 import { checkNumberTaken, normRef } from "../lib/checks.js";
 import { Modal, Field, Badge } from "./ui.jsx";
+import AccountSelect from "./AccountSelect.jsx";
 
 const METHODS = ["Check", "ACH / Wire", "Credit Card", "Cash", "Other"];
 
@@ -28,6 +29,7 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
   const [date, setDate] = useState(group?.date || todayISO());
   const [method, setMethod] = useState(group?.method || "Check");
   const [ref, setRef] = useState(group?.ref || "");
+  const [cashAccount, setCashAccount] = useState(group?.cashAccount || "");
   const [saving, setSaving] = useState(false);
   // Explicit per-document overrides: { [id]: { checked, amount } }. Anything not
   // in here uses the default below.
@@ -86,7 +88,7 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
       // deletes any prior id not kept, so the merged amount lands on one row.
       .map(d => ({ docId: d.id, amount: eff(d).amount, discount: eff(d).discount || 0, paymentId: onGroup[d.id]?.paymentIds[0] }));
     setSaving(true);
-    const ok = await onSave(allocations, { date, method, ref });
+    const ok = await onSave(allocations, { date, method, ref, cashAccount });
     setSaving(false);
     if (ok) onClose();
   };
@@ -111,6 +113,8 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
       </select></Field>
       <Field label={L.refLabel}><input className="input mono" value={ref} onChange={e => setRef(e.target.value)}
         style={refErr ? { borderColor: "var(--neg)" } : undefined} /></Field>
+      <Field label={isBill ? "Paid From" : "Deposit To"}>
+        <AccountSelect db={db} value={cashAccount} onChange={setCashAccount} types={["Cash"]} blank="— default cash account —" /></Field>
     </div>
     {refErr && <p className="subtle" style={{ margin: "0 0 8px", color: "var(--neg)" }}>{refErr}</p>}
 

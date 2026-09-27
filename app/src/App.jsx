@@ -28,6 +28,7 @@ import ExpensesView from "./views/Expenses.jsx";
 import ContactsView from "./views/Contacts.jsx";
 import CatalogView from "./views/Catalog.jsx";
 import SettingsView from "./views/Settings.jsx";
+import AccountsView from "./views/Accounts.jsx";
 
 const NAV = [
   {
@@ -68,6 +69,7 @@ const NAV = [
   },
   {
     group: "System", items: [
+      { k: "accounts", label: "Chart of Accounts", icon: ICONS.catalog },
       { k: "settings", label: "Settings", icon: ICONS.settings },
     ]
   },
@@ -84,6 +86,7 @@ const TITLES = {
   expenses: ["Expenses", "Business spend by category"],
   customers: ["Customers", "The companies you quote and invoice"], vendors: ["Vendors", "The vendors and subs you buy from"],
   catalog: ["Item Catalog", "Reusable quote line items"], settings: ["Settings", "Company info and defaults"],
+  accounts: ["Chart of Accounts", "The general ledger accounts every document posts to"],
   reports: ["Reports", "P&L, sales tax, customers, and statements"],
   jobCosting: ["Job Costing", "Profit per job — revenue vs labor and materials"],
   proposals: ["Proposals", "Fixture and system proposals — priced, tracked, and documented"],
@@ -193,6 +196,7 @@ export default function App({ session }) {
         {activeView === "customers" && <ContactsView {...props} type="customer" />}
         {activeView === "vendors" && <ContactsView {...props} type="vendor" />}
         {activeView === "catalog" && <CatalogView {...props} />}
+        {activeView === "accounts" && <AccountsView {...props} />}
         {activeView === "settings" && <SettingsView {...props} />}
       </div>
     </div>

@@ -49,6 +49,7 @@ export const NAV_AREA = {
   vendors: "contacts",
   catalog: "catalog",
   settings: "settings",
+  accounts: "settings",
 };
 
 export const isAdminRole = (role) => role === "owner" || role === "admin";

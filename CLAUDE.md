@@ -560,6 +560,34 @@ and pinned from the button's rectangle, because a panel absolutely positioned in
 clipped by it. **Column headings wrap** (to three lines, `.th-label`) when a table is squeezed, so a long
 heading never sets the width of a narrow column; `SortTh` no longer forces `nowrap`.
 
+**General ledger** (`calc/accounts.js`, `calc/gl.js`, migration 024). The chart of accounts is the
+`accounts` table (System → Chart of Accounts, `views/Accounts.jsx`; **Load TMJ Chart of Accounts** seeds
+the Sage chart from `DEFAULT_ACCOUNTS`). Documents carry the account **number** as text, never a row
+id: an invoice its `incomeAccount`, a bill its `expenseAccount`, an expense its `account` and
+`cashAccount`, a payment its `cashAccount`. Blank means "use the default", resolved in one place —
+`incomeAccountOf()` / `expenseAccountOfBill()` / `expenseAccountOfExpense()` / `cashAccountOf()`: the
+document's own account, else the customer's `salesAccount` or the vendor's `expenseAccount`, else
+Settings → Accounts (`settings.accounts`: A/R 1100, A/P 2000, cash 1020, sales tax 2310, sales
+discounts 4900, purchase discounts 6900, default income 4000, default expense 6750). The store stamps
+the resolved income / expense account onto an invoice or bill when it is written, so a later change
+to a contact's default leaves issued documents alone. `AccountSelect` (`components/AccountSelect.jsx`)
+is the picker every editor uses, filtered by type or balance-sheet group; with no chart loaded it
+falls back to a number box.
+
+**Nothing is journalled by hand.** `journal(db)` posts every document on file by fixed rules — invoice
+Dr A/R / Cr income + sales tax; credit note the reverse; receipt Dr cash (+ Dr sales discounts) / Cr
+A/R; bill Dr expense / Cr A/P; bill payment Dr A/P / Cr cash (+ Cr purchase discounts); expense Dr
+expense / Cr cash; a credit applied to an invoice (method `Credit`) moves nothing — so the ledger is
+in step with the books by construction. `generalLedger()` (per-account activity with opening and
+running balances), `trialBalance()`, `incomeStatement()` (the Sage layout: Revenues · Cost of Sales ·
+Gross Profit · Expenses · Net Income, every income/COS/expense account in the chart zeros included,
+for the range and the year to date at its end, with % of revenue) and `vendor1099()` (each 1099-NEC /
+1099-MISC vendor's cash payments in the year — bill payments plus expense entries payable to the
+vendor's name — with the $600 limit) are the four reports under General Ledger / Financial Statements
+/ Accounts Payable in Reports. The old cash-basis P&L stays alongside. A number a document names that
+the chart lacks still reports, as "(not in chart)". `tools/sage-lists-sql.py` turns the Sage Vendor and
+Customer lists into the data fix that fills each contact's account, 1099 type and tax id.
+
 **Network failures on a save:** every PostgREST request goes through `ledgerFetch()` in
 `lib/supabaseClient.js` — a request the browser could not send at all ("Failed to fetch", typically
 a PWA window waking from sleep) is sent once more after a short pause, and one the server never
@@ -604,7 +632,8 @@ ascending then descending. See §7 for the convention new pages follow.
 
 **Not built (candidates for next work):** refunds (returning cash rather than crediting) · partial invoicing of an SO ·
 recurring invoices · email sending · attachments / receipt photos · quote line-item reordering ·
-multi-user roles · bank import / reconciliation · double-entry GL · undo · automated tests ·
+multi-user roles · bank import / reconciliation · manual journal entries and a balance sheet (the GL is
+derived from documents only) · undo · automated tests ·
 Capacitor store apps (PWA covers home-screen install today).
 
 ---

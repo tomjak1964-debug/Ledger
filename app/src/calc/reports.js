@@ -159,7 +159,7 @@ export function receiptGroups(db, { kind = "invoice", from, to, partyId } = {}) 
     const ref = String(p.ref ?? "").trim();
     const key = [who(doc), p.date || "", p.method || "", ref.toLowerCase()].join("|");
     let g = m.get(key);
-    if (!g) { g = { key, ref, partyId: who(doc), date: p.date || "", method: p.method || "", amount: 0, lines: [] }; m.set(key, g); }
+    if (!g) { g = { key, ref, partyId: who(doc), date: p.date || "", method: p.method || "", cashAccount: p.cashAccount || "", amount: 0, lines: [] }; m.set(key, g); }
     const amount = Number(p.amount) || 0;
     g.amount += amount;
     g.lines.push({ paymentId: p.id, docId: doc.id, number: doc.number || "", docDate: doc.date || "", amount });

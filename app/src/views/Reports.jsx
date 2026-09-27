@@ -8,7 +8,7 @@ import {
 } from "../calc/reports.js";
 import { Ico, ICONS, Badge, Empty, SortTh, useTableSort } from "../components/ui.jsx";
 import { generalLedger, trialBalance, incomeStatement, vendor1099, ledgerAccounts, TEN99_LIMIT } from "../calc/gl.js";
-import { ten99Label, accountLabel } from "../calc/accounts.js";
+import { ten99Label, accountLabel, chartLoaded } from "../calc/accounts.js";
 import FilterBar, { rangeLabel } from "../components/FilterBar.jsx";
 
 /* ---------- CSV export ---------- */
@@ -471,7 +471,7 @@ function GeneralLedgerReport({ db, from, to, rangeLabel: label }) {
       <button className="btn sm" style={{ marginLeft: "auto" }} onClick={exportCSV}>Export CSV</button>
     </div>
     {r.blocks.length === 0
-      ? <div className="card"><Empty icon={ICONS.catalog} title="Nothing posted in this range" msg="Invoices, bills, expenses and payments post to the ledger as they are entered. Widen the range, or load a chart of accounts under System → Chart of Accounts to name the accounts." /></div>
+      ? <div className="card"><Empty icon={ICONS.catalog} title="Nothing posted in this range" msg="Invoices, bills, expenses and payments post to the ledger as they are entered. Widen the date range above." /></div>
       : r.blocks.map(b => <ReportCard key={b.account.number} title={`${b.account.number} · ${b.account.name}`} rangeLabel={label}
         right={<span className="mono" style={{ fontWeight: 700 }}>{money(b.closing)}</span>}>
         <table><thead><tr><th>Date</th><th>Memo</th><th>Party</th><th className="num">Debit</th><th className="num">Credit</th><th className="num">Balance</th></tr></thead>
@@ -552,7 +552,7 @@ function IncomeStatementReport({ db, from, to, rangeLabel: label }) {
   const ytdLabel = r.ytdFrom ? `${fmtDate(r.ytdFrom)} – ${fmtDate(r.end)}` : "Year to date";
   return <ReportCard title={"Income Statement" + (db.settings.company ? " — " + db.settings.company : "")} rangeLabel={label}
     right={<button className="btn sm no-print" onClick={exportCSV}>Export CSV</button>}>
-    {!(db.accounts || []).length && <div className="card-body subtle" style={{ paddingBottom: 0 }}>No chart of accounts is loaded, so only accounts with activity are listed. Load the chart under System → Chart of Accounts for the full statement.</div>}
+    {!chartLoaded(db) && <div className="card-body subtle" style={{ paddingBottom: 0 }}>Reading the built-in TMJ chart. Load it under System → Chart of Accounts to rename accounts or add your own.</div>}
     <table><thead><tr><th></th><th className="num">{label}</th><th className="num">%</th><th className="num">{ytdLabel}</th><th className="num">%</th></tr></thead>
       <tbody>
         {section("Revenues", r.revenues, r.totRev, "Total Revenues")}

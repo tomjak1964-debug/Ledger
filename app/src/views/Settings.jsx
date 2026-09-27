@@ -450,7 +450,7 @@ function AccountsTab({ db, s, set, readOnly, saveAll }) {
   return <div className="card" style={{ marginBottom: 16 }}>
     <div className="card-head"><h3>Posting Accounts</h3><span className="subtle" style={{ marginLeft: "auto" }}>from the chart under System → Chart of Accounts</span></div>
     <div className="card-body">
-      {!(db.accounts || []).length && <p className="subtle" style={{ marginTop: 0 }}>No chart of accounts is loaded yet — load one under System → Chart of Accounts and these become pick lists.</p>}
+      {!(db.accounts || []).length && <p className="subtle" style={{ marginTop: 0 }}>Reading the built-in TMJ chart. Load it under System → Chart of Accounts to rename accounts or add your own.</p>}
       <div className="row">
         {row("cash", "Cash account", "Pays bills and takes receipts unless a payment says otherwise", ["Cash"])}
         {row("ar", "Accounts Receivable", "Debited by every invoice, credited by every receipt", ["Accounts Receivable"])}

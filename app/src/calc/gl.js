@@ -19,7 +19,7 @@ import { sum } from "../lib/helpers.js";
 import { lineTotals, round2 as r2 } from "./ledger.js";
 import { CREDIT_METHOD } from "../lib/credits.js";
 import {
-  accountSettings, normalSide, TYPE_GROUP, accountByNumber, accountsOfType,
+  accountSettings, normalSide, TYPE_GROUP, accountByNumber, accountsOfType, chart,
   incomeAccountOf, expenseAccountOfBill, expenseAccountOfExpense, cashAccountOf,
 } from "./accounts.js";
 
@@ -95,10 +95,11 @@ export function journal(db) {
   return out;
 }
 
-// The chart the ledger reports against: the accounts on file, plus any number a
-// document points at that the chart doesn't know (so nothing posted is hidden).
+// The chart the ledger reports against: the accounts on file (or the built-in
+// chart until one is loaded), plus any number a document points at that the
+// chart doesn't know (so nothing posted is hidden).
 export function ledgerAccounts(db, entries) {
-  const known = new Map((db.accounts || []).map(a => [String(a.number), a]));
+  const known = new Map(chart(db).map(a => [String(a.number), a]));
   (entries || journal(db)).forEach(e => e.lines.forEach(l => {
     if (!known.has(String(l.account))) known.set(String(l.account), { number: String(l.account), name: "(not in chart)", type: guessType(l.account), active: true, sort: 9999 });
   }));

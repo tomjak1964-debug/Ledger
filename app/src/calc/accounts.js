@@ -62,10 +62,15 @@ export const TEN99_TYPES = [["", "None"], ["nec", "1099-NEC"], ["misc", "1099-MI
 export const ten99Label = t => TEN99_TYPES.find(([k]) => k === (t || ""))?.[1] || "None";
 
 const key = s => String(s || "").trim();
-export const accountByNumber = (db, number) => (db.accounts || []).find(a => key(a.number) === key(number)) || null;
+// The chart the app reads: the org's own accounts once any are loaded, else
+// the built-in TMJ chart — so every picker and report names accounts from the
+// first day, before anyone has been to System → Chart of Accounts.
+export const chart = db => ((db.accounts || []).length ? db.accounts : DEFAULT_ACCOUNTS);
+export const chartLoaded = db => (db.accounts || []).length > 0;
+export const accountByNumber = (db, number) => chart(db).find(a => key(a.number) === key(number)) || null;
 export const accountName = (db, number) => accountByNumber(db, number)?.name || "";
 export const accountLabel = (db, number) => number ? `${number}${accountName(db, number) ? " · " + accountName(db, number) : ""}` : "";
-export const accountsOfType = (db, types) => (db.accounts || []).filter(a => a.active !== false && (!types || types.includes(a.type)));
+export const accountsOfType = (db, types) => chart(db).filter(a => a.active !== false && (!types || types.includes(a.type)));
 
 export const incomeAccountOf = (db, inv) => {
   const cust = db.contacts.find(c => c.id === inv.customerId);

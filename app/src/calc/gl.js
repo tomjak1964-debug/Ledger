@@ -205,7 +205,8 @@ export function vendor1099(db, year) {
     lines.sort((a, b) => a.date.localeCompare(b.date) || a.ref.localeCompare(b.ref, undefined, { numeric: true }));
     const total = round2(sum(lines, l => l.amount));
     return { vendor: v, lines, total, limitMet: total >= TEN99_LIMIT };
-  }).sort((a, b) => (a.vendor.code || a.vendor.name).localeCompare(b.vendor.code || b.vendor.name, undefined, { sensitivity: "base" }));
+  }).filter(r => r.total > 0.005) // a vendor paid nothing in the year gets no 1099, so it is not listed
+    .sort((a, b) => (a.vendor.code || a.vendor.name).localeCompare(b.vendor.code || b.vendor.name, undefined, { sensitivity: "base" }));
   return { year: y, rows, total: round2(sum(rows, r => r.total)) };
 }
 

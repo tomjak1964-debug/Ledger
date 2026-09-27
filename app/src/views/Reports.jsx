@@ -42,7 +42,7 @@ const REPORTS = {
   gl: { label: "General Ledger", blurb: "Every posting by account, with a running balance.", party: null, Render: GeneralLedgerReport },
   tb: { label: "Trial Balance", blurb: "Debits and credits by account as of the end of the range — the two columns agree.", party: null, asOf: true, Render: TrialBalanceReport },
   is: { label: "Income Statement", blurb: "The standard statement: revenues, cost of sales, gross profit, expenses and net income by account, for the range and year to date.", party: null, Render: IncomeStatementReport },
-  v1099: { label: "1099 Vendor Report", blurb: "Every 1099 vendor with each payment made in the year, the total, and whether the $600 limit was met.", party: "vendor", Render: Vendor1099Report },
+  v1099: { label: "1099 Vendor Report", blurb: "Every 1099 vendor paid in the year, each payment made, the total, and whether the $600 limit was met.", party: "vendor", Render: Vendor1099Report },
 };
 
 const CATEGORIES = [
@@ -582,10 +582,13 @@ function Vendor1099Report({ db, to, partyId }) {
       ? x.lines.map((l, i) => [x.vendor.code || "", x.vendor.name, (x.vendor.address || "").replace(/\n/g, ", "), ten99Label(x.vendor.ten99), x.vendor.taxId || "", l.date, l.ref, l.amount.toFixed(2), i === 0 ? x.total.toFixed(2) : "", i === 0 ? (x.limitMet ? "Yes" : "No") : ""])
       : [[x.vendor.code || "", x.vendor.name, (x.vendor.address || "").replace(/\n/g, ", "), ten99Label(x.vendor.ten99), x.vendor.taxId || "", "", "", "", "0.00", "No"]]));
   const setup = db.contacts.filter(c => c.type === "vendor" && (c.ten99 === "nec" || c.ten99 === "misc")).length;
+  const emptyTitle = !setup ? "No vendors are marked for 1099s" : partyId ? "No 1099 vendor matches the filter" : "No 1099 vendor was paid in " + year;
+  const emptyMsg = !setup ? "Set 1099 Type to NEC or MISC on each vendor under Vendors & Purchases → Vendors, and they appear here with every payment made to them."
+    : partyId ? "Clear the vendor filter above, or the vendor was paid nothing in " + year + "." : "Only vendors paid something in the year are listed. Check the date range ends in the year you want.";
   return <>
     <div className="grid" style={{ gridTemplateColumns: "repeat(3,1fr)", marginBottom: 16 }}>
       <div className="stat"><div className="lbl">Year</div><div className="val mono">{year}</div><div className="meta">the year the date range ends in</div></div>
-      <div className="stat"><div className="lbl">1099 Vendors</div><div className="val mono">{rows.length}</div><div className="meta">{rows.filter(x => x.limitMet).length} at or over {money(TEN99_LIMIT)}</div></div>
+      <div className="stat"><div className="lbl">1099 Vendors Paid</div><div className="val mono">{rows.length}</div><div className="meta">{rows.filter(x => x.limitMet).length} at or over {money(TEN99_LIMIT)} · {setup} marked for 1099s</div></div>
       <div className="stat"><div className="lbl">Paid</div><div className="val mono neg">{money(rows.reduce((t, x) => t + x.total, 0))}</div><div className="meta">cash paid to 1099 vendors in {year}</div></div>
     </div>
     <ReportCard title={"1099 Vendor Report — " + year} rangeLabel={"For the year " + year} right={<>
@@ -595,8 +598,7 @@ function Vendor1099Report({ db, to, partyId }) {
       </div>
       <button className="btn sm no-print" onClick={exportCSV}>Export CSV</button></>}>
       {rows.length === 0
-        ? <Empty icon={ICONS.contacts} title={setup ? "No 1099 vendor matches the filter" : "No vendors are marked for 1099s"}
-          msg={setup ? "Clear the vendor filter above." : "Set 1099 Type to NEC or MISC on each vendor under Vendors & Purchases → Vendors, and they appear here with every payment made to them."} />
+        ? <Empty icon={ICONS.contacts} title={emptyTitle} msg={emptyMsg} />
         : <table><thead><tr>
           <th>Vendor ID</th><th>Vendor</th><th>1099 Type</th><th>Tax ID</th><th>Box</th>
           {detail && <><th>Date</th><th>Trans No</th><th className="num">Amount</th></>}
@@ -622,7 +624,7 @@ function Vendor1099Report({ db, to, partyId }) {
             </tr>);
           })}</tbody></table>}
       <div className="card-body subtle" style={{ paddingTop: 10 }}>
-        Cash paid in {year}: every bill payment to the vendor plus any expense entry whose payee is the vendor's name. Discounts taken are not payments. Limit met at {money(TEN99_LIMIT)}.
+        Cash paid in {year}: every bill payment to the vendor plus any expense entry whose payee is the vendor's name. Discounts taken are not payments. A 1099 vendor paid nothing in the year is left off. Limit met at {money(TEN99_LIMIT)}.
       </div>
     </ReportCard>
   </>;

@@ -584,7 +584,8 @@ running balances), `trialBalance()`, `incomeStatement()` (the Sage layout: Reven
 Gross Profit · Expenses · Net Income, every income/COS/expense account in the chart zeros included,
 for the range and the year to date at its end, with % of revenue) and `vendor1099()` (each 1099-NEC /
 1099-MISC vendor's cash payments in the year — bill payments plus expense entries payable to the
-vendor's name — with the $600 limit) are the four reports under General Ledger / Financial Statements
+vendor's name — with the $600 limit; a 1099 vendor paid nothing in the year is left off, since no
+1099 goes to them) are the four reports under General Ledger / Financial Statements
 / Accounts Payable in Reports. The old cash-basis P&L stays alongside. A number a document names that
 the chart lacks still reports, as "(not in chart)". `tools/sage-lists-sql.py` turns the Sage Vendor and
 Customer lists into the data fix that fills each contact's account, 1099 type and tax id.

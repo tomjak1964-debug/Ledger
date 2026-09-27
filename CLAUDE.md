@@ -571,8 +571,9 @@ Settings → Accounts (`settings.accounts`: A/R 1100, A/P 2000, cash 1020, sales
 discounts 4900, purchase discounts 6900, default income 4000, default expense 6750). The store stamps
 the resolved income / expense account onto an invoice or bill when it is written, so a later change
 to a contact's default leaves issued documents alone. `AccountSelect` (`components/AccountSelect.jsx`)
-is the picker every editor uses, filtered by type or balance-sheet group; with no chart loaded it
-falls back to a number box.
+is the picker every editor uses, filtered by type or balance-sheet group. **Until a chart is loaded the
+built-in TMJ chart stands in** (`chart(db)` in `calc/accounts.js`): pickers, labels and every ledger
+report name accounts from the first day, and loading the chart only makes it editable.
 
 **Nothing is journalled by hand.** `journal(db)` posts every document on file by fixed rules — invoice
 Dr A/R / Cr income + sales tax; credit note the reverse; receipt Dr cash (+ Dr sales discounts) / Cr

@@ -75,6 +75,15 @@ If you ran `schema.sql` before a migration existed, run the files in
   `remote_sonic` on `machine_types` for the /Torque, /IO Link and Remote
   Sonic Panel columns of Fixture Rates. Without it, saving a fixture type
   fails with "Could not find the 'torque_rate' column".
+- `024_general_ledger.sql` — the general ledger: the `accounts` table (the
+  chart of accounts), `sales_account` / `expense_account` / `ten99` on
+  `contacts`, and the account each invoice, bill, expense and payment posts to.
+  Needed for System → Chart of Accounts, the Accounts tab in Settings, the
+  General Ledger / Trial Balance / Income Statement / 1099 reports, and to save
+  any document once the app carries the new fields. After it, run
+  `data-fixes/2026-09-27_contact_accounts.sql` to fill each vendor's and
+  customer's account from the Sage lists, and load the chart under
+  System → Chart of Accounts.
 
 ## Email sending (invoices & proposals)
 

@@ -18,6 +18,7 @@ import { defaultSettings, sampleData } from "./seed.js";
 import { proposalConfig, phaseAmount } from "../calc/proposals.js";
 import { round2, lineTotals, balance } from "../calc/ledger.js";
 import { checkNumberTaken, isCheckPayment, normRef } from "./checks.js";
+import { incomeAccountOf, expenseAccountOfBill } from "../calc/accounts.js";
 
 const SEQ_TYPES = ["quote", "so", "invoice", "bill"];
 // Placeholder shown in the invoice-number field; means "use the auto sequence".
@@ -34,7 +35,7 @@ const th = (res) => { if (res.error) throw res.error; return res.data; };
 
 async function fetchAll() {
   const [settings, sequences, contacts, catalog, quotes, qli, sos, soli, invoices, invli, payments, bills, expenses,
-    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments, pos, poli] = await Promise.all([
+    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments, pos, poli, accounts] = await Promise.all([
     supabase.from("settings").select("*").maybeSingle(),
     supabase.from("org_sequences").select("*"),
     supabase.from("contacts").select("*").order("created_at"),
@@ -60,6 +61,7 @@ async function fetchAll() {
     supabase.from("attachments").select("*").order("created_at", { ascending: false }),
     supabase.from("purchase_orders").select("*").order("created_at"),
     supabase.from("purchase_order_line_items").select("*").order("sort"),
+    supabase.from("accounts").select("*").order("sort").order("number"),
   ]);
   return {
     settingsRow: th(settings), sequences: th(sequences),
@@ -78,6 +80,7 @@ async function fetchAll() {
     attachments: attachments && !attachments.error ? (attachments.data || []) : [],
     pos: pos && !pos.error ? (pos.data || []) : [],
     poli: poli && !poli.error ? (poli.data || []) : [],
+    accounts: accounts && !accounts.error ? (accounts.data || []) : [],   // migration 024
   };
 }
 
@@ -111,6 +114,7 @@ function assemble(raw) {
     timeEntries: (raw.timeEntries || []).map(A.timeEntryFromRow),
     attachments: (raw.attachments || []).map(A.attachmentFromRow),
     purchaseOrders: (() => { const items = groupBy(raw.poli || [], "purchase_order_id"); return (raw.pos || []).map(r => A.poFromRow(r, li(items[r.id]))); })(),
+    accounts: (raw.accounts || []).map(A.accountFromRow),
   };
 }
 
@@ -350,6 +354,7 @@ export function useLedger(session, onError) {
           ],
           taxRate: so.taxRate, payments: [],
         };
+        inv.incomeAccount = inv.incomeAccount || incomeAccountOf(dbRef.current, inv);
         th(await supabase.from("invoices").insert(A.invoiceToRow(inv)));
         await replaceLineItems("invoice_line_items", "invoice_id", inv.id, inv.lineItems);
         const billedIds = toBill.map(li => li.id);
@@ -572,6 +577,9 @@ export function useLedger(session, onError) {
           inv.number = manual;
         }
         if (isNew) inv.payments = inv.payments || [];
+        // The account an invoice posts to is fixed when it is written, so a later
+        // change to the customer's sales account leaves issued invoices alone.
+        if (!(inv.incomeAccount || "").trim()) inv.incomeAccount = incomeAccountOf(dbRef.current, inv);
         th(await supabase.from("invoices").upsert(A.invoiceToRow(inv)));
         await replaceLineItems("invoice_line_items", "invoice_id", inv.id, inv.lineItems);
         setDb(d => ({ ...d, invoices: upsertList(d.invoices, inv) }));
@@ -704,7 +712,7 @@ export function useLedger(session, onError) {
     async recordReceipt(allocations, meta) {
       try {
         const rows = allocations
-          .map(a => ({ invoiceId: a.docId, payment: { id: uid(), amount: round2(Number(a.amount) || 0), discount: round2(Number(a.discount) || 0), date: meta.date, method: meta.method, ref: meta.ref || "" } }))
+          .map(a => ({ invoiceId: a.docId, payment: { id: uid(), amount: round2(Number(a.amount) || 0), discount: round2(Number(a.discount) || 0), date: meta.date, method: meta.method, ref: meta.ref || "", cashAccount: meta.cashAccount || "" } }))
           .filter(r => Math.abs(r.payment.amount) > 0.005 || Math.abs(r.payment.discount) > 0.005);
         if (!rows.length) throw new Error("Nothing to apply — select at least one item with an amount.");
         th(await supabase.from("payments").insert(rows.map(r => A.paymentToRow(r.payment, "invoice", r.invoiceId))));
@@ -772,7 +780,7 @@ export function useLedger(session, onError) {
           .map(a => ({ docId: a.docId, paymentId: a.paymentId, amount: round2(Number(a.amount) || 0), discount: round2(Number(a.discount) || 0) }))
           .filter(a => Math.abs(a.amount) > 0.005 || Math.abs(a.discount) > 0.005);
         if (!keep.length) throw new Error("Nothing to apply — keep at least one item on it, or delete it instead.");
-        const stamp = { date: meta.date, method: meta.method, ref: meta.ref || "" };
+        const stamp = { date: meta.date, method: meta.method, ref: meta.ref || "", cashAccount: meta.cashAccount || "" };
         const prev = [...new Set(prevPaymentIds || [])];
         const writes = keep.map(a => ({
           docId: a.docId,
@@ -818,6 +826,7 @@ export function useLedger(session, onError) {
           && (x.ref || "").trim().toLowerCase() === ref.toLowerCase());
         if (dup) throw new Error(`A bill with Ref "${ref}" already exists for this vendor (${dup.number}).`);
         bill.ref = ref;
+        if (!(bill.expenseAccount || "").trim()) bill.expenseAccount = expenseAccountOfBill(dbRef.current, bill);
         if (isNew) bill.number = dbRef.current.settings.billPrefix + "-" + pad4(await claimNumber("bill"));
         th(await supabase.from("bills").upsert(A.billToRow(bill)));
         setDb(d => ({ ...d, bills: upsertList(d.bills, bill) }));
@@ -1064,6 +1073,39 @@ export function useLedger(session, onError) {
       } catch (e) { return fail(e); }
     },
 
+    /* ---- chart of accounts ---- */
+    async saveAccount(a) {
+      try {
+        const acc = { ...a, number: String(a.number || "").trim() }; delete acc._new;
+        if (!acc.number) throw new Error("An account number is required.");
+        if (dbRef.current.accounts.some(x => x.id !== acc.id && String(x.number) === acc.number))
+          throw new Error(`Account ${acc.number} already exists.`);
+        th(await supabase.from("accounts").upsert(A.accountToRow(acc)));
+        setDb(d => ({ ...d, accounts: upsertList(d.accounts, acc) }));
+        return acc;
+      } catch (e) { return fail(e); }
+    },
+    async deleteAccount(id) {
+      try {
+        th(await supabase.from("accounts").delete().eq("id", id));
+        setDb(d => ({ ...d, accounts: d.accounts.filter(a => a.id !== id) }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
+    // Add accounts, skipping numbers already on file — seeds an empty chart and
+    // tops one up. Returns the rows actually added.
+    async seedAccounts(list) {
+      try {
+        const have = new Set(dbRef.current.accounts.map(a => String(a.number)));
+        const start = dbRef.current.accounts.reduce((n, a) => Math.max(n, Number(a.sort) || 0), -1) + 1;
+        const rows = list.filter(a => !have.has(String(a.number))).map((a, i) => ({ ...a, id: uid(), sort: a.sort ?? start + i }));
+        if (!rows.length) return [];
+        th(await supabase.from("accounts").insert(rows.map(A.accountToRow)));
+        setDb(d => ({ ...d, accounts: [...d.accounts, ...rows] }));
+        return rows;
+      } catch (e) { return fail(e); }
+    },
+
     /* ---- machine rates & contact people ---- */
     async saveMachineType(m) {
       try {
@@ -1215,6 +1257,7 @@ export function useLedger(session, onError) {
             })),
           ],
         };
+        inv.incomeAccount = inv.incomeAccount || incomeAccountOf(dbRef.current, inv);
         th(await supabase.from("invoices").insert(A.invoiceToRow(inv)));
         await replaceLineItems("invoice_line_items", "invoice_id", inv.id, inv.lineItems);
         const phases = (p.phases || []).map(ph => sel.some(s => s.key === ph.key) ? { ...ph, invoiceId: inv.id } : ph);
@@ -1298,6 +1341,10 @@ export function useLedger(session, onError) {
         ]);
         await ins("bills", bills.map(A.billToRow));
         await ins("expenses", expenses.map(A.expenseToRow));
+        // The chart is reference data (kept by wipe, like machine rates); a
+        // backup that carries one only adds the numbers not already on file.
+        const have = new Set(dbRef.current.accounts.map(a => String(a.number)));
+        await ins("accounts", arr("accounts").filter(a => !have.has(String(a.number))).map(a => A.accountToRow({ ...a, id: uid() })));
 
         const { counters, ...settingsData } = { ...defaultSettings(), ...data.settings };
         th(await supabase.from("settings").upsert({ org_id: orgId, data: settingsData }, { onConflict: "org_id" }));

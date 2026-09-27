@@ -7,6 +7,8 @@ import FormsTab from "../components/FormsEditor.jsx";
 import { proposalConfig } from "../calc/proposals.js";
 import { ROLE_LABELS, HOUR_MODEL_LABELS } from "../calc/estimates.js";
 import { REV, BUILD, checkForUpdate, updateNow } from "../lib/version.js";
+import AccountSelect from "../components/AccountSelect.jsx";
+import { accountSettings } from "../calc/accounts.js";
 
 export default function SettingsView({ db, actions, toast, session, readOnly, isAdmin }) {
   const [s, setS] = useState(db.settings);
@@ -18,6 +20,7 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
     ["data", "Data"],
     ["forms", "Forms"],
     ["proposals", "Proposals"],
+    ["accounts", "Accounts"],
     ...(isAdmin ? [["users", "Users & Access"], ["time", "Time Categories"], ["backups", "Backups"]] : []),
     ["activity", "Activity"],
     ["revision", "Revision"],
@@ -108,6 +111,7 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
 
     {tab === "forms" && <FormsTab s={s} set={set} readOnly={readOnly} saveAll={saveAll} />}
     {tab === "proposals" && <ProposalsTab s={s} set={set} readOnly={readOnly} saveAll={saveAll} />}
+    {tab === "accounts" && <AccountsTab db={db} s={s} set={set} readOnly={readOnly} saveAll={saveAll} />}
 
     {tab === "users" && isAdmin && <UsersCard db={db} actions={actions} toast={toast} session={session} />}
     {tab === "time" && isAdmin && <TimeCategoriesCard db={db} actions={actions} toast={toast} />}
@@ -434,6 +438,37 @@ function CreateUserForm({ actions, toast }) {
   </div>;
 }
 
+
+// Settings → Accounts: the general ledger accounts the app posts to on its own
+// (calc/accounts.js). A customer or vendor with an account of their own wins
+// over the income / expense defaults here; the rest are used every time.
+function AccountsTab({ db, s, set, readOnly, saveAll }) {
+  const a = accountSettings(s);
+  const setA = (k, v) => set("accounts", { ...(s.accounts || {}), [k]: v });
+  const row = (k, label, hint, types, groups) => <Field key={k} label={label} hint={hint}>
+    <AccountSelect db={db} value={a[k]} onChange={v => setA(k, v)} types={types} groups={groups} disabled={readOnly} blank="— pick an account —" /></Field>;
+  return <div className="card" style={{ marginBottom: 16 }}>
+    <div className="card-head"><h3>Posting Accounts</h3><span className="subtle" style={{ marginLeft: "auto" }}>from the chart under System → Chart of Accounts</span></div>
+    <div className="card-body">
+      {!(db.accounts || []).length && <p className="subtle" style={{ marginTop: 0 }}>No chart of accounts is loaded yet — load one under System → Chart of Accounts and these become pick lists.</p>}
+      <div className="row">
+        {row("cash", "Cash account", "Pays bills and takes receipts unless a payment says otherwise", ["Cash"])}
+        {row("ar", "Accounts Receivable", "Debited by every invoice, credited by every receipt", ["Accounts Receivable"])}
+        {row("ap", "Accounts Payable", "Credited by every bill, debited by every bill payment", ["Accounts Payable"])}
+      </div>
+      <div className="row">
+        {row("income", "Default income account", "For a customer with no sales account of their own", ["Income"])}
+        {row("expense", "Default expense account", "For a vendor with no expense account of their own", null, ["expense", "cos"])}
+        {row("salesTax", "Sales tax payable", "The tax on every invoice", null, ["liability"])}
+      </div>
+      <div className="row">
+        {row("salesDiscount", "Sales discounts", "An early-payment term a customer took", null, ["income", "expense"])}
+        {row("purchaseDiscount", "Purchase discounts", "An early-payment term the shop took on a bill", null, ["expense", "cos", "income"])}
+      </div>
+      <button className="btn primary" disabled={readOnly} onClick={saveAll}><Ico d={ICONS.check} size={15} />Save Settings</button>
+    </div>
+  </div>;
+}
 
 // Settings → Proposals: what the machine proposal and the controls estimate
 // read from settings.proposal (calc/proposals.js proposalConfig). The rate

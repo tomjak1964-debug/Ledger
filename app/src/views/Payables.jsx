@@ -12,6 +12,8 @@ import Attachments from "../components/Attachments.jsx";
 import { openCheckPdf } from "../lib/checkPrint.js";
 import { remittancePdf, openRemittancePdf } from "../lib/remittance.js";
 import EmailModal from "../components/EmailModal.jsx";
+import AccountSelect from "../components/AccountSelect.jsx";
+import { expenseAccountOfBill, accountLabel, accountSettings } from "../calc/accounts.js";
 
 // The date a bill was settled — the last payment on it.
 const paidDate = (b) => (b.payments || []).map(p => p.date).filter(Boolean).sort().pop() || "";
@@ -142,6 +144,8 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
           <input className="input" type="date" value={edit.dueDate} onChange={e => setEdit({ ...edit, dueDate: e.target.value })} /></Field>
         <Field label="Amount"><input className="input mono" type="number" step="any" value={edit.amount} onChange={e => setEdit({ ...edit, amount: e.target.value })} /></Field>
       </div>
+      <Field label="Expense Account" hint={edit.expenseAccount ? "Where this bill posts" : "Default: " + (accountLabel(db, expenseAccountOfBill(db, edit)) || "none set — see Settings → Accounts")}>
+        <AccountSelect db={db} value={edit.expenseAccount} onChange={v => setEdit({ ...edit, expenseAccount: v })} groups={["expense", "cos", "liability", "asset"]} blank="— vendor's default —" /></Field>
       <Field label="Job (optional)" hint="Attribute this bill to a sales order for job costing">
         <select className="select" value={edit.salesOrderId || ""} onChange={e => setEdit({ ...edit, salesOrderId: e.target.value })}>
           <option value="">— none —</option>
@@ -154,7 +158,7 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
         : <><div className="divider"></div><Attachments db={db} actions={actions} toast={toast} parentType="bill" parentId={edit.id} readOnly={readOnly} /></>}
     </Modal>;
     })()}
-    {pay && <PaymentModal doc={pay} isBill onClose={() => setPay(null)}
+    {pay && <PaymentModal db={db} doc={pay} isBill onClose={() => setPay(null)}
       offerFor={d => discountOffer(db, pay, pay.vendorId, d)}
       nextCheckRef={nextCheckNumber(db, db.settings)}
       isRefTaken={(r) => checkNumberTaken(db, r)}
@@ -207,6 +211,7 @@ function groupSel(rows) {
 function PayBillsModal({ db, actions, toast, onClose }) {
   const openBills = db.bills.filter(b => (billBalance(b)) > 0.005);
   const [date, setDate] = useState(todayISO());
+  const [cashAccount, setCashAccount] = useState("");   // blank = the default cash account (Checking)
   const [startChk, setStartChk] = useState(() => nextCheckNumber(db, db.settings));
   const [busy, setBusy] = useState(false);
   const [docs, setDocs] = useState(null); // after recording: {checkRuns, remitRuns, checkPaymentIds}
@@ -262,7 +267,7 @@ function PayBillsModal({ db, actions, toast, onClose }) {
     });
     const entries = groups.flatMap(g => g.rows.map(r => ({
       parentType: "bill", parentId: r.bill.id,
-      payment: { id: uid(), amount: Number(r.amount) || 0, discount: Number(r.discount) || 0, date, method: g.method, ref: g.ref },
+      payment: { id: uid(), amount: Number(r.amount) || 0, discount: Number(r.discount) || 0, date, method: g.method, ref: g.ref, cashAccount },
     })));
     const written = await actions.recordPayments(entries);
     setBusy(false);
@@ -347,6 +352,8 @@ function PayBillsModal({ db, actions, toast, onClose }) {
       <Field label="Starting Check #" hint="Checks are numbered from here, one per vendor">
         <input className="input mono" value={startChk} onChange={e => setStartChk(e.target.value)} placeholder="1001"
           style={err ? { borderColor: "var(--neg)" } : undefined} /></Field>
+      <Field label="Pay From" hint={"Default: " + (accountLabel(db, accountSettings(db.settings).cash) || "Checking")}>
+        <AccountSelect db={db} value={cashAccount} onChange={setCashAccount} types={["Cash"]} blank="— default cash account —" /></Field>
     </div>
     {err && <p className="subtle" style={{ margin: "0 0 8px", color: "var(--neg)" }}>{err}</p>}
     <div className="toolbar" style={{ marginBottom: 8 }}>

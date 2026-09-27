@@ -12,8 +12,8 @@ const num = v => Number(v) || 0;
 // terms null means "use the company default" — an empty box has to stay empty
 // on the way to the database, not become a 0-day term.
 const intOrNull = v => (v === "" || v == null ? null : Math.trunc(Number(v)) || 0);
-export const contactToRow = c => ({ id: c.id, type: c.type, name: c.name ?? "", contact: c.contact ?? "", email: c.email ?? "", phone: c.phone ?? "", address: c.address ?? "", code: c.code ?? "", lat: c.lat === "" || c.lat == null ? null : Number(c.lat), lng: c.lng === "" || c.lng == null ? null : Number(c.lng), terms: intOrNull(c.terms), discount_pct: num(c.discountPct), discount_days: num(c.discountDays), remit_name: c.remitName ?? "", remit_phone: c.remitPhone ?? "", remit_email: c.remitEmail ?? "", remit_address: c.remitAddress ?? "", tax_id: c.taxId ?? "" });
-export const contactFromRow = r => ({ id: r.id, type: r.type, name: r.name, contact: r.contact, email: r.email, phone: r.phone, address: r.address, code: r.code || "", lat: r.lat ?? null, lng: r.lng ?? null, terms: r.terms ?? "", discountPct: num(r.discount_pct), discountDays: num(r.discount_days), remitName: r.remit_name || "", remitPhone: r.remit_phone || "", remitEmail: r.remit_email || "", remitAddress: r.remit_address || "", taxId: r.tax_id || "" });
+export const contactToRow = c => ({ id: c.id, type: c.type, name: c.name ?? "", contact: c.contact ?? "", email: c.email ?? "", phone: c.phone ?? "", address: c.address ?? "", code: c.code ?? "", lat: c.lat === "" || c.lat == null ? null : Number(c.lat), lng: c.lng === "" || c.lng == null ? null : Number(c.lng), terms: intOrNull(c.terms), discount_pct: num(c.discountPct), discount_days: num(c.discountDays), remit_name: c.remitName ?? "", remit_phone: c.remitPhone ?? "", remit_email: c.remitEmail ?? "", remit_address: c.remitAddress ?? "", tax_id: c.taxId ?? "", sales_account: c.salesAccount ?? "", expense_account: c.expenseAccount ?? "", ten99: c.ten99 ?? "" });
+export const contactFromRow = r => ({ id: r.id, type: r.type, name: r.name, contact: r.contact, email: r.email, phone: r.phone, address: r.address, code: r.code || "", lat: r.lat ?? null, lng: r.lng ?? null, terms: r.terms ?? "", discountPct: num(r.discount_pct), discountDays: num(r.discount_days), remitName: r.remit_name || "", remitPhone: r.remit_phone || "", remitEmail: r.remit_email || "", remitAddress: r.remit_address || "", taxId: r.tax_id || "", salesAccount: r.sales_account || "", expenseAccount: r.expense_account || "", ten99: r.ten99 || "" });
 
 /* ---- catalog ---- */
 export const catalogToRow = c => ({ id: c.id, description: c.desc ?? "", unit: c.unit ?? "", unit_price: num(c.unitPrice) });
@@ -48,8 +48,8 @@ export const timeEntryFromRow = r => ({ id: r.id, userEmail: r.user_email || "",
 export const timeEntryToRow = e => ({ id: e.id, user_email: e.userEmail ?? "", sales_order_id: idOrNull(e.salesOrderId), category_id: idOrNull(e.categoryId), date: dateOrNull(e.date), hours: num(e.hours), rate: num(e.rate), cost: num(e.cost), description: e.description ?? "", invoice_id: idOrNull(e.invoiceId), approved: !!e.approved, approved_by: e.approvedBy ?? "" });
 
 /* ---- payments ---- */
-export const paymentToRow = (p, parentType, parentId) => ({ id: p.id, parent_type: parentType, parent_id: parentId, amount: num(p.amount), discount: num(p.discount), date: dateOrNull(p.date), method: p.method ?? "", ref: p.ref ?? "" });
-export const paymentFromRow = r => ({ id: r.id, amount: num(r.amount), discount: num(r.discount), date: r.date || "", method: r.method, ref: r.ref || "" });
+export const paymentToRow = (p, parentType, parentId) => ({ id: p.id, parent_type: parentType, parent_id: parentId, amount: num(p.amount), discount: num(p.discount), date: dateOrNull(p.date), method: p.method ?? "", ref: p.ref ?? "", cash_account: p.cashAccount ?? "" });
+export const paymentFromRow = r => ({ id: r.id, amount: num(r.amount), discount: num(r.discount), date: r.date || "", method: r.method, ref: r.ref || "", cashAccount: r.cash_account || "" });
 
 /* ---- quotes ---- */
 export const quoteToRow = q => ({
@@ -82,12 +82,14 @@ export const invoiceToRow = i => ({
   customer_id: idOrNull(i.customerId), po_number: i.poNumber ?? "", date: dateOrNull(i.date),
   due_date: dateOrNull(i.dueDate), tax_rate: num(i.taxRate), notes: i.notes ?? "",
   proposal_id: idOrNull(i.proposalId), contact_person_id: idOrNull(i.contactPersonId), printed: !!i.printed,
+  income_account: i.incomeAccount ?? "",
 });
 export const invoiceFromRow = (r, items, payments) => ({
   id: r.id, number: r.number, kind: r.kind || "invoice", salesOrderId: r.sales_order_id || "", quoteId: r.quote_id || "",
   customerId: r.customer_id || "", poNumber: r.po_number, date: r.date || "", dueDate: r.due_date || "",
   taxRate: num(r.tax_rate), notes: r.notes || "", proposalId: r.proposal_id || "",
   contactPersonId: r.contact_person_id || "", printed: !!r.printed, lineItems: items || [], payments: payments || [],
+  incomeAccount: r.income_account || "",
 });
 
 /* ---- contact people ---- */
@@ -133,11 +135,12 @@ export const billToRow = b => ({
   id: b.id, number: b.number, vendor_id: idOrNull(b.vendorId), date: dateOrNull(b.date),
   due_date: dateOrNull(b.dueDate), amount: num(b.amount), ref: b.ref ?? "", notes: b.notes ?? "",
   sales_order_id: idOrNull(b.salesOrderId), purchase_order_id: idOrNull(b.purchaseOrderId),
+  expense_account: b.expenseAccount ?? "",
 });
 export const billFromRow = (r, payments) => ({
   id: r.id, number: r.number, vendorId: r.vendor_id || "", date: r.date || "", dueDate: r.due_date || "",
   amount: num(r.amount), ref: r.ref, notes: r.notes, salesOrderId: r.sales_order_id || "",
-  purchaseOrderId: r.purchase_order_id || "", payments: payments || [],
+  purchaseOrderId: r.purchase_order_id || "", payments: payments || [], expenseAccount: r.expense_account || "",
 });
 
 /* ---- purchase orders ---- */
@@ -153,5 +156,9 @@ export const poFromRow = (r, items) => ({
 });
 
 /* ---- expenses ---- */
-export const expenseToRow = e => ({ id: e.id, date: dateOrNull(e.date), category: e.category ?? "", vendor: e.vendor ?? "", amount: num(e.amount), method: e.method ?? "", notes: e.notes ?? "", sales_order_id: idOrNull(e.salesOrderId) });
-export const expenseFromRow = r => ({ id: r.id, date: r.date || "", category: r.category, vendor: r.vendor, amount: num(r.amount), method: r.method, notes: r.notes, salesOrderId: r.sales_order_id || "" });
+export const expenseToRow = e => ({ id: e.id, date: dateOrNull(e.date), category: e.category ?? "", vendor: e.vendor ?? "", amount: num(e.amount), method: e.method ?? "", notes: e.notes ?? "", sales_order_id: idOrNull(e.salesOrderId), account: e.account ?? "", cash_account: e.cashAccount ?? "" });
+export const expenseFromRow = r => ({ id: r.id, date: r.date || "", category: r.category, vendor: r.vendor, amount: num(r.amount), method: r.method, notes: r.notes, salesOrderId: r.sales_order_id || "", account: r.account || "", cashAccount: r.cash_account || "" });
+
+/* ---- chart of accounts ---- */
+export const accountToRow = a => ({ id: a.id, number: String(a.number ?? "").trim(), name: a.name ?? "", type: a.type ?? "Expenses", active: a.active !== false, sort: num(a.sort) });
+export const accountFromRow = r => ({ id: r.id, number: String(r.number ?? ""), name: r.name || "", type: r.type || "Expenses", active: r.active !== false, sort: num(r.sort) });

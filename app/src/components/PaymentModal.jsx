@@ -2,6 +2,8 @@ import { useState } from "react";
 import { uid, money, fmtDate, todayISO } from "../lib/helpers.js";
 import { paid, balance, round2, billBalance } from "../calc/ledger.js";
 import { Modal, Field, Ico, ICONS } from "./ui.jsx";
+import AccountSelect from "./AccountSelect.jsx";
+import { accountLabel, accountSettings } from "../calc/accounts.js";
 
 // One payment, start to finish:
 //
@@ -13,13 +15,14 @@ import { Modal, Field, Ico, ICONS } from "./ui.jsx";
 //
 // There is no way back to the Record button after a payment lands, so the same
 // payment can't be applied twice.
-export default function PaymentModal({ doc, onClose, onSave, onVoid, onDelete, onPrintCheck, onEmailDoc, isBill, nextCheckRef, isRefTaken, offerFor }) {
+export default function PaymentModal({ db, doc, onClose, onSave, onVoid, onDelete, onPrintCheck, onEmailDoc, isBill, nextCheckRef, isRefTaken, offerFor }) {
   const bal = isBill ? billBalance(doc) : balance(doc);
   const [amount, setAmount] = useState(round2(bal));
   const [discount, setDiscount] = useState(0);
   const [date, setDate] = useState(todayISO());
   const [method, setMethod] = useState("Check");
   const [ref, setRef] = useState(isBill && nextCheckRef ? nextCheckRef : "");
+  const [cashAccount, setCashAccount] = useState("");   // blank = the default cash account
   const [stage, setStage] = useState("entry");   // entry | check | done
   const [saved, setSaved] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -55,7 +58,7 @@ export default function PaymentModal({ doc, onClose, onSave, onVoid, onDelete, o
 
   const record = async () => {
     setBusy(true);
-    const p = { id: uid(), amount: amt, discount: disc, date, method, ref: ref.trim() };
+    const p = { id: uid(), amount: amt, discount: disc, date, method, ref: ref.trim(), cashAccount };
     const ok = await onSave(p);
     setBusy(false);
     if (!ok) return;
@@ -120,6 +123,8 @@ export default function PaymentModal({ doc, onClose, onSave, onVoid, onDelete, o
       <Field label={isCheck ? "Check #" : "Ref #"} hint={isCheck ? "Next unused check" : undefined}>
         <input className="input mono" value={ref} onChange={e => setRef(e.target.value)}
           style={refErr ? { borderColor: "var(--neg)" } : undefined} /></Field>
+      {db && <Field label={isBill ? "Paid From" : "Deposit To"} hint={"Default: " + (accountLabel(db, accountSettings(db.settings).cash) || "Checking")}>
+        <AccountSelect db={db} value={cashAccount} onChange={setCashAccount} types={["Cash"]} blank="— default cash account —" /></Field>}
     </div>
     {offer && (offer.expired
       ? <p className="subtle" style={{ margin: "0 0 8px" }}>

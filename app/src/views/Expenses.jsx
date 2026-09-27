@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { uid, money, fmtDate, todayISO, sum, EXPENSE_CATS } from "../lib/helpers.js";
+import { uid, money, fmtDate, todayISO, sum, nameOf, EXPENSE_CATS } from "../lib/helpers.js";
 import { useFilters } from "../components/useFilters.jsx";
 import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort } from "../components/ui.jsx";
 import Attachments from "../components/Attachments.jsx";
+import AccountSelect from "../components/AccountSelect.jsx";
+import { expenseAccountOfExpense, accountLabel, accountSettings } from "../calc/accounts.js";
 
 export default function ExpensesView({ db, actions, toast, readOnly }) {
   const [edit, setEdit] = useState(null);
@@ -13,7 +15,7 @@ export default function ExpensesView({ db, actions, toast, readOnly }) {
     const rec = db.expenses.find(e => e.id === id);
     if (await actions.deleteExpense(id)) toast("Expense deleted", { actionLabel: "Undo", onAction: async () => { if (await actions.restoreRecord("expense", rec)) toast("Expense restored"); } });
   };
-  const startNew = () => setEdit({ id: uid(), _new: true, date: todayISO(), category: "Materials", vendor: "", amount: 0, method: "Credit Card", notes: "", salesOrderId: "" });
+  const startNew = () => setEdit({ id: uid(), _new: true, date: todayISO(), category: "Materials", vendor: "", amount: 0, method: "Credit Card", notes: "", salesOrderId: "", account: "", cashAccount: "" });
   const openSOs = db.salesOrders.filter(s => s.status === "open");
   const f = useFilters();
   const shown = db.expenses.filter(e => f.keep(e.date));
@@ -71,6 +73,12 @@ export default function ExpensesView({ db, actions, toast, readOnly }) {
           <datalist id="vend-list">{vendors.map(v => <option key={v.id} value={v.name} />)}</datalist></Field>
         <Field label="Method"><select className="select" value={edit.method} onChange={e => setEdit({ ...edit, method: e.target.value })}>
           {["Credit Card", "Check", "ACH / Wire", "Cash", "Other"].map(m => <option key={m}>{m}</option>)}</select></Field>
+      </div>
+      <div className="row">
+        <Field label="Expense Account" hint={edit.account ? "Where this expense posts" : "Default for " + (edit.category || "this category") + ": " + (accountLabel(db, expenseAccountOfExpense(db, edit)) || "none")}>
+          <AccountSelect db={db} value={edit.account} onChange={v => setEdit({ ...edit, account: v })} groups={["expense", "cos", "liability", "asset"]} blank="— category default —" /></Field>
+        <Field label="Paid From" hint={"Default: " + (accountLabel(db, accountSettings(db.settings).cash) || "Checking")}>
+          <AccountSelect db={db} value={edit.cashAccount} onChange={v => setEdit({ ...edit, cashAccount: v })} types={["Cash"]} blank="— default cash account —" /></Field>
       </div>
       <Field label="Job (optional)" hint="Attribute this cost to a sales order for job costing">
         <select className="select" value={edit.salesOrderId || ""} onChange={e => setEdit({ ...edit, salesOrderId: e.target.value })}>

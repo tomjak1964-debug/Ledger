@@ -4,6 +4,7 @@ import { lineTotals, paid, round2 } from "../calc/ledger.js";
 import { AUTO_NUMBER } from "../lib/store.js";
 import { Modal, Field } from "./ui.jsx";
 import LineItemsEditor from "./LineItemsEditor.jsx";
+import AccountSelect from "./AccountSelect.jsx";
 
 // Issue a credit note — its own document, numbered in its own series (CM-0001).
 //
@@ -62,6 +63,8 @@ export default function CreditNoteModal({ db, credit, onClose, onSave }) {
       <Field label="Credit Note #" hint={cn._new ? "Assigned from the credit series on save" : "Renaming affects this credit only"}>
         <input className="input mono" value={cn.number} onChange={e => set("number", e.target.value)} /></Field>
       <Field label="Date"><input className="input" type="date" value={cn.date} onChange={e => set("date", e.target.value)} /></Field>
+      <Field label="Income Account" hint="The account this credit reverses. Blank uses the customer's">
+        <AccountSelect db={db} value={cn.incomeAccount} onChange={v => set("incomeAccount", v)} types={["Income"]} blank="— customer's default —" /></Field>
     </div>
     <p className="subtle" style={{ marginTop: 0 }}>Enter the amounts as positives — what you are crediting the customer.
       It prints as a credit memo and can be applied to their open invoices from Receivables.</p>

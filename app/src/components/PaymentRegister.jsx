@@ -9,6 +9,7 @@ import FilterBar from "./FilterBar.jsx";
 import PaymentGroupModal from "./PaymentGroupModal.jsx";
 import EmailModal from "./EmailModal.jsx";
 import { remittancePdf } from "../lib/remittance.js";
+import AccountSelect from "./AccountSelect.jsx";
 
 const METHODS = ["Check", "ACH / Wire", "Credit Card", "Cash", "Other"];
 
@@ -237,6 +238,8 @@ function EditPayment({ db, actions, toast, kind, entry, onClose }) {
       <Field label="Amount"><input className="input mono" type="number" step="any" value={p.amount} onChange={e => setP({ ...p, amount: e.target.value })} /></Field>
       <Field label="Discount taken"><input className="input mono" type="number" step="any" value={p.discount || 0} onChange={e => setP({ ...p, discount: e.target.value })} /></Field>
       <Field label="Date"><input className="input" type="date" value={p.date || ""} onChange={e => setP({ ...p, date: e.target.value })} /></Field>
+      <Field label={kind === "bill" ? "Paid From" : "Deposit To"}>
+        <AccountSelect db={db} value={p.cashAccount} onChange={v => setP({ ...p, cashAccount: v })} types={["Cash"]} blank="— default cash account —" /></Field>
       <Field label="Method"><select className="select" value={p.method || "Other"} onChange={e => setP({ ...p, method: e.target.value })}>
         {METHODS.map(m => <option key={m}>{m}</option>)}</select></Field>
       <Field label={kind === "bill" && p.method === "Check" ? "Check #" : "Ref #"}>

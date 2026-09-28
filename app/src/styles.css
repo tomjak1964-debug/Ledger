@@ -155,7 +155,13 @@ td.num,th.num{text-align:right;font-family:"IBM Plex Mono";font-variant-numeric:
 textarea.input{resize:vertical;min-height:64px}
 textarea.input.grow{min-height:0;resize:none;overflow:hidden;line-height:1.4;white-space:pre-wrap}
 .row{display:flex;gap:14px;flex-wrap:wrap}
-.row>.field{flex:1;min-width:150px}
+.row>.field{flex:1;min-width:150px;max-width:100%}
+/* A control never runs wider than its field. A date input sizes itself to its own
+   contents in Safari and could push past the column into the next one. */
+.field .input,.field .select,.field textarea.input{min-width:0;max-width:100%}
+input[type=date].input,input[type=month].input{min-width:0;display:block}
+@media (hover:hover) and (pointer:fine){ input[type=date].input,input[type=month].input{-webkit-appearance:none;appearance:none} }
+input[type=date].input::-webkit-datetime-edit{overflow:hidden;min-width:0}
 
 /* line items editor */
 .li-table th{padding:8px 10px}

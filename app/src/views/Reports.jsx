@@ -7,7 +7,7 @@ import {
   agedReceivables, agedPayables, incomeExpenseByMonth, receiptGroups,
 } from "../calc/reports.js";
 import { Ico, ICONS, Badge, Empty, SortTh, useTableSort } from "../components/ui.jsx";
-import { generalLedger, trialBalance, incomeStatement, vendor1099, ledgerAccounts, TEN99_LIMIT } from "../calc/gl.js";
+import { generalLedger, trialBalance, incomeStatement, balanceSheet, vendor1099, ledgerAccounts, TEN99_LIMIT } from "../calc/gl.js";
 import { ten99Label, accountLabel, chartLoaded } from "../calc/accounts.js";
 import FilterBar, { rangeLabel } from "../components/FilterBar.jsx";
 
@@ -40,7 +40,8 @@ const REPORTS = {
   payments: { label: "Payments Register", blurb: "Every payment made, by check or reference, with the bills it covered.", party: "vendor", Render: PaymentsReport },
   expenses: { label: "Expenses by Category", blurb: "Where the money went, grouped by category.", party: null, Render: ExpenseReport },
   gl: { label: "General Ledger", blurb: "Every posting by account, with a running balance.", party: null, Render: GeneralLedgerReport },
-  tb: { label: "Trial Balance", blurb: "Debits and credits by account as of the end of the range — the two columns agree.", party: null, asOf: true, Render: TrialBalanceReport },
+  tb: { label: "Trial Balance", blurb: "Debits and credits by account as of the end of the range — the two columns agree. Dated after a year-end, the year's income shows in Retained Earnings.", party: null, asOf: true, Render: TrialBalanceReport },
+  bs: { label: "Balance Sheet", blurb: "Assets, liabilities and capital as of the end of the range — with the year's income rolled into Retained Earnings once the year has closed.", party: null, asOf: true, Render: BalanceSheetReport },
   is: { label: "Income Statement", blurb: "The standard statement: revenues, cost of sales, gross profit, expenses and net income by account, for the range and year to date.", party: null, Render: IncomeStatementReport },
   v1099: { label: "1099 Vendor Report", blurb: "Every 1099 vendor paid in the year, each payment made, the total, and whether the $600 limit was met.", party: "vendor", Render: Vendor1099Report },
 };
@@ -50,7 +51,7 @@ const CATEGORIES = [
   { key: "ap", label: "Accounts Payable", icon: ICONS.ap, blurb: "Vendors, open bills, the checks that paid them, and the 1099s.", reports: ["ap", "payments", "v1099"] },
   { key: "payroll", label: "Payroll", icon: ICONS.contacts, blurb: "Wages and payroll taxes.", reports: [] },
   { key: "gl", label: "General Ledger", icon: ICONS.catalog, blurb: "Account activity and the trial balance, posted from the documents and the journal entries booked by hand.", reports: ["gl", "tb"] },
-  { key: "financial", label: "Financial Statements", icon: ICONS.reports, blurb: "The income statement, cash-basis profit and loss, and cash in versus cash out.", reports: ["is", "pl", "ie"] },
+  { key: "financial", label: "Financial Statements", icon: ICONS.reports, blurb: "The balance sheet, the income statement, cash-basis profit and loss, and cash in versus cash out.", reports: ["bs", "is", "pl", "ie"] },
   { key: "inventory", label: "Inventory", icon: ICONS.catalog, blurb: "Stock on hand and item movement.", reports: [] },
   { key: "jobs", label: "Job Reports", icon: ICONS.job, blurb: "Cost and profit per job.", reports: [] },
   { key: "recon", label: "Account Reconciliation", icon: ICONS.check, blurb: "Bank statements against the register.", reports: [] },
@@ -518,6 +519,54 @@ function TrialBalanceReport({ db, asOf }) {
           <tr><td style={{ fontWeight: 700 }} colSpan={3}>Total</td>
             <td className="num" style={{ fontWeight: 700 }}>{money(r.debits)}</td><td className="num" style={{ fontWeight: 700 }}>{money(r.credits)}</td></tr>
         </tbody></table>}
+  </ReportCard>;
+}
+
+/* ---------- Balance Sheet ----------
+   As of the end of the range. Current Assets, Property and Equipment, Total
+   Assets; Current and Long-Term Liabilities; Capital with the equity accounts,
+   Retained Earnings and the year's Net Income not yet closed. */
+export function BalanceSheetReport({ db, asOf }) {
+  const r = balanceSheet(db, asOf);
+  const line = (name, v, opts = {}) => <tr key={name + (opts.key || "")} style={opts.bold ? { fontWeight: 700 } : undefined}>
+    <td style={{ paddingLeft: opts.indent ? 28 : undefined, ...(opts.top ? { borderTop: "2px solid var(--ink)" } : {}) }} className={opts.indent && !opts.bold ? "subtle" : ""}>{name}</td>
+    <td className="num" style={opts.top ? { borderTop: "2px solid var(--ink)" } : undefined}>{money(v)}</td>
+  </tr>;
+  const heading = (title, big) => <tr key={"h" + title}><td colSpan={2} style={{ fontWeight: 700, paddingTop: big ? 18 : 12, ...(big ? { textTransform: "uppercase", letterSpacing: ".04em" } : {}) }}>{title}</td></tr>;
+  const section = sec => [
+    heading(sec.label),
+    ...sec.rows.map(x => line(x.account.name || x.account.number, x.amount, { indent: true, key: x.account.number })),
+    ...(sec.key === "capital" ? [line("Net Income", r.netIncome, { indent: true, key: "net" })] : []),
+    line("Total " + sec.label, sec.key === "capital" ? r.totalCapital : sec.total, { bold: true, indent: true }),
+  ];
+  const by = side => r.sections.filter(s => s.side === side);
+  const exportCSV = () => downloadCSV("balance-sheet", ["Line", "Amount"], [
+    ["ASSETS"], ...by("assets").flatMap(s => [[s.label], ...s.rows.map(x => [x.account.name, x.amount.toFixed(2)]), ["Total " + s.label, s.total.toFixed(2)]]),
+    ["Total Assets", r.totalAssets.toFixed(2)],
+    ["LIABILITIES AND CAPITAL"], ...by("liabilities").flatMap(s => [[s.label], ...s.rows.map(x => [x.account.name, x.amount.toFixed(2)]), ["Total " + s.label, s.total.toFixed(2)]]),
+    ["Total Liabilities", r.totalLiabilities.toFixed(2)],
+    ...by("capital").flatMap(s => [[s.label], ...s.rows.map(x => [x.account.name, x.amount.toFixed(2)]), ["Net Income", r.netIncome.toFixed(2)], ["Total Capital", r.totalCapital.toFixed(2)]]),
+    ["Total Liabilities & Capital", r.totalLiabCap.toFixed(2)]]);
+  const empty = r.sections.every(s => !s.rows.length) && Math.abs(r.netIncome) < 0.005;
+  return <ReportCard title={"Balance Sheet" + (db.settings.company ? " — " + db.settings.company : "")} rangeLabel={"As of " + fmtDate(asOf)}
+    right={<><span className={"badge " + (r.balanced ? "green" : "red")}><span className="dot"></span>{r.balanced ? "In balance" : "Out of balance"}</span>
+      <button className="btn sm no-print" onClick={exportCSV}>Export CSV</button></>}>
+    {empty
+      ? <Empty icon={ICONS.reports} title="Nothing posted yet" msg="The balance sheet fills in as invoices, bills, expenses, payments and journal entries are entered." />
+      : <table><thead><tr><th></th><th className="num">{fmtDate(asOf)}</th></tr></thead>
+        <tbody>
+          {heading("Assets", true)}
+          {by("assets").flatMap(section)}
+          {line("Total Assets", r.totalAssets, { bold: true, top: true })}
+          {heading("Liabilities and Capital", true)}
+          {by("liabilities").flatMap(section)}
+          {line("Total Liabilities", r.totalLiabilities, { bold: true, top: true })}
+          {by("capital").flatMap(section)}
+          {line("Total Liabilities & Capital", r.totalLiabCap, { bold: true, top: true })}
+        </tbody></table>}
+    <div className="card-body subtle" style={{ paddingTop: 10 }}>
+      Each fiscal year's income, cost of sales, expenses and distributions close into Retained Earnings on the year-end date (Settings → Accounts); Net Income is what the current year has earned since. Accrual basis. For management purposes only.
+    </div>
   </ReportCard>;
 }
 

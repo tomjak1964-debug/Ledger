@@ -465,6 +465,13 @@ function AccountsTab({ db, s, set, readOnly, saveAll }) {
         {row("salesDiscount", "Sales discounts", "An early-payment term a customer took", null, ["income", "expense"])}
         {row("purchaseDiscount", "Purchase discounts", "An early-payment term the shop took on a bill", null, ["expense", "cos", "income"])}
       </div>
+      <div className="row">
+        {row("retainedEarnings", "Retained Earnings", "Where income, expenses and distributions close to at year-end", null, ["equity"])}
+        <Field label="Fiscal year ends" hint="The close posts on the last day of this month; the Balance Sheet and Trial Balance dated after it show the year rolled into Retained Earnings">
+          <select className="select" value={Number(a.fiscalYearEndMonth) || 12} disabled={readOnly} onChange={e => setA("fiscalYearEndMonth", Number(e.target.value))}>
+            {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((mn, i) => <option key={mn} value={i + 1}>{mn}</option>)}
+          </select></Field>
+      </div>
       <button className="btn primary" disabled={readOnly} onClick={saveAll}><Ico d={ICONS.check} size={15} />Save Settings</button>
     </div>
   </div>;

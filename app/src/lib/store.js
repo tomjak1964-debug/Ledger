@@ -13,7 +13,7 @@ import { supabase } from "./supabaseClient.js";
 import * as A from "./adapters.js";
 import { dueDateFor } from "./terms.js";
 import { CREDIT_METHOD } from "./credits.js";
-import { uid, todayISO, addDays, pad4, money } from "./helpers.js";
+import { uid, todayISO, addDays, pad4, money, sum } from "./helpers.js";
 import { defaultSettings, sampleData } from "./seed.js";
 import { proposalConfig, phaseAmount } from "../calc/proposals.js";
 import { round2, lineTotals, balance } from "../calc/ledger.js";
@@ -35,7 +35,7 @@ const th = (res) => { if (res.error) throw res.error; return res.data; };
 
 async function fetchAll() {
   const [settings, sequences, contacts, catalog, quotes, qli, sos, soli, invoices, invli, payments, bills, expenses,
-    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments, pos, poli, accounts] = await Promise.all([
+    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments, pos, poli, accounts, journal] = await Promise.all([
     supabase.from("settings").select("*").maybeSingle(),
     supabase.from("org_sequences").select("*"),
     supabase.from("contacts").select("*").order("created_at"),
@@ -62,6 +62,7 @@ async function fetchAll() {
     supabase.from("purchase_orders").select("*").order("created_at"),
     supabase.from("purchase_order_line_items").select("*").order("sort"),
     supabase.from("accounts").select("*").order("sort").order("number"),
+    supabase.from("journal_entries").select("*").order("date").order("number"),
   ]);
   return {
     settingsRow: th(settings), sequences: th(sequences),
@@ -81,6 +82,7 @@ async function fetchAll() {
     pos: pos && !pos.error ? (pos.data || []) : [],
     poli: poli && !poli.error ? (poli.data || []) : [],
     accounts: accounts && !accounts.error ? (accounts.data || []) : [],   // migration 024
+    journal: journal && !journal.error ? (journal.data || []) : [],        // migration 025
   };
 }
 
@@ -115,6 +117,7 @@ function assemble(raw) {
     attachments: (raw.attachments || []).map(A.attachmentFromRow),
     purchaseOrders: (() => { const items = groupBy(raw.poli || [], "purchase_order_id"); return (raw.pos || []).map(r => A.poFromRow(r, li(items[r.id]))); })(),
     accounts: (raw.accounts || []).map(A.accountFromRow),
+    journalEntries: (raw.journal || []).map(A.journalEntryFromRow),
   };
 }
 
@@ -1073,6 +1076,36 @@ export function useLedger(session, onError) {
       } catch (e) { return fail(e); }
     },
 
+    /* ---- manual journal entries ---- */
+    // A hand-booked entry: several lines that must balance. A new one claims
+    // JE-nnnn from next_doc_number('journal'); an edit keeps its number.
+    async saveJournalEntry(j) {
+      try {
+        const lines = (j.lines || []).map(l => ({ ...l, id: l.id || uid(), account: String(l.account || "").trim(), desc: l.desc || "", debit: round2(Number(l.debit) || 0), credit: round2(Number(l.credit) || 0) }))
+          .filter(l => l.account || Math.abs(l.debit) > 0.005 || Math.abs(l.credit) > 0.005);
+        if (!j.date) throw new Error("A date is required.");
+        if (lines.some(l => !l.account)) throw new Error("Every line needs an account.");
+        if (lines.some(l => l.debit < 0 || l.credit < 0)) throw new Error("Amounts can't be negative — put the amount on the other side instead.");
+        if (lines.some(l => Math.abs(l.debit) < 0.005 && Math.abs(l.credit) < 0.005)) throw new Error("Every line needs a debit or a credit.");
+        if (lines.length < 2) throw new Error("An entry needs at least two lines.");
+        const debits = round2(sum(lines, l => l.debit)), credits = round2(sum(lines, l => l.credit));
+        if (Math.abs(debits - credits) > 0.005) throw new Error(`Debits (${money(debits)}) and credits (${money(credits)}) must be equal.`);
+        const entry = { ...j, lines, ref: j.ref || "", memo: j.memo || "" };
+        const isNew = !!entry._new; delete entry._new;
+        if (isNew || !entry.number) entry.number = "JE-" + String(await claimNumber("journal")).padStart(4, "0");
+        th(await supabase.from("journal_entries").upsert(A.journalEntryToRow(entry)));
+        setDb(d => ({ ...d, journalEntries: upsertList(d.journalEntries || [], entry) }));
+        return entry;
+      } catch (e) { return fail(e); }
+    },
+    async deleteJournalEntry(id) {
+      try {
+        th(await supabase.from("journal_entries").delete().eq("id", id));
+        setDb(d => ({ ...d, journalEntries: (d.journalEntries || []).filter(j => j.id !== id) }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
+
     /* ---- chart of accounts ---- */
     async saveAccount(a) {
       try {
@@ -1341,6 +1374,7 @@ export function useLedger(session, onError) {
         ]);
         await ins("bills", bills.map(A.billToRow));
         await ins("expenses", expenses.map(A.expenseToRow));
+        await ins("journal_entries", arr("journalEntries").map(j => A.journalEntryToRow({ ...j, id: uid(), lines: (j.lines || []).map(l => ({ ...l, id: uid() })) })));
         // The chart is reference data (kept by wipe, like machine rates); a
         // backup that carries one only adds the numbers not already on file.
         const have = new Set(dbRef.current.accounts.map(a => String(a.number)));
@@ -1366,7 +1400,7 @@ export function useLedger(session, onError) {
 async function wipe(orgId) {
   // Children first (payments have no FK; line items cascade from parents).
   for (const table of ["payments", "quote_line_items", "sales_order_line_items", "invoice_line_items",
-    "quotes", "sales_orders", "invoices", "proposals", "contact_people", "bills", "expenses",
+    "quotes", "sales_orders", "invoices", "proposals", "contact_people", "bills", "expenses", "journal_entries",
     "contacts", "catalog_items", "org_sequences"]) {
     const { error } = await supabase.from(table).delete().eq("org_id", orgId);
     if (error) throw error;

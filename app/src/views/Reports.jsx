@@ -49,7 +49,7 @@ const CATEGORIES = [
   { key: "ar", label: "Accounts Receivable", icon: ICONS.ar, blurb: "Customers, what they owe, what they've paid, and sales tax.", reports: ["ar", "customers", "receipts", "statement", "tax"] },
   { key: "ap", label: "Accounts Payable", icon: ICONS.ap, blurb: "Vendors, open bills, the checks that paid them, and the 1099s.", reports: ["ap", "payments", "v1099"] },
   { key: "payroll", label: "Payroll", icon: ICONS.contacts, blurb: "Wages and payroll taxes.", reports: [] },
-  { key: "gl", label: "General Ledger", icon: ICONS.catalog, blurb: "Account activity and the trial balance, posted from the documents.", reports: ["gl", "tb"] },
+  { key: "gl", label: "General Ledger", icon: ICONS.catalog, blurb: "Account activity and the trial balance, posted from the documents and the journal entries booked by hand.", reports: ["gl", "tb"] },
   { key: "financial", label: "Financial Statements", icon: ICONS.reports, blurb: "The income statement, cash-basis profit and loss, and cash in versus cash out.", reports: ["is", "pl", "ie"] },
   { key: "inventory", label: "Inventory", icon: ICONS.catalog, blurb: "Stock on hand and item movement.", reports: [] },
   { key: "jobs", label: "Job Reports", icon: ICONS.job, blurb: "Cost and profit per job.", reports: [] },
@@ -471,7 +471,7 @@ function GeneralLedgerReport({ db, from, to, rangeLabel: label }) {
       <button className="btn sm" style={{ marginLeft: "auto" }} onClick={exportCSV}>Export CSV</button>
     </div>
     {r.blocks.length === 0
-      ? <div className="card"><Empty icon={ICONS.catalog} title="Nothing posted in this range" msg="Invoices, bills, expenses and payments post to the ledger as they are entered. Widen the date range above." /></div>
+      ? <div className="card"><Empty icon={ICONS.catalog} title="Nothing posted in this range" msg="Invoices, bills, expenses, payments and journal entries post to the ledger as they are entered. Widen the date range above." /></div>
       : r.blocks.map(b => <ReportCard key={b.account.number} title={`${b.account.number} · ${b.account.name}`} rangeLabel={label}
         right={<span className="mono" style={{ fontWeight: 700 }}>{money(b.closing)}</span>}>
         <table><thead><tr><th>Date</th><th>Memo</th><th>Party</th><th className="num">Debit</th><th className="num">Credit</th><th className="num">Balance</th></tr></thead>
@@ -562,7 +562,7 @@ function IncomeStatementReport({ db, from, to, rangeLabel: label }) {
         {line("Net Income", r.net, { bold: true, top: true })}
       </tbody></table>
     <div className="card-body subtle" style={{ paddingTop: 10 }}>
-      Accrual basis: invoices count when issued and bills when entered, posted to the accounts on the documents (or the customer's / vendor's default). Percentages are of total revenues. For management purposes only.
+      Accrual basis: invoices count when issued and bills when entered, posted to the accounts on the documents (or the customer's / vendor's default), plus any journal entries booked by hand. An account with nothing in either column is left off. Percentages are of total revenues. For management purposes only.
     </div>
   </ReportCard>;
 }

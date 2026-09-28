@@ -535,7 +535,7 @@ two electronic runs to the same vendor on the same day collapse into a single re
 **Navigation groups:** the sidebar reads Overview · **Customers & Sales** (Customers, Proposals, Quotes,
 Sales Orders, Invoices, Receivables) · **Vendors & Purchases** (Vendors, Purchase Orders, Payables,
 Payments, Expenses) · **Work** (Jobs, Tasks, Field, Time Tracking, Item Catalog, Fixture Rates) ·
-**System** (Settings). The group names are labels in `NAV` (`App.jsx`) only, so moving or renaming a
+**System** (Chart of Accounts, Journal Entries, Settings). The group names are labels in `NAV` (`App.jsx`) only, so moving or renaming a
 page is a one-line edit there. **Customers and Vendors** are the two halves of the old Contacts page
 (`views/Contacts.jsx` with a `type` prop; view keys `customers` / `vendors`, both gated by the
 `contacts` permission area, and `go("contacts")` still lands on Customers). A vendor carries a
@@ -581,14 +581,28 @@ A/R; bill Dr expense / Cr A/P; bill payment Dr A/P / Cr cash (+ Cr purchase disc
 expense / Cr cash; a credit applied to an invoice (method `Credit`) moves nothing — so the ledger is
 in step with the books by construction. `generalLedger()` (per-account activity with opening and
 running balances), `trialBalance()`, `incomeStatement()` (the Sage layout: Revenues · Cost of Sales ·
-Gross Profit · Expenses · Net Income, every income/COS/expense account in the chart zeros included,
-for the range and the year to date at its end, with % of revenue) and `vendor1099()` (each 1099-NEC /
+Gross Profit · Expenses · Net Income, for the range and the year to date at its end, with % of
+revenue; an account with nothing in either column is left off, so the statement is only as long as
+the accounts in use) and `vendor1099()` (each 1099-NEC /
 1099-MISC vendor's cash payments in the year — bill payments plus expense entries payable to the
 vendor's name — with the $600 limit; a 1099 vendor paid nothing in the year is left off, since no
 1099 goes to them) are the four reports under General Ledger / Financial Statements
 / Accounts Payable in Reports. The old cash-basis P&L stays alongside. A number a document names that
 the chart lacks still reports, as "(not in chart)". `tools/sage-lists-sql.py` turns the Sage Vendor and
 Customer lists into the data fix that fills each contact's account, 1099 type and tax id.
+
+**Journal entries by hand** (System → Journal Entries, `views/JournalEntries.jsx`, the `journal_entries`
+table, migration 025): what no document covers — a payroll run (Wages Expense, Payroll Tax Expense, 401K
+Employer against Checking and the payables), depreciation, an adjustment. An entry is a date, an optional
+reference, a memo and any number of lines, each an account with a debit *or* a credit (typing on one side
+clears the other; `=` in an amount box, or **Balance on last line**, puts the difference there). It saves
+only in balance — `saveJournalEntry()` in `store.js` refuses an unbalanced, one-line, negative or
+account-less entry with the precise complaint — and a new one claims `JE-nnnn` from
+`next_doc_number('journal')`. Lines are jsonb on the row (`[{ id, account, desc, debit, credit }]`), the
+account as a chart number like every other document. `journal(db)` posts them as written, with a line's
+own description shown after the entry memo in the General Ledger, so they land in the GL, the trial
+balance and the income statement beside the derived entries. **Copy to new entry** on a row prefills next
+month's payroll. Entries wipe with the documents and travel in the JSON backup as `journalEntries`.
 
 **Network failures on a save:** every PostgREST request goes through `ledgerFetch()` in
 `lib/supabaseClient.js` — a request the browser could not send at all ("Failed to fetch", typically
@@ -634,8 +648,8 @@ ascending then descending. See §7 for the convention new pages follow.
 
 **Not built (candidates for next work):** refunds (returning cash rather than crediting) · partial invoicing of an SO ·
 recurring invoices · email sending · attachments / receipt photos · quote line-item reordering ·
-multi-user roles · bank import / reconciliation · manual journal entries and a balance sheet (the GL is
-derived from documents only) · undo · automated tests ·
+multi-user roles · bank import / reconciliation · a balance sheet and year-end close (the GL has no
+closing entries) · undo · automated tests ·
 Capacitor store apps (PWA covers home-screen install today).
 
 ---

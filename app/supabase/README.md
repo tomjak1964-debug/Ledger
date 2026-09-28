@@ -84,6 +84,10 @@ If you ran `schema.sql` before a migration existed, run the files in
   `data-fixes/2026-09-27_contact_accounts.sql` to fill each vendor's and
   customer's account from the Sage lists, and load the chart under
   System → Chart of Accounts.
+- `025_journal_entries.sql` — the `journal_entries` table for entries booked
+  by hand (System → Journal Entries: payroll, employer taxes, 401K,
+  depreciation, adjustments). Without it the page can't save and the app logs
+  a missing-table error on load (everything else still works).
 
 ## Email sending (invoices & proposals)
 

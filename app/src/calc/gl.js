@@ -34,7 +34,7 @@ export function journal(db) {
   const out = [];
   const post = (date, source, memo, party, lines) => {
     const clean = lines.filter(l => Math.abs(l.debit || 0) > 0.005 || Math.abs(l.credit || 0) > 0.005)
-      .map(l => ({ account: l.account, debit: round2(l.debit), credit: round2(l.credit) }));
+      .map(l => ({ account: l.account, debit: round2(l.debit), credit: round2(l.credit), ...(l.memo ? { memo: l.memo } : {}) }));
     if (clean.length) out.push({ date, source, memo, party, lines: clean });
   };
 
@@ -91,6 +91,14 @@ export function journal(db) {
     ]);
   });
 
+  // Hand-booked entries (System → Journal Entries): posted as written. A line's
+  // own description, when it has one, is what the ledger shows for that line.
+  (db.journalEntries || []).forEach(j => {
+    post(j.date, { type: "journal", id: j.id, number: j.number, ref: j.ref }, `${j.number || "Journal entry"}${j.memo ? " — " + j.memo : ""}`, "", (j.lines || []).map(l => ({
+      account: l.account, debit: Number(l.debit) || 0, credit: Number(l.credit) || 0, memo: l.desc || "",
+    })));
+  });
+
   out.sort((a, b) => (a.date || "").localeCompare(b.date || "") || a.memo.localeCompare(b.memo));
   return out;
 }
@@ -131,7 +139,7 @@ export function generalLedger(db, { from, to, account } = {}) {
       if (String(l.account) !== num) return;
       if (from && e.date < from) { opening += signed(a.type, l.debit, l.credit); return; }
       if (!inRange(e.date, from, to)) return;
-      rows.push({ date: e.date, memo: e.memo, party: e.party, source: e.source, debit: l.debit, credit: l.credit });
+      rows.push({ date: e.date, memo: l.memo ? `${e.memo}: ${l.memo}` : e.memo, party: e.party, source: e.source, debit: l.debit, credit: l.credit });
     }));
     let bal = round2(opening);
     rows.forEach(r => { bal = round2(bal + signed(a.type, r.debit, r.credit)); r.balance = bal; });
@@ -171,8 +179,10 @@ export function incomeStatement(db, from, to) {
     return round2(signed(type, d, c));
   };
   const chart = ledgerAccounts(db, entries).filter(a => ["income", "cos", "expense"].includes(TYPE_GROUP[a.type]) && a.active !== false);
+  // Only accounts with something in them: a zero line in both columns is left off.
   const section = group => chart.filter(a => TYPE_GROUP[a.type] === group)
-    .map(a => ({ account: a, period: sumFor(a.number, a.type, from, to), ytd: sumFor(a.number, a.type, ytdFrom, end) }));
+    .map(a => ({ account: a, period: sumFor(a.number, a.type, from, to), ytd: sumFor(a.number, a.type, ytdFrom, end) }))
+    .filter(r => Math.abs(r.period) > 0.005 || Math.abs(r.ytd) > 0.005);
   const revenues = section("income"), cos = section("cos"), expenses = section("expense");
   const tot = rows => ({ period: round2(sum(rows, r => r.period)), ytd: round2(sum(rows, r => r.ytd)) });
   const totRev = tot(revenues), totCos = tot(cos), totExp = tot(expenses);

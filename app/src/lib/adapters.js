@@ -162,3 +162,9 @@ export const expenseFromRow = r => ({ id: r.id, date: r.date || "", category: r.
 /* ---- chart of accounts ---- */
 export const accountToRow = a => ({ id: a.id, number: String(a.number ?? "").trim(), name: a.name ?? "", type: a.type ?? "Expenses", active: a.active !== false, sort: num(a.sort) });
 export const accountFromRow = r => ({ id: r.id, number: String(r.number ?? ""), name: r.name || "", type: r.type || "Expenses", active: r.active !== false, sort: num(r.sort) });
+
+// Manual journal entries (migration 025). Lines ride along as jsonb:
+// [{ id, account, desc, debit, credit }] — account is a chart number as text.
+const journalLine = l => ({ id: l.id || crypto.randomUUID(), account: String(l.account ?? "").trim(), desc: l.desc ?? "", debit: num(l.debit), credit: num(l.credit) });
+export const journalEntryToRow = j => ({ id: j.id, number: j.number ?? "", date: j.date, ref: j.ref ?? "", memo: j.memo ?? "", lines: (j.lines || []).map(journalLine) });
+export const journalEntryFromRow = r => ({ id: r.id, number: r.number || "", date: r.date, ref: r.ref || "", memo: r.memo || "", lines: (Array.isArray(r.lines) ? r.lines : []).map(journalLine) });

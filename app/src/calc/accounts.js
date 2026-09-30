@@ -40,6 +40,7 @@ export const closesAtYearEnd = type => ["income", "cos", "expense"].includes(TYP
 // The accounts the app posts to on its own. Each is a chart number; Settings →
 // Accounts lets the shop point them elsewhere.
 export const DEFAULT_ACCOUNT_SETTINGS = {
+  basis: "cash",            // "cash": revenue when a receipt lands, expenses when a bill is paid; "accrual": when issued / entered
   ar: "1100",               // Accounts Receivable
   ap: "2000",               // Accounts Payable
   cash: "1020",             // Checking Account — what pays bills and takes deposits
@@ -52,6 +53,8 @@ export const DEFAULT_ACCOUNT_SETTINGS = {
   fiscalYearEndMonth: 12,   // the fiscal year ends on the last day of this month
 };
 export const accountSettings = settings => ({ ...DEFAULT_ACCOUNT_SETTINGS, ...(settings?.accounts || {}) });
+export const isCashBasis = settings => accountSettings(settings).basis !== "accrual";
+export const basisLabel = settings => (isCashBasis(settings) ? "Cash basis" : "Accrual basis");
 
 // The legacy expense categories (helpers.js EXPENSE_CATS) mapped onto the
 // chart, so an expense logged before accounts existed still lands somewhere

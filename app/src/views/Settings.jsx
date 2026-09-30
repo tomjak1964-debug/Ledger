@@ -452,9 +452,17 @@ function AccountsTab({ db, s, set, readOnly, saveAll }) {
     <div className="card-body">
       {!(db.accounts || []).length && <p className="subtle" style={{ marginTop: 0 }}>Reading the built-in TMJ chart. Load it under System → Chart of Accounts to rename accounts or add your own.</p>}
       <div className="row">
+        <Field label="Accounting basis" hint={a.basis === "accrual"
+          ? "Invoices post when issued and bills when entered; A/R and A/P are on the ledger"
+          : "Revenue is recognized when a receipt is recorded and expenses when a bill is paid — the basis the books and tax returns are kept on. No A/R or A/P on the ledger"}>
+          <select className="select" value={a.basis === "accrual" ? "accrual" : "cash"} disabled={readOnly} onChange={e => setA("basis", e.target.value)}>
+            <option value="cash">Cash</option><option value="accrual">Accrual</option>
+          </select></Field>
+      </div>
+      <div className="row">
         {row("cash", "Cash account", "Pays bills and takes receipts unless a payment says otherwise", ["Cash"])}
-        {row("ar", "Accounts Receivable", "Debited by every invoice, credited by every receipt", ["Accounts Receivable"])}
-        {row("ap", "Accounts Payable", "Credited by every bill, debited by every bill payment", ["Accounts Payable"])}
+        {row("ar", "Accounts Receivable", a.basis === "accrual" ? "Debited by every invoice, credited by every receipt" : "Used on the accrual basis only", ["Accounts Receivable"])}
+        {row("ap", "Accounts Payable", a.basis === "accrual" ? "Credited by every bill, debited by every bill payment" : "Used on the accrual basis only", ["Accounts Payable"])}
       </div>
       <div className="row">
         {row("income", "Default income account", "For a customer with no sales account of their own", ["Income"])}

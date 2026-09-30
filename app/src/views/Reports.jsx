@@ -8,7 +8,7 @@ import {
 } from "../calc/reports.js";
 import { Ico, ICONS, Badge, Empty, SortTh, useTableSort } from "../components/ui.jsx";
 import { generalLedger, trialBalance, incomeStatement, balanceSheet, vendor1099, ledgerAccounts, TEN99_LIMIT } from "../calc/gl.js";
-import { ten99Label, accountLabel, chartLoaded } from "../calc/accounts.js";
+import { ten99Label, accountLabel, chartLoaded, isCashBasis, basisLabel } from "../calc/accounts.js";
 import FilterBar, { rangeLabel } from "../components/FilterBar.jsx";
 
 /* ---------- CSV export ---------- */
@@ -42,7 +42,7 @@ const REPORTS = {
   gl: { label: "General Ledger", blurb: "Every posting by account, with a running balance.", party: null, Render: GeneralLedgerReport },
   tb: { label: "Trial Balance", blurb: "Debits and credits by account as of the end of the range — the two columns agree. Dated after a year-end, the year's income shows in Retained Earnings.", party: null, asOf: true, Render: TrialBalanceReport },
   bs: { label: "Balance Sheet", blurb: "Assets, liabilities and capital as of the end of the range — with the year's income rolled into Retained Earnings once the year has closed.", party: null, asOf: true, Render: BalanceSheetReport },
-  is: { label: "Income Statement", blurb: "The standard statement: revenues, cost of sales, gross profit, expenses and net income by account, for the range and year to date.", party: null, Render: IncomeStatementReport },
+  is: { label: "Income Statement", blurb: "The standard statement: revenues, cost of sales, gross profit, expenses and net income by account, for the range and year to date, on the basis set in Settings → Accounts.", party: null, Render: IncomeStatementReport },
   v1099: { label: "1099 Vendor Report", blurb: "Every 1099 vendor paid in the year, each payment made, the total, and whether the $600 limit was met.", party: "vendor", Render: Vendor1099Report },
 };
 
@@ -565,7 +565,7 @@ export function BalanceSheetReport({ db, asOf }) {
           {line("Total Liabilities & Capital", r.totalLiabCap, { bold: true, top: true })}
         </tbody></table>}
     <div className="card-body subtle" style={{ paddingTop: 10 }}>
-      Each fiscal year's income, cost of sales, expenses and distributions close into Retained Earnings on the year-end date (Settings → Accounts); Net Income is what the current year has earned since. Accrual basis. For management purposes only.
+      Each fiscal year's income, cost of sales, expenses and distributions close into Retained Earnings on the year-end date (Settings → Accounts); Net Income is what the current year has earned since. {basisLabel(db.settings)}{isCashBasis(db.settings) ? " — open invoices and bills are not on the sheet; see Aged Receivables and Aged Payables for those" : ""}. For management purposes only.
     </div>
   </ReportCard>;
 }
@@ -611,7 +611,10 @@ function IncomeStatementReport({ db, from, to, rangeLabel: label }) {
         {line("Net Income", r.net, { bold: true, top: true })}
       </tbody></table>
     <div className="card-body subtle" style={{ paddingTop: 10 }}>
-      Accrual basis: invoices count when issued and bills when entered, posted to the accounts on the documents (or the customer's / vendor's default), plus any journal entries booked by hand. An account with nothing in either column is left off. Percentages are of total revenues. For management purposes only.
+      {isCashBasis(db.settings)
+        ? "Cash basis: revenue counts when a receipt is recorded and an expense when a bill is paid, posted to the accounts on the documents (or the customer's / vendor's default), plus expense entries and any journal entries booked by hand. "
+        : "Accrual basis: invoices count when issued and bills when entered, posted to the accounts on the documents (or the customer's / vendor's default), plus any journal entries booked by hand. "}
+      An account with nothing in either column is left off. Percentages are of total revenues. The basis is set under Settings → Accounts.
     </div>
   </ReportCard>;
 }

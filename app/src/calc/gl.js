@@ -1,12 +1,25 @@
 // The general ledger, derived from the documents.
 //
-// Nothing is journalled by hand: every invoice, credit note, bill, expense and
-// payment already on file IS the journal, posted by the rules below whenever a
-// report asks. That keeps the ledger in step with the books by construction —
-// correct a payment and the ledger corrects itself — at the cost of there
-// being no manual journal entry (yet).
+// Every invoice, credit note, bill, expense and payment already on file IS the
+// journal, posted by the rules below whenever a report asks (plus the entries
+// booked by hand under System → Journal Entries). That keeps the ledger in
+// step with the books by construction — correct a payment and the ledger
+// corrects itself.
 //
-// Postings (Dr / Cr):
+// The shop keeps its books on a CASH basis (Settings → Accounts, the default):
+// nothing posts when an invoice is issued or a bill is entered; revenue is
+// recognized when a receipt lands and an expense when a bill is paid, and
+// there is no A/R or A/P on the ledger. Postings (Dr / Cr):
+//   receipt          Dr cash amount, Dr sales discounts discount
+//                    Cr income (the receipt's share of the invoice subtotal), Cr sales tax payable (its share of the tax)
+//   bill payment     Dr expense amount + discount    Cr cash amount, Cr purchase discounts discount
+//   expense entry    Dr expense amount               Cr cash amount
+// A partly paid invoice recognizes revenue as the cash comes in: each receipt
+// takes its proportion of the subtotal and the tax, running totals rounded so
+// the last cent lands on the last receipt. A credit note recognizes nothing
+// until cash moves, and a credit applied to an invoice is not cash.
+//
+// On the ACCRUAL basis (the setting) the documents post when issued:
 //   invoice          Dr A/R total                Cr income subtotal, Cr sales tax payable tax
 //   credit note      Dr income |subtotal|, Dr tax |tax|      Cr A/R |total|
 //   receipt          Dr cash amount, Dr sales discounts discount     Cr A/R amount + discount
@@ -27,7 +40,7 @@ import { sum, todayISO } from "../lib/helpers.js";
 import { lineTotals, round2 as r2 } from "./ledger.js";
 import { CREDIT_METHOD } from "../lib/credits.js";
 import {
-  accountSettings, normalSide, TYPE_GROUP, accountByNumber, accountsOfType, chart, closesAtYearEnd,
+  accountSettings, isCashBasis, normalSide, TYPE_GROUP, accountByNumber, accountsOfType, chart, closesAtYearEnd,
   incomeAccountOf, expenseAccountOfBill, expenseAccountOfExpense, cashAccountOf,
 } from "./accounts.js";
 
@@ -39,6 +52,7 @@ const partyName = (db, id) => db.contacts.find(c => c.id === id)?.name || "";
 // lines; `lines` carry the account number, a debit or a credit, never both.
 export function journal(db, { close = true } = {}) {
   const acct = accountSettings(db.settings);
+  const cash = isCashBasis(db.settings);
   const out = [];
   const post = (date, source, memo, party, lines) => {
     const clean = lines.filter(l => Math.abs(l.debit || 0) > 0.005 || Math.abs(l.credit || 0) > 0.005)
@@ -51,6 +65,26 @@ export function journal(db, { close = true } = {}) {
     const income = incomeAccountOf(db, inv);
     const who = partyName(db, inv.customerId);
     const isCredit = inv.kind === "credit" || t.total < 0;
+    if (cash) {
+      if (isCredit) return;                                 // nothing until cash moves
+      let cumSettled = 0, cumIncome = 0;
+      [...(inv.payments || [])].sort((a, b) => (a.date || "").localeCompare(b.date || "")).forEach(p => {
+        if (p.method === CREDIT_METHOD) return;             // a credit applied is not cash
+        const amount = Number(p.amount) || 0, disc = Number(p.discount) || 0;
+        const settled = amount + disc;
+        cumSettled = round2(cumSettled + settled);
+        const cumInc = Math.abs(t.total) > 0.005 ? round2(cumSettled * t.sub / t.total) : cumSettled;
+        const inc = round2(cumInc - cumIncome), tax = round2(settled - inc);
+        cumIncome = cumInc;
+        post(p.date, { type: "receipt", id: p.id, number: inv.number, ref: p.ref }, `Receipt on ${inv.number}${p.ref ? " #" + p.ref : ""}`, who, [
+          { account: cashAccountOf(db, p), debit: amount },
+          { account: acct.salesDiscount, debit: disc },
+          { account: income, credit: inc },
+          { account: acct.salesTax, credit: tax },
+        ]);
+      });
+      return;
+    }
     if (isCredit) {
       post(inv.date, { type: "credit", id: inv.id, number: inv.number }, `Credit note ${inv.number}`, who, [
         { account: income, debit: Math.abs(t.sub) },
@@ -78,14 +112,14 @@ export function journal(db, { close = true } = {}) {
   db.bills.forEach(b => {
     const expense = expenseAccountOfBill(db, b);
     const who = partyName(db, b.vendorId);
-    post(b.date, { type: "bill", id: b.id, number: b.number, ref: b.ref }, `Bill ${b.number}${b.ref ? " (" + b.ref + ")" : ""}`, who, [
+    if (!cash) post(b.date, { type: "bill", id: b.id, number: b.number, ref: b.ref }, `Bill ${b.number}${b.ref ? " (" + b.ref + ")" : ""}`, who, [
       { account: expense, debit: Number(b.amount) || 0 },
       { account: acct.ap, credit: Number(b.amount) || 0 },
     ]);
     (b.payments || []).forEach(p => {
       const amount = Number(p.amount) || 0, disc = Number(p.discount) || 0;
       post(p.date, { type: "payment", id: p.id, number: b.number, ref: p.ref }, `Payment on ${b.number}${p.ref ? " #" + p.ref : ""}`, who, [
-        { account: acct.ap, debit: amount + disc },
+        { account: cash ? expense : acct.ap, debit: amount + disc },   // cash basis: the expense is recognized as it is paid
         { account: cashAccountOf(db, p), credit: amount },
         { account: acct.purchaseDiscount, credit: disc },
       ]);

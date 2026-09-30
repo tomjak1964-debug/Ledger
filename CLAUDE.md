@@ -575,11 +575,21 @@ is the picker every editor uses, filtered by type or balance-sheet group. **Unti
 built-in TMJ chart stands in** (`chart(db)` in `calc/accounts.js`): pickers, labels and every ledger
 report name accounts from the first day, and loading the chart only makes it editable.
 
-**Nothing is journalled by hand.** `journal(db)` posts every document on file by fixed rules — invoice
-Dr A/R / Cr income + sales tax; credit note the reverse; receipt Dr cash (+ Dr sales discounts) / Cr
-A/R; bill Dr expense / Cr A/P; bill payment Dr A/P / Cr cash (+ Cr purchase discounts); expense Dr
-expense / Cr cash; a credit applied to an invoice (method `Credit`) moves nothing — so the ledger is
-in step with the books by construction. `generalLedger()` (per-account activity with opening and
+**The books are kept on a cash basis.** `settings.accounts.basis` is `cash` by default (Settings →
+Accounts; `accrual` is the alternative) because the shop's books and tax returns are cash basis.
+`journal(db)` posts every document on file by fixed rules so the ledger is in step with the books by
+construction. On the **cash basis** nothing posts when an invoice is issued or a bill is entered, and
+there is no A/R or A/P on the ledger: a receipt is Dr cash (+ Dr sales discounts) / Cr income for its
+share of the invoice subtotal and Cr sales tax for its share of the tax — a partly paid invoice
+recognizes revenue as the cash comes in, running totals rounded so the last cent lands on the last
+receipt; a bill payment is Dr expense (amount + discount) / Cr cash (+ Cr purchase discounts); an
+expense entry Dr expense / Cr cash; a credit note recognizes nothing until cash moves and a credit
+applied to an invoice (method `Credit`) is not cash. So the Income Statement's revenue equals the
+receipts net of tax, and the Balance Sheet carries no A/R or A/P (Aged Receivables / Payables show
+what is open). On the **accrual basis** the documents post when issued — invoice Dr A/R / Cr income +
+sales tax; credit note the reverse; receipt Dr cash (+ Dr sales discounts) / Cr A/R; bill Dr expense /
+Cr A/P; bill payment Dr A/P / Cr cash (+ Cr purchase discounts). Switching the basis re-derives the
+whole ledger; nothing stored changes. `generalLedger()` (per-account activity with opening and
 running balances), `trialBalance()`, `incomeStatement()` (the Sage layout: Revenues · Cost of Sales ·
 Gross Profit · Expenses · Net Income, for the range and the year to date at its end, with % of
 revenue; an account with nothing in either column is left off, so the statement is only as long as
@@ -605,8 +615,9 @@ Statement reads `journal(db, { close: false })`, because the close would zero th
 Current Liabilities · Long-Term Liabilities · Total Liabilities · Capital (the equity accounts, Retained
 Earnings as closed, and the income not yet closed as one **Net Income** line) · Total Liabilities & Capital
 — zero accounts left off, with an In balance badge (`views/Reports.jsx`, Financial Statements). The books
-started in Ledger part-way through the shop's life, so the Sage balances at the cutover (cash, A/R, A/P,
-Retained Earnings…) belong in one journal entry dated the day before the first Ledger transaction.
+started in Ledger part-way through the shop's life, so the Sage balances at the cutover (cash, equipment,
+loans, Retained Earnings… — on the cash basis no A/R or A/P) belong in one journal entry dated the day
+before the first Ledger transaction.
 
 **Journal entries by hand** (System → Journal Entries, `views/JournalEntries.jsx`, the `journal_entries`
 table, migration 025): what no document covers — a payroll run (Wages Expense, Payroll Tax Expense, 401K

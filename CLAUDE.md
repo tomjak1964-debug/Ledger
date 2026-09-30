@@ -591,13 +591,31 @@ vendor's name — with the $600 limit; a 1099 vendor paid nothing in the year is
 the chart lacks still reports, as "(not in chart)". `tools/sage-lists-sql.py` turns the Sage Vendor and
 Customer lists into the data fix that fills each contact's account, 1099 type and tax id.
 
+**Year-end close and the balance sheet** (`calc/gl.js`). `journal(db)` ends with one **closing entry per
+fiscal year-end that has passed** (`closingEntries()`): every income, cost of sales, expense and
+*Equity-gets closed* (Distributions) balance is brought to zero and the difference — net income less
+distributions — lands in Retained Earnings (`settings.accounts.retainedEarnings`, default 3910; the
+year-end month is `settings.accounts.fiscalYearEndMonth`, default December, both in Settings → Accounts).
+The close is derived like everything else, so a bill back-dated into a closed year simply re-closes.
+**A closing entry counts from the day after its date**: `throughDate()` gives a Trial Balance or Balance
+Sheet dated *on* the year-end the year's income, like Sage's period 12, and one dated the next day shows it
+rolled into Retained Earnings; the General Ledger lists the closing lines on the year-end day. The Income
+Statement reads `journal(db, { close: false })`, because the close would zero the year it reports.
+`balanceSheet(db, asOf)` is the Sage layout — Current Assets · Property and Equipment · Total Assets ·
+Current Liabilities · Long-Term Liabilities · Total Liabilities · Capital (the equity accounts, Retained
+Earnings as closed, and the income not yet closed as one **Net Income** line) · Total Liabilities & Capital
+— zero accounts left off, with an In balance badge (`views/Reports.jsx`, Financial Statements). The books
+started in Ledger part-way through the shop's life, so the Sage balances at the cutover (cash, A/R, A/P,
+Retained Earnings…) belong in one journal entry dated the day before the first Ledger transaction.
+
 **Journal entries by hand** (System → Journal Entries, `views/JournalEntries.jsx`, the `journal_entries`
 table, migration 025): what no document covers — a payroll run (Wages Expense, Payroll Tax Expense, 401K
 Employer against Checking and the payables), depreciation, an adjustment. An entry is a date, an optional
 reference, a memo and any number of lines, each an account with a debit *or* a credit (typing on one side
 clears the other; `=` in an amount box, or **Balance on last line**, puts the difference there). It saves
 only in balance — `saveJournalEntry()` in `store.js` refuses an unbalanced, one-line, negative or
-account-less entry with the precise complaint — and a new one claims `JE-nnnn` from
+account-less entry with the precise complaint, and migration 026 puts the same rule on the table as a
+trigger, so a row written any other way is refused too — and a new one claims `JE-nnnn` from
 `next_doc_number('journal')`. Lines are jsonb on the row (`[{ id, account, desc, debit, credit }]`), the
 account as a chart number like every other document. `journal(db)` posts them as written, with a line's
 own description shown after the entry memo in the General Ledger, so they land in the GL, the trial
@@ -648,8 +666,8 @@ ascending then descending. See §7 for the convention new pages follow.
 
 **Not built (candidates for next work):** refunds (returning cash rather than crediting) · partial invoicing of an SO ·
 recurring invoices · email sending · attachments / receipt photos · quote line-item reordering ·
-multi-user roles · bank import / reconciliation · a balance sheet and year-end close (the GL has no
-closing entries) · undo · automated tests ·
+multi-user roles · bank import / reconciliation · locking a closed year against back-dated documents ·
+undo · automated tests ·
 Capacitor store apps (PWA covers home-screen install today).
 
 ---

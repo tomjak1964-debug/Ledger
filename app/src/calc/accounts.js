@@ -33,6 +33,9 @@ export const TYPE_GROUP = {
   "Income": "income", "Cost of Sales": "cos", "Expenses": "expense",
 };
 export const normalSide = type => (["asset", "expense", "cos"].includes(TYPE_GROUP[type]) ? "debit" : "credit");
+// The accounts a year-end close empties into Retained Earnings: every income,
+// cost of sales and expense account, and equity typed "gets closed" (Distributions).
+export const closesAtYearEnd = type => ["income", "cos", "expense"].includes(TYPE_GROUP[type]) || type === "Equity-gets closed";
 
 // The accounts the app posts to on its own. Each is a chart number; Settings →
 // Accounts lets the shop point them elsewhere.
@@ -45,6 +48,8 @@ export const DEFAULT_ACCOUNT_SETTINGS = {
   purchaseDiscount: "6900", // Purchase Disc-Expense Items — a term the shop took on a bill
   income: "4000",           // Professional Fees — a customer with no sales account of their own
   expense: "6750",          // Control Panel Expenses — a vendor with no expense account of their own
+  retainedEarnings: "3910", // where income, cost, expense and distribution balances close to at year-end
+  fiscalYearEndMonth: 12,   // the fiscal year ends on the last day of this month
 };
 export const accountSettings = settings => ({ ...DEFAULT_ACCOUNT_SETTINGS, ...(settings?.accounts || {}) });
 

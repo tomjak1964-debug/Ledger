@@ -88,6 +88,9 @@ If you ran `schema.sql` before a migration existed, run the files in
   by hand (System → Journal Entries: payroll, employer taxes, 401K,
   depreciation, adjustments). Without it the page can't save and the app logs
   a missing-table error on load (everything else still works).
+- `026_journal_entries_balanced.sql` — a trigger that refuses an unbalanced
+  or one-line journal entry at the database, the rule the app already applies
+  before saving. Optional but recommended; nothing in the app depends on it.
 
 ## Email sending (invoices & proposals)
 

@@ -15,11 +15,19 @@
 //   expense entry    Dr expense amount           Cr cash amount
 // A credit applied to an invoice moves nothing between accounts (A/R to A/R),
 // so those payment pairs are skipped.
-import { sum } from "../lib/helpers.js";
+//
+// Year-end close: for every fiscal year-end that has passed, a closing entry
+// dated that day moves each income, cost of sales, expense and distribution
+// balance into Retained Earnings (closingEntries below). It is derived like
+// everything else, so a bill back-dated into a closed year simply re-closes.
+// A closing entry counts from the day AFTER the year-end: a trial balance or
+// balance sheet dated on the year-end still shows the year's income, the way
+// Sage's period 12 does, and one dated the next day shows it rolled up.
+import { sum, todayISO } from "../lib/helpers.js";
 import { lineTotals, round2 as r2 } from "./ledger.js";
 import { CREDIT_METHOD } from "../lib/credits.js";
 import {
-  accountSettings, normalSide, TYPE_GROUP, accountByNumber, accountsOfType, chart,
+  accountSettings, normalSide, TYPE_GROUP, accountByNumber, accountsOfType, chart, closesAtYearEnd,
   incomeAccountOf, expenseAccountOfBill, expenseAccountOfExpense, cashAccountOf,
 } from "./accounts.js";
 
@@ -29,7 +37,7 @@ const partyName = (db, id) => db.contacts.find(c => c.id === id)?.name || "";
 
 // Every posting, oldest first. Each entry is one document event with balanced
 // lines; `lines` carry the account number, a debit or a credit, never both.
-export function journal(db) {
+export function journal(db, { close = true } = {}) {
   const acct = accountSettings(db.settings);
   const out = [];
   const post = (date, source, memo, party, lines) => {
@@ -100,8 +108,56 @@ export function journal(db) {
   });
 
   out.sort((a, b) => (a.date || "").localeCompare(b.date || "") || a.memo.localeCompare(b.memo));
+  if (close) closingEntries(db, out).forEach(e => out.push(e));
+  // A closing entry sorts after everything else on its day.
+  out.sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.close ? 1 : 0) - (b.close ? 1 : 0) || a.memo.localeCompare(b.memo));
   return out;
 }
+
+// The last day of the fiscal year that ends in calendar year `y`.
+export function fiscalYearEnd(settings, y) {
+  const m = Number(accountSettings(settings).fiscalYearEndMonth) || 12;
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return `${y}-${String(m).padStart(2, "0")}-${String(last).padStart(2, "0")}`;
+}
+// Every fiscal year-end from the first posting up to today that has already passed.
+export function closedYearEnds(db, entries) {
+  const first = (entries || []).find(e => e.date)?.date;
+  if (!first) return [];
+  const today = todayISO(), ends = [];
+  for (let y = Number(first.slice(0, 4)); y <= Number(today.slice(0, 4)); y++) {
+    const ye = fiscalYearEnd(db.settings, y);
+    if (ye >= first && ye < today) ends.push(ye);
+  }
+  return ends;
+}
+// One closing entry per passed year-end, built on the entries so far (closing
+// entries included, so each year closes only what it earned): every income,
+// cost, expense and distribution account is brought to zero and the difference
+// — net income less distributions — lands in Retained Earnings.
+function closingEntries(db, entries) {
+  const acct = accountSettings(db.settings);
+  const typeOf = n => accountByNumber(db, n)?.type || guessType(n);
+  const out = [];
+  closedYearEnds(db, entries).forEach(ye => {
+    const bal = new Map();
+    [...entries, ...out].forEach(e => { if (e.date <= ye) e.lines.forEach(l => { if (closesAtYearEnd(typeOf(l.account))) bal.set(String(l.account), round2((bal.get(String(l.account)) || 0) + l.debit - l.credit)); }); });
+    const lines = [];
+    [...bal.entries()].sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true })).forEach(([account, net]) => {
+      if (net > 0.005) lines.push({ account, debit: 0, credit: net, memo: "closed to Retained Earnings" });
+      else if (net < -0.005) lines.push({ account, debit: -net, credit: 0, memo: "closed to Retained Earnings" });
+    });
+    if (!lines.length) return;
+    const plug = round2(sum(lines, l => l.debit) - sum(lines, l => l.credit));
+    if (plug > 0.005) lines.push({ account: acct.retainedEarnings, debit: 0, credit: plug, memo: "net income for the year" });
+    else if (plug < -0.005) lines.push({ account: acct.retainedEarnings, debit: -plug, credit: 0, memo: "net loss for the year" });
+    out.push({ date: ye, close: true, source: { type: "close", id: "close-" + ye, number: "FY" + ye.slice(0, 4) }, memo: "Year-end close FY" + ye.slice(0, 4), party: "", lines });
+  });
+  return out;
+}
+// The postings a point-in-time report reads: everything through `asOf`, with a
+// closing entry counting only once its year-end is behind the date.
+const throughDate = (entries, asOf) => entries.filter(e => inRange(e.date, null, asOf) && !(e.close && e.date === asOf));
 
 // The chart the ledger reports against: the accounts on file (or the built-in
 // chart until one is loaded), plus any number a document points at that the
@@ -150,7 +206,7 @@ export function generalLedger(db, { from, to, account } = {}) {
 
 // Debits and credits per account through `asOf`; the two columns must agree.
 export function trialBalance(db, asOf) {
-  const entries = journal(db).filter(e => inRange(e.date, null, asOf));
+  const entries = throughDate(journal(db), asOf);
   const m = new Map();
   entries.forEach(e => e.lines.forEach(l => {
     const at = m.get(String(l.account)) || { debit: 0, credit: 0 };
@@ -170,7 +226,7 @@ export function trialBalance(db, asOf) {
 // share of total revenues. Accrual basis: invoices count when issued and bills
 // when entered, which is what the chart's A/R and A/P are for.
 export function incomeStatement(db, from, to) {
-  const entries = journal(db);
+  const entries = journal(db, { close: false });   // the close would zero the year it reports
   const end = to || entries[entries.length - 1]?.date || "";
   const ytdFrom = end ? end.slice(0, 4) + "-01-01" : "";
   const sumFor = (num, type, f, t) => {
@@ -190,6 +246,45 @@ export function incomeStatement(db, from, to) {
   const net = { period: round2(gross.period - totExp.period), ytd: round2(gross.ytd - totExp.ytd) };
   const pct = (v, base) => (Math.abs(base) > 0.005 ? (v / base) * 100 : 0);
   return { revenues, cos, expenses, totRev, totCos, totExp, gross, net, ytdFrom, end, pct: { period: v => pct(v, totRev.period), ytd: v => pct(v, totRev.ytd) } };
+}
+
+// Balance sheet as of a date, in the Sage layout: Current Assets · Property and
+// Equipment · Total Assets; Current Liabilities · Long-Term Liabilities · Total
+// Liabilities; Capital — the equity accounts, Retained Earnings as closed, and
+// the income not yet closed as one Net Income line — and Total Liabilities &
+// Capital. Every figure is on the account's own side (an asset positive when
+// debit, a liability positive when credit); zero accounts are left off.
+export const BALANCE_SHEET_SECTIONS = [
+  { key: "currentAssets", label: "Current Assets", side: "assets", types: ["Cash", "Accounts Receivable", "Inventory", "Other Current Assets"] },
+  { key: "fixedAssets", label: "Property and Equipment", side: "assets", types: ["Fixed Assets", "Accumulated Depreciation"] },
+  { key: "currentLiabilities", label: "Current Liabilities", side: "liabilities", types: ["Accounts Payable", "Other Current Liabilities"] },
+  { key: "longTermLiabilities", label: "Long-Term Liabilities", side: "liabilities", types: ["Long Term Liabilities"] },
+  { key: "capital", label: "Capital", side: "capital", types: ["Equity-doesn't close", "Equity-Retained Earnings", "Equity-gets closed"] },
+];
+export function balanceSheet(db, asOf) {
+  const entries = throughDate(journal(db), asOf);
+  const m = new Map();
+  entries.forEach(e => e.lines.forEach(l => {
+    const at = m.get(String(l.account)) || { debit: 0, credit: 0 };
+    at.debit += l.debit; at.credit += l.credit; m.set(String(l.account), at);
+  }));
+  const accounts = ledgerAccounts(db, entries);
+  const balanceOf = a => { const t = m.get(String(a.number)) || { debit: 0, credit: 0 }; return round2(signed(a.type, t.debit, t.credit)); };
+  const sections = BALANCE_SHEET_SECTIONS.map(sec => {
+    const rows = accounts.filter(a => sec.types.includes(a.type)).map(a => ({ account: a, amount: balanceOf(a) })).filter(r => Math.abs(r.amount) > 0.005);
+    return { ...sec, rows, total: round2(sum(rows, r => r.amount)) };
+  });
+  // Income, cost and expense balances still open — the current year's result.
+  const netIncome = round2(sum(accounts.filter(a => ["income", "cos", "expense"].includes(TYPE_GROUP[a.type])), a => {
+    const t = m.get(String(a.number)) || { debit: 0, credit: 0 }; return t.credit - t.debit;
+  }));
+  const by = side => sections.filter(s => s.side === side);
+  const totalAssets = round2(sum(by("assets"), s => s.total));
+  const totalLiabilities = round2(sum(by("liabilities"), s => s.total));
+  const capital = sections.find(s => s.key === "capital");
+  const totalCapital = round2(capital.total + netIncome);
+  const totalLiabCap = round2(totalLiabilities + totalCapital);
+  return { asOf, sections, netIncome, totalAssets, totalLiabilities, totalCapital, totalLiabCap, balanced: Math.abs(totalAssets - totalLiabCap) < 0.01 };
 }
 
 // 1099 vendor report for a calendar year: every vendor marked 1099-NEC or

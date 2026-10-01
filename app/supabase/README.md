@@ -91,6 +91,9 @@ If you ran `schema.sql` before a migration existed, run the files in
 - `026_journal_entries_balanced.sql` — a trigger that refuses an unbalanced
   or one-line journal entry at the database, the rule the app already applies
   before saving. Optional but recommended; nothing in the app depends on it.
+- `027_bank_reconciliation.sql` — `bank_reconciliations` (one per statement)
+  and `bank_cleared_items` (which register items have cleared, by key). Needed
+  for System → Bank Reconciliation; without it the page can't start one.
 
 ## Email sending (invoices & proposals)
 

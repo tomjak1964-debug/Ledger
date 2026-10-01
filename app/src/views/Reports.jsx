@@ -9,6 +9,7 @@ import {
 import { Ico, ICONS, Badge, Empty, SortTh, useTableSort } from "../components/ui.jsx";
 import { generalLedger, trialBalance, incomeStatement, balanceSheet, vendor1099, ledgerAccounts, TEN99_LIMIT } from "../calc/gl.js";
 import { ten99Label, accountLabel, chartLoaded, isCashBasis, basisLabel } from "../calc/accounts.js";
+import { reconcileState } from "../calc/bankRecon.js";
 import FilterBar, { rangeLabel } from "../components/FilterBar.jsx";
 
 /* ---------- CSV export ---------- */
@@ -43,6 +44,7 @@ const REPORTS = {
   tb: { label: "Trial Balance", blurb: "Debits and credits by account as of the end of the range — the two columns agree. Dated after a year-end, the year's income shows in Retained Earnings.", party: null, asOf: true, Render: TrialBalanceReport },
   bs: { label: "Balance Sheet", blurb: "Assets, liabilities and capital as of the end of the range — with the year's income rolled into Retained Earnings once the year has closed.", party: null, asOf: true, Render: BalanceSheetReport },
   is: { label: "Income Statement", blurb: "The standard statement: revenues, cost of sales, gross profit, expenses and net income by account, for the range and year to date, on the basis set in Settings → Accounts.", party: null, Render: IncomeStatementReport },
+  reconSummary: { label: "Reconciliation Summary", blurb: "Every statement reconciled: its balance, what cleared, what was still outstanding, and the book balance.", party: null, Render: ReconciliationSummary },
   v1099: { label: "1099 Vendor Report", blurb: "Every 1099 vendor paid in the year, each payment made, the total, and whether the $600 limit was met.", party: "vendor", Render: Vendor1099Report },
 };
 
@@ -54,7 +56,7 @@ const CATEGORIES = [
   { key: "financial", label: "Financial Statements", icon: ICONS.reports, blurb: "The balance sheet, the income statement, cash-basis profit and loss, and cash in versus cash out.", reports: ["bs", "is", "pl", "ie"] },
   { key: "inventory", label: "Inventory", icon: ICONS.catalog, blurb: "Stock on hand and item movement.", reports: [] },
   { key: "jobs", label: "Job Reports", icon: ICONS.job, blurb: "Cost and profit per job.", reports: [] },
-  { key: "recon", label: "Account Reconciliation", icon: ICONS.check, blurb: "Bank statements against the register.", reports: [] },
+  { key: "recon", label: "Account Reconciliation", icon: ICONS.check, blurb: "Bank statements against the register.", reports: ["reconSummary"] },
   { key: "time", label: "Time/Expense Reports", icon: ICONS.clock, blurb: "Hours logged and business spending.", reports: ["expenses"] },
   { key: "company", label: "Company Reports", icon: ICONS.settings, blurb: "Company-wide lists and settings.", reports: [] },
 ];
@@ -616,6 +618,40 @@ function IncomeStatementReport({ db, from, to, rangeLabel: label }) {
         : "Accrual basis: invoices count when issued and bills when entered, posted to the accounts on the documents (or the customer's / vendor's default), plus any journal entries booked by hand. "}
       An account with nothing in either column is left off. Percentages are of total revenues. The basis is set under Settings → Accounts.
     </div>
+  </ReportCard>;
+}
+
+/* ---------- Reconciliation Summary ---------- */
+function ReconciliationSummary({ db, from, to }) {
+  const recs = (db.bankReconciliations || []).filter(r => (!from || r.statementDate >= from) && (!to || r.statementDate <= to))
+    .map(r => ({ r, s: reconcileState(db, r) }));
+  const { sorted: rows, sort, onSort } = useTableSort(recs, {
+    date: x => x.r.statementDate, account: x => x.r.account, status: x => x.r.status, statement: x => x.r.statementBalance,
+    cleared: x => x.s.clearedTotal, diff: x => x.s.difference, outstanding: x => x.s.outstanding.length, book: x => x.s.bookBalance,
+  }, { key: "date", dir: "desc" });
+  const exportCSV = () => downloadCSV("reconciliations", ["Statement Date", "Account", "Status", "Statement Balance", "Cleared Balance", "Difference", "Outstanding Items", "Outstanding Deposits", "Outstanding Payments", "Book Balance"],
+    rows.map(({ r, s }) => [r.statementDate, accountLabel(db, r.account), r.status, r.statementBalance.toFixed(2), s.clearedTotal.toFixed(2), s.difference.toFixed(2), s.outstanding.length, s.outstandingDeposits.toFixed(2), s.outstandingPayments.toFixed(2), s.bookBalance.toFixed(2)]));
+  return <ReportCard title="Reconciliation Summary" rangeLabel={rangeLabel(from, to)} right={<button className="btn sm no-print" onClick={exportCSV}>Export CSV</button>}>
+    {rows.length === 0
+      ? <Empty icon={ICONS.check} title="No statements reconciled in this range" msg="Reconcile a statement under System → Bank Reconciliation and it appears here." />
+      : <table><thead><tr>
+        <SortTh label="Statement" col="date" sort={sort} onSort={onSort} />
+        <SortTh label="Account" col="account" sort={sort} onSort={onSort} />
+        <SortTh label="Status" col="status" sort={sort} onSort={onSort} />
+        <SortTh label="Statement Balance" col="statement" sort={sort} onSort={onSort} num />
+        <SortTh label="Cleared Balance" col="cleared" sort={sort} onSort={onSort} num />
+        <SortTh label="Difference" col="diff" sort={sort} onSort={onSort} num />
+        <SortTh label="Outstanding" col="outstanding" sort={sort} onSort={onSort} num />
+        <SortTh label="Book Balance" col="book" sort={sort} onSort={onSort} num /></tr></thead>
+        <tbody>{rows.map(({ r, s }) => <tr key={r.id}>
+          <td className="subtle">{fmtDate(r.statementDate)}</td><td>{accountLabel(db, r.account)}</td>
+          <td><span className={"badge " + (r.status === "done" ? "green" : "blue")}><span className="dot"></span>{r.status === "done" ? "Finished" : "Open"}</span></td>
+          <td className="num">{money(r.statementBalance)}</td><td className="num">{money(s.clearedTotal)}</td>
+          <td className="num" style={{ color: Math.abs(s.difference) > 0.005 ? "var(--neg)" : undefined, fontWeight: 600 }}>{money(s.difference)}</td>
+          <td className="num">{s.outstanding.length}<span className="subtle"> · +{money(s.outstandingDeposits)} / −{money(s.outstandingPayments)}</span></td>
+          <td className="num">{money(s.bookBalance)}</td>
+        </tr>)}</tbody></table>}
+    <div className="card-body subtle" style={{ paddingTop: 10 }}>Cleared balance is the sum of every item that has cleared the bank through that statement; Book balance is the ledger's balance on the statement date, so the two differ by exactly the outstanding items.</div>
   </ReportCard>;
 }
 

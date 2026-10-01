@@ -35,7 +35,7 @@ const th = (res) => { if (res.error) throw res.error; return res.data; };
 
 async function fetchAll() {
   const [settings, sequences, contacts, catalog, quotes, qli, sos, soli, invoices, invli, payments, bills, expenses,
-    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments, pos, poli, accounts, journal] = await Promise.all([
+    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments, pos, poli, accounts, journal, recons, cleared] = await Promise.all([
     supabase.from("settings").select("*").maybeSingle(),
     supabase.from("org_sequences").select("*"),
     supabase.from("contacts").select("*").order("created_at"),
@@ -63,6 +63,8 @@ async function fetchAll() {
     supabase.from("purchase_order_line_items").select("*").order("sort"),
     supabase.from("accounts").select("*").order("sort").order("number"),
     supabase.from("journal_entries").select("*").order("date").order("number"),
+    supabase.from("bank_reconciliations").select("*").order("statement_date"),
+    supabase.from("bank_cleared_items").select("*"),
   ]);
   return {
     settingsRow: th(settings), sequences: th(sequences),
@@ -83,6 +85,8 @@ async function fetchAll() {
     poli: poli && !poli.error ? (poli.data || []) : [],
     accounts: accounts && !accounts.error ? (accounts.data || []) : [],   // migration 024
     journal: journal && !journal.error ? (journal.data || []) : [],        // migration 025
+    recons: recons && !recons.error ? (recons.data || []) : [],            // migration 027
+    cleared: cleared && !cleared.error ? (cleared.data || []) : [],
   };
 }
 
@@ -118,6 +122,8 @@ function assemble(raw) {
     purchaseOrders: (() => { const items = groupBy(raw.poli || [], "purchase_order_id"); return (raw.pos || []).map(r => A.poFromRow(r, li(items[r.id]))); })(),
     accounts: (raw.accounts || []).map(A.accountFromRow),
     journalEntries: (raw.journal || []).map(A.journalEntryFromRow),
+    bankReconciliations: (raw.recons || []).map(A.reconFromRow),
+    bankCleared: (raw.cleared || []).map(A.clearedFromRow),
   };
 }
 
@@ -1076,6 +1082,45 @@ export function useLedger(session, onError) {
       } catch (e) { return fail(e); }
     },
 
+    /* ---- bank reconciliation ---- */
+    async saveReconciliation(r) {
+      try {
+        const rec = { ...r, statementBalance: round2(Number(r.statementBalance) || 0) }; delete rec._new;
+        if (!rec.account) throw new Error("Pick the bank account.");
+        if (!rec.statementDate) throw new Error("The statement's ending date is required.");
+        if (dbRef.current.bankReconciliations.some(x => x.id !== rec.id && x.account === rec.account && x.status === "open"))
+          throw new Error("That account already has a reconciliation open — finish or delete it first.");
+        th(await supabase.from("bank_reconciliations").upsert(A.reconToRow(rec)));
+        setDb(d => ({ ...d, bankReconciliations: upsertList(d.bankReconciliations || [], rec) }));
+        return rec;
+      } catch (e) { return fail(e); }
+    },
+    // Deleting a reconciliation un-clears everything it cleared (the table cascades).
+    async deleteReconciliation(id) {
+      try {
+        th(await supabase.from("bank_reconciliations").delete().eq("id", id));
+        setDb(d => ({ ...d, bankReconciliations: (d.bankReconciliations || []).filter(r => r.id !== id), bankCleared: (d.bankCleared || []).filter(c => c.reconciliationId !== id) }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
+    // Tick or untick register items on a reconciliation. items: [{ key, date, amount }].
+    async setCleared(recon, items, cleared) {
+      try {
+        const keys = items.map(it => it.key);
+        if (!keys.length) return true;
+        if (cleared) {
+          const have = new Set((dbRef.current.bankCleared || []).map(c => c.itemKey));
+          const rows = items.filter(it => !have.has(it.key)).map(it => ({ id: uid(), reconciliationId: recon.id, account: recon.account, itemKey: it.key, itemDate: it.date, amount: round2(it.amount) }));
+          if (rows.length) th(await supabase.from("bank_cleared_items").insert(rows.map(A.clearedToRow)));
+          setDb(d => ({ ...d, bankCleared: [...(d.bankCleared || []), ...rows] }));
+        } else {
+          th(await supabase.from("bank_cleared_items").delete().eq("reconciliation_id", recon.id).in("item_key", keys));
+          setDb(d => ({ ...d, bankCleared: (d.bankCleared || []).filter(c => !(c.reconciliationId === recon.id && keys.includes(c.itemKey))) }));
+        }
+        return true;
+      } catch (e) { return fail(e); }
+    },
+
     /* ---- manual journal entries ---- */
     // A hand-booked entry: several lines that must balance. A new one claims
     // JE-nnnn from next_doc_number('journal'); an edit keeps its number.
@@ -1400,7 +1445,7 @@ export function useLedger(session, onError) {
 async function wipe(orgId) {
   // Children first (payments have no FK; line items cascade from parents).
   for (const table of ["payments", "quote_line_items", "sales_order_line_items", "invoice_line_items",
-    "quotes", "sales_orders", "invoices", "proposals", "contact_people", "bills", "expenses", "journal_entries",
+    "quotes", "sales_orders", "invoices", "proposals", "contact_people", "bills", "expenses", "journal_entries", "bank_cleared_items", "bank_reconciliations",
     "contacts", "catalog_items", "org_sequences"]) {
     const { error } = await supabase.from(table).delete().eq("org_id", orgId);
     if (error) throw error;

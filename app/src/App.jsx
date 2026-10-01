@@ -30,6 +30,7 @@ import CatalogView from "./views/Catalog.jsx";
 import SettingsView from "./views/Settings.jsx";
 import AccountsView from "./views/Accounts.jsx";
 import JournalEntriesView from "./views/JournalEntries.jsx";
+import BankReconciliationView from "./views/BankReconciliation.jsx";
 
 const NAV = [
   {
@@ -72,6 +73,7 @@ const NAV = [
     group: "System", items: [
       { k: "accounts", label: "Chart of Accounts", icon: ICONS.catalog },
       { k: "journal", label: "Journal Entries", icon: ICONS.reports },
+      { k: "recon", label: "Bank Reconciliation", icon: ICONS.check },
       { k: "settings", label: "Settings", icon: ICONS.settings },
     ]
   },
@@ -90,6 +92,7 @@ const TITLES = {
   catalog: ["Item Catalog", "Reusable quote line items"], settings: ["Settings", "Company info and defaults"],
   accounts: ["Chart of Accounts", "The general ledger accounts every document posts to"],
   journal: ["Journal Entries", "What you book to the ledger by hand — payroll, adjustments, depreciation"],
+  recon: ["Bank Reconciliation", "Tick what cleared the bank until the statement and the books agree"],
   reports: ["Reports", "P&L, sales tax, customers, and statements"],
   jobCosting: ["Job Costing", "Profit per job — revenue vs labor and materials"],
   proposals: ["Proposals", "Fixture and system proposals — priced, tracked, and documented"],
@@ -201,6 +204,7 @@ export default function App({ session }) {
         {activeView === "catalog" && <CatalogView {...props} />}
         {activeView === "accounts" && <AccountsView {...props} />}
         {activeView === "journal" && <JournalEntriesView {...props} />}
+        {activeView === "recon" && <BankReconciliationView {...props} />}
         {activeView === "settings" && <SettingsView {...props} />}
       </div>
     </div>

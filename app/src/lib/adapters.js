@@ -167,4 +167,9 @@ export const accountFromRow = r => ({ id: r.id, number: String(r.number ?? ""), 
 // [{ id, account, desc, debit, credit }] — account is a chart number as text.
 const journalLine = l => ({ id: l.id || crypto.randomUUID(), account: String(l.account ?? "").trim(), desc: l.desc ?? "", debit: num(l.debit), credit: num(l.credit) });
 export const journalEntryToRow = j => ({ id: j.id, number: j.number ?? "", date: j.date, ref: j.ref ?? "", memo: j.memo ?? "", lines: (j.lines || []).map(journalLine) });
+// Bank reconciliation (migration 027).
+export const reconToRow = r => ({ id: r.id, account: String(r.account ?? ""), statement_date: dateOrNull(r.statementDate), statement_balance: num(r.statementBalance), status: r.status || "open", notes: r.notes ?? "", finished_at: r.finishedAt || null });
+export const reconFromRow = r => ({ id: r.id, account: String(r.account || ""), statementDate: r.statement_date || "", statementBalance: num(r.statement_balance), status: r.status || "open", notes: r.notes || "", finishedAt: r.finished_at || null, createdAt: r.created_at });
+export const clearedToRow = c => ({ id: c.id, reconciliation_id: c.reconciliationId, account: String(c.account ?? ""), item_key: c.itemKey, item_date: dateOrNull(c.itemDate), amount: num(c.amount) });
+export const clearedFromRow = r => ({ id: r.id, reconciliationId: r.reconciliation_id, account: String(r.account || ""), itemKey: r.item_key, itemDate: r.item_date || "", amount: num(r.amount) });
 export const journalEntryFromRow = r => ({ id: r.id, number: r.number || "", date: r.date, ref: r.ref || "", memo: r.memo || "", lines: (Array.isArray(r.lines) ? r.lines : []).map(journalLine) });

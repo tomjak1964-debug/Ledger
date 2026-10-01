@@ -535,7 +535,7 @@ two electronic runs to the same vendor on the same day collapse into a single re
 **Navigation groups:** the sidebar reads Overview · **Customers & Sales** (Customers, Proposals, Quotes,
 Sales Orders, Invoices, Receivables) · **Vendors & Purchases** (Vendors, Purchase Orders, Payables,
 Payments, Expenses) · **Work** (Jobs, Tasks, Field, Time Tracking, Item Catalog, Fixture Rates) ·
-**System** (Chart of Accounts, Journal Entries, Settings). The group names are labels in `NAV` (`App.jsx`) only, so moving or renaming a
+**System** (Chart of Accounts, Journal Entries, Bank Reconciliation, Settings). The group names are labels in `NAV` (`App.jsx`) only, so moving or renaming a
 page is a one-line edit there. **Customers and Vendors** are the two halves of the old Contacts page
 (`views/Contacts.jsx` with a `type` prop; view keys `customers` / `vendors`, both gated by the
 `contacts` permission area, and `go("contacts")` still lands on Customers). A vendor carries a
@@ -633,6 +633,32 @@ own description shown after the entry memo in the General Ledger, so they land i
 balance and the income statement beside the derived entries. **Copy to new entry** on a row prefills next
 month's payroll. Entries wipe with the documents and travel in the JSON backup as `journalEntries`.
 
+**Bank reconciliation** (System → Bank Reconciliation, `views/BankReconciliation.jsx`, `calc/bankRecon.js`,
+`lib/bankStatement.js`, migration 027). The register is not a table: `cashRegister(db, account)` is every
+ledger line on the cash account, each with a stable key (`receipt:<payment id>`, `payment:<payment id>`,
+`expense:<id>`, `journal:<entry id>:<line index>`), so a receipt, a check, an expense entry, a journal line
+and the opening-balance entry are all there to tick, and a correction in the books corrects the register.
+A reconciliation (`bank_reconciliations`: account, statement ending date and balance, open/done) shows the
+items dated on or before the statement that have not cleared on an earlier one; ticking writes the key to
+`bank_cleared_items` with the reconciliation it cleared in (a key clears once — unique per org). The
+arithmetic carries no "last reconciled balance": **difference = statement balance − Σ every cleared item on
+the account**, and Finish needs it at zero. **Book the Difference** prefills a journal entry between the
+bank account and Other Income / Service Charge for what is left, and clears it. **Import Statement** reads
+the bank's PDF (pdf.js, the lineup reader), a `.csv` export (columns by heading: date, description, amount
+or debit/credit, balance, check number) or pasted rows; `parseStatementText()` is keyword-driven — a line
+is a transaction when it starts with a date (or a check number and a date) and ends in an amount, the
+section heading ("Deposits and additions", "Checks paid"…) sets the sign, a running-balance column
+overrides it, and Chase-style check tables with several checks per line are read one check each.
+`matchStatement()` pairs each line with an outstanding item by amount and side — the same check number
+first, else the nearest date within ten days, else a check number on its own for a slow check — each item
+used once. Matched lines are ticked; the rest are **Not in Ledger** with a *Post to* account: money out to
+an expense-type account becomes an expense entry (payee guessed from the description), anything else — a
+distribution, a loan payment, interest, a transfer — a two-line journal entry, and the new item is ticked
+as cleared. A customer receipt the bank has but the books don't is left alone on purpose: it belongs in
+Receivables against its invoice. Reports → Account Reconciliation → **Reconciliation Summary** lists each
+statement with its cleared balance, outstanding items and book balance. Cleared keys are not carried by a
+JSON backup import, because the import gives payments new ids.
+
 **Network failures on a save:** every PostgREST request goes through `ledgerFetch()` in
 `lib/supabaseClient.js` — a request the browser could not send at all ("Failed to fetch", typically
 a PWA window waking from sleep) is sent once more after a short pause, and one the server never
@@ -677,7 +703,8 @@ ascending then descending. See §7 for the convention new pages follow.
 
 **Not built (candidates for next work):** refunds (returning cash rather than crediting) · partial invoicing of an SO ·
 recurring invoices · email sending · attachments / receipt photos · quote line-item reordering ·
-multi-user roles · bank import / reconciliation · locking a closed year against back-dated documents ·
+multi-user roles · a live bank feed (statements are imported by file) · locking a closed year against
+back-dated documents ·
 undo · automated tests ·
 Capacitor store apps (PWA covers home-screen install today).
 

@@ -13,7 +13,7 @@ import { DEVICE_FIELDS } from "../calc/estimates.js";
 /* ---------------- text out of a file ---------------- */
 
 // pdf.js loads on demand: it is the size of the rest of the app.
-async function pdfLines(buf) {
+export async function pdfLines(buf) {
   const pdfjs = await import("pdfjs-dist");
   const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
   pdfjs.GlobalWorkerOptions.workerSrc = worker.default;

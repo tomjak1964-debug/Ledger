@@ -5,6 +5,53 @@ root so it's read automatically as session context.
 
 ---
 
+## Backend: self-hosted on HomeServer (since 2026-10-03)
+
+The database, logins, file storage and server functions no longer run on Supabase.com. They run in a
+**self-hosted Supabase stack on Tom's home server (the NUC)**, managed from the HomeServer repo
+(`tomjak1964-debug/HomeServer`: runbook `docs/03-ledger.md`, live checklist `docs/STATUS.md`).
+
+- **Public API:** `https://api.tmjledger.com` through Cloudflare Tunnel; only the rest, auth, storage, functions paths get
+  through. On the NUC the stack is `~/apps/ledger` (containers `ledger-*`, API at `http://127.0.0.1:8200`).
+- **Website:** unchanged on Vercel. It finds the backend through Vercel env vars `VITE_SUPABASE_URL=https://api.tmjledger.com` and `VITE_SUPABASE_ANON_KEY` (the NUC's anon key), Production and Preview.
+  Pushing to `main` still deploys the site as before.
+- **Supabase.com project `iusqcwfgciavixuhywoh` is retired.** It's kept untouched as a fallback for a few weeks, then
+  deleted. Never apply changes there, and don't use its dashboard or SQL editor. Older docs in this repo that
+  say "run it in the Supabase SQL editor" now mean "apply it on the NUC" (below).
+
+**Database changes (schema, functions, policies, data fixes)** — only from a Claude session on the NUC (the
+`ledger` remote-control environment, folder `~/src/ledger`); cloud sessions can change code but can't
+reach the database, by design.
+1. Write the SQL as a file in app/supabase/migrations/ (numbered files), as before, and commit it with the code that needs it.
+2. Safety copy first:
+   `docker exec ledger-db pg_dump -U supabase_admin -d postgres -Fc > ~/homeserver/backups/manual/ledger-$(date +%F-%H%M).dump`
+   (restore: `docker exec -i ledger-db pg_restore -U supabase_admin -d postgres --clean --if-exists -n public < <file>`).
+3. Apply it in one transaction:
+   `docker exec -i ledger-db psql -U postgres -d postgres -v ON_ERROR_STOP=1 --single-transaction < <file>.sql`
+4. Let the API see it: `docker exec ledger-db psql -U postgres -c "notify pgrst, 'reload schema'"`.
+5. Check it, then ship the code that uses it (push to `main`). Order matters when old code would break on the
+   new schema or the other way round: apply first if the change is additive.
+
+- **Edge functions** run in the stack's `functions` container. To ship a changed or new function:
+  `cp -r app/supabase/functions/<name> ~/apps/ledger/volumes/functions/` then
+  `cd ~/apps/ledger && docker compose restart functions`. Check with `docker compose logs --since 10m functions`.
+  The Supabase dashboard paste is retired. Key checks are on (`FUNCTIONS_VERIFY_JWT=true`), and each function must
+  still check the caller itself (a signed-in member), like `send-document` and `admin-create-user` do.
+- **Function secrets** (`RESEND_API_KEY`, `EMAIL_FROM`=`remittances@tmjengineering.com`, `CRON_SECRET`) live in
+  `~/apps/ledger/.env` on the NUC, never in git. A new secret also has to be listed under `functions:` in
+  HomeServer's `apps/ledger/docker-compose.homeserver.yml`, then `docker compose up -d functions`.
+- **Storage** (`attachments`, `backups` buckets) is on the NUC's disk (`~/apps/ledger/volumes/storage`); its access
+  policies are in HomeServer's `apps/ledger/post-restore.sql`. A new bucket policy goes in both places.
+- **Logins**: email + password, no public sign-up; admins create logins through `admin-create-user`.
+- Scheduled JSON backups (`scheduled-backup`) aren't scheduled on the NUC: the NUC's nightly database dump covers
+  every table. Supabase.com's two cron jobs never worked.
+- **Backups:** every night at 03:10 the NUC dumps this database and its stored files into a bundle that is copied
+  to the NAS at 03:20 (HomeServer `scripts/backup-local.sh`, `backup-to-nas.sh`).
+- **Logs:** `cd ~/apps/ledger && docker compose logs --since 1h rest` (or `auth`, `functions`, `storage`).
+- **The house depends on this box.** Don't restart other stacks, Home Assistant, Z-Wave or `cloudflared`, don't
+  upgrade Docker, and don't change UFW from an app session; those belong to the HomeServer session. Secrets never
+  go in git (they live in `~/apps/ledger/.env`).
+
 ## 1. What this is
 
 A single-file browser app for a small industrial-controls business to run the full

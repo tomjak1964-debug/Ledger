@@ -39,6 +39,15 @@ export const FIELD_SPECS = {
     { key: "col.discount", label: "Discount Taken", group: "Voucher columns", axes: "x", align: true, short: "Disc" },
     { key: "col.amountPaid", label: "Amount Paid", group: "Voucher columns", axes: "x", align: true, short: "Paid" },
 
+    // The bottom voucher's rules don't sit under the top one's on every stock;
+    // a form that doesn't set these uses the top voucher's columns.
+    { key: "colB.ref", label: "Reference No.", group: "Bottom voucher columns", axes: "x", align: true, short: "Ref" },
+    { key: "colB.desc", label: "Description", group: "Bottom voucher columns", axes: "x", align: true, short: "Desc" },
+    { key: "colB.invDate", label: "Invoice Date", group: "Bottom voucher columns", axes: "x", align: true, short: "Inv date" },
+    { key: "colB.invAmount", label: "Invoice Amount", group: "Bottom voucher columns", axes: "x", align: true, short: "Inv amt" },
+    { key: "colB.discount", label: "Discount Taken", group: "Bottom voucher columns", axes: "x", align: true, short: "Disc" },
+    { key: "colB.amountPaid", label: "Amount Paid", group: "Bottom voucher columns", axes: "x", align: true, short: "Paid" },
+
     { key: "foot.date", label: "Check Date", group: "Voucher totals", axes: "x", align: true, short: "Date" },
     { key: "foot.number", label: "Check No.", group: "Voucher totals", axes: "x", align: true, short: "Check #" },
     { key: "foot.payee", label: "Payee", group: "Voucher totals", axes: "x", align: true, short: "Payee" },
@@ -51,9 +60,16 @@ export const FIELD_SPECS = {
 
 const F = (x, y, extra) => ({ on: true, x, y, ...(extra || {}) });
 
-// The check stock in use: three 3.5" panels — voucher, check, voucher — with
-// the column rules measured off the blank stock at 0.084 / 1.109 / 3.508 /
-// 4.267 / 5.722 / 6.860 / 8.298 in. Text sits a sixteenth inside each rule.
+// The check stock in use (LAP98): voucher, check, voucher. Measured off a scan
+// of the blank stock laid over a Ledger test print, so the numbers include this
+// printer's drift. The vouchers' rules differ, and so do their totals lines:
+//   top voucher     0.11 / 1.12 / 3.51 / 4.26 / 5.70 / 6.83 / 8.26 in
+//   bottom voucher  0.15 / 1.14 / 3.65 / 4.39 / 5.68 / 6.84 / 8.29 in
+//   totals lines    0.12 / 1.44 / 2.40 / 5.71 / 6.84 / 8.26 in (bottom ~0.03 right)
+// Text sits about a sixteenth inside each rule. On the check, the date sits
+// beside DATE, the amount beside the $, and the payee's name and address beside
+// PAY TO THE ORDER OF, where the envelope window shows them. There is no memo
+// line on this stock; the memo sits above the MICR clear band.
 export const TMJ_3PART_CHECK = {
   id: "tmj-3part-check",
   name: "TMJ 3Part Check",
@@ -65,24 +81,31 @@ export const TMJ_3PART_CHECK = {
   offsetY: 0,
   guides: [0.45, 3.38, 3.5, 7.0, 7.62, 10.54],
   fields: {
-    date: F(6.30, 4.45), payee: F(0.90, 5.00), amount: F(7.05, 5.00, { align: "left" }),
-    words: F(0.35, 5.40), address: F(0.90, 5.80), memo: F(0.55, 6.65),
+    date: F(7.50, 4.11), payee: { on: false, x: 0.90, y: 5.30 }, amount: F(6.45, 4.89, { align: "left" }),
+    words: F(0.33, 5.03), address: F(0.90, 5.30), memo: F(0.90, 6.15),
 
-    stubTop: F(0, 1.15), footTop: F(0, 3.18),
-    stubBottom: F(0, 8.32), footBottom: F(0, 10.35),
+    stubTop: F(0, 0.81), footTop: F(0, 3.26),
+    stubBottom: F(0, 7.95), footBottom: F(0, 10.39),
 
-    "col.ref": F(0.15, 0, { align: "left" }),
-    "col.desc": F(1.17, 0, { align: "left" }),
-    "col.invDate": F(3.57, 0, { align: "left" }),
-    "col.invAmount": F(5.66, 0, { align: "right" }),
-    "col.discount": F(6.80, 0, { align: "right" }),
-    "col.amountPaid": F(8.24, 0, { align: "right" }),
+    "col.ref": F(0.17, 0, { align: "left" }),
+    "col.desc": F(1.18, 0, { align: "left" }),
+    "col.invDate": F(3.54, 0, { align: "left", size: 8 }),   // ¾" column: "Sep 10, 2026" needs 8pt
+    "col.invAmount": F(5.64, 0, { align: "right" }),
+    "col.discount": F(6.77, 0, { align: "right" }),
+    "col.amountPaid": F(8.20, 0, { align: "right" }),
 
-    "foot.date": F(0.15, 0, { align: "left" }),
-    "foot.number": F(1.17, 0, { align: "left" }),
-    "foot.payee": F(3.57, 0, { align: "left" }),
-    "foot.discounts": F(6.80, 0, { align: "right" }),
-    "foot.amount": F(8.24, 0, { align: "right" }),
+    "colB.ref": F(0.20, 0, { align: "left" }),
+    "colB.desc": F(1.20, 0, { align: "left" }),
+    "colB.invDate": F(3.68, 0, { align: "left", size: 8 }),
+    "colB.invAmount": F(5.62, 0, { align: "right" }),
+    "colB.discount": F(6.78, 0, { align: "right" }),
+    "colB.amountPaid": F(8.23, 0, { align: "right" }),
+
+    "foot.date": F(0.19, 0, { align: "left" }),
+    "foot.number": F(1.52, 0, { align: "left" }),
+    "foot.payee": F(2.47, 0, { align: "left" }),
+    "foot.discounts": F(6.78, 0, { align: "right" }),
+    "foot.amount": F(8.21, 0, { align: "right" }),
   },
 };
 
@@ -185,10 +208,11 @@ export function fieldsOf(form) {
   const specs = FIELD_SPECS[form?.type] || [];
   const base = (form?.type === "check" ? TMJ_3PART_CHECK : form) || {};
   return specs.map(spec => {
-    const def = base.fields?.[spec.key] || { on: true, x: 0, y: 0 };
+    const top = spec.key.startsWith("colB.") && !form?.fields?.[spec.key] && form?.fields?.["col." + spec.key.slice(5)];
+    const def = top || base.fields?.[spec.key] || { on: true, x: 0, y: 0 };
     const val = form?.fields?.[spec.key] || {};
     return { ...spec, canAlign: spec.align === true, on: val.on !== false, x: Number(val.x ?? def.x) || 0, y: Number(val.y ?? def.y) || 0,
-      align: val.align || def.align || "left", size: Number(val.size || 0) || 0 };
+      align: val.align || def.align || "left", size: Number(val.size || def.size || 0) || 0 };
   });
 }
 

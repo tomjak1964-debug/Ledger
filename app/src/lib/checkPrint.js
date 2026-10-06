@@ -36,14 +36,18 @@ export function checkFields(form) {
   return Object.fromEntries(fieldsOf(form).map(f => [f.key, { ...f, x: f.x + ox, y: f.y + oy }]));
 }
 
-const COLS = [
-  ["col.ref", l => l.ref || ""],
-  ["col.desc", l => l.desc || ""],
-  ["col.invDate", l => (l.date ? fmtDate(l.date) : "")],
-  ["col.invAmount", l => (l.invoiceAmount == null ? "" : money(l.invoiceAmount))],
-  ["col.discount", l => (Number(l.discount) ? money(l.discount) : "")],
-  ["col.amountPaid", l => money(l.amount)],
+// A voucher row's columns. The bottom voucher has its own (colB.*), since its
+// rules can sit apart from the top one's.
+const COL_VALUES = [
+  ["ref", l => l.ref || ""],
+  ["desc", l => l.desc || ""],
+  ["invDate", l => (l.date ? fmtDate(l.date) : "")],
+  ["invAmount", l => (l.invoiceAmount == null ? "" : money(l.invoiceAmount))],
+  ["discount", l => (Number(l.discount) ? money(l.discount) : "")],
+  ["amountPaid", l => money(l.amount)],
 ];
+const cols = prefix => COL_VALUES.map(([k, val]) => [prefix + "." + k, val]);
+const FOOT = ["foot.date", "foot.number", "foot.payee", "foot.discounts", "foot.amount"];
 
 export function drawCheck(doc, form, { payment, vendor, memo, stubLines }) {
   const F = checkFields(form);
@@ -53,15 +57,16 @@ export function drawCheck(doc, form, { payment, vendor, memo, stubLines }) {
   const put = (key, text, size, y) => {
     const f = F[key];
     if (!f || !f.on || text == null || text === "") return;
-    doc.setFontSize(size || f.size || base);
+    doc.setFontSize(f.size || size || base);   // a size set on the field wins
     doc.text(String(text), f.x, y == null ? f.y : y, f.align === "right" ? { align: "right" } : undefined);
   };
-  // Trim to the room a column actually has before the next one starts.
-  const fit = (key, text, size) => {
+  // Trim to the room a column actually has before the next one on its line
+  // starts (a right-aligned neighbour starts where its widest text would).
+  const fit = (key, text, size, line) => {
     const f = F[key];
     if (!f?.on || !text) return "";
-    const next = COLS.map(([k]) => F[k]).filter(c => c.on && c.x > f.x).sort((a, b) => a.x - b.x)[0];
-    const room = next ? next.x - f.x - 0.08 : 8.3 - f.x;
+    const next = line.map(k => F[k]).filter(c => c.on && c.x > f.x).map(c => (c.align === "right" ? c.x - 1.1 : c.x)).sort((a, b) => a - b)[0];
+    const room = next != null ? next - f.x - 0.08 : 8.3 - f.x;
     doc.setFontSize(size || base);
     let s = String(text);
     if (doc.getTextWidth(s) <= room) return s;
@@ -73,19 +78,20 @@ export function drawCheck(doc, form, { payment, vendor, memo, stubLines }) {
   const disc = (stubLines || []).reduce((t, l) => t + (Number(l.discount) || 0), 0);
 
   put("date", fmtDate(payment.date));
-  put("payee", vendor?.name || "");
+  put("payee", vendor?.name || "");   // off on a stock whose address block carries the name
   put("amount", "**" + amt.toLocaleString("en-US", { minimumFractionDigits: 2 }), base + 1);
   put("words", (amountInWords(amt) + " ").padEnd(95, "*"), Math.min(base, 9.5));
   // Mail the check to the remit-to address when the vendor gave one.
   const mailTo = (vendor?.remitAddress || "").trim() || vendor?.address || "";
-  if (mailTo && F.address.on) {
+  if (F.address.on && (mailTo || !F.payee.on)) {
     doc.setFontSize(F.address.size || base);
-    doc.text([vendor.name, ...mailTo.split("\n")].filter(Boolean), F.address.x, F.address.y);
+    doc.text([vendor?.name, ...mailTo.split("\n")].filter(Boolean), F.address.x, F.address.y);
   }
   put("memo", memo || "");
 
   // The two vouchers are identical: one for the payee, one for the file.
-  const voucher = (rowsKey, footKey) => {
+  const voucher = (rowsKey, footKey, prefix) => {
+    const COLS = cols(prefix), line = COLS.map(([k]) => k);
     const start = F[rowsKey], foot = F[footKey];
     if (!start?.on) return;
     const rh = Number(form.rowHeight) || 0.17;
@@ -96,22 +102,22 @@ export function drawCheck(doc, form, { payment, vendor, memo, stubLines }) {
     doc.setFontSize(size);
     let y = start.y;
     shown.forEach(l => {
-      COLS.forEach(([k, val]) => put(k, k === "col.desc" ? fit(k, val(l), size) : val(l), size, y));
+      COLS.forEach(([k, val]) => put(k, k === prefix + ".desc" ? fit(k, val(l), size, line) : val(l), size, y));
       y += rh;
     });
-    if (lines.length > shown.length) put("col.desc", `+ ${lines.length - shown.length} more invoice(s)`, size, y);
+    if (lines.length > shown.length) put(prefix + ".desc", `+ ${lines.length - shown.length} more invoice(s)`, size, y);
     if (foot?.on) {
       doc.setFont("helvetica", "bold");
       put("foot.date", fmtDate(payment.date), size, foot.y);
       put("foot.number", payment.ref || "", size, foot.y);
-      put("foot.payee", fit("foot.payee", vendor?.name || "", size), size, foot.y);
+      put("foot.payee", fit("foot.payee", vendor?.name || "", size, FOOT), size, foot.y);
       put("foot.discounts", money(disc), size, foot.y);
       put("foot.amount", money(amt), size, foot.y);
       doc.setFont("helvetica", "normal");
     }
   };
-  voucher("stubTop", "footTop");
-  voucher("stubBottom", "footBottom");
+  voucher("stubTop", "footTop", "col");
+  voucher("stubBottom", "footBottom", "colB");
 }
 
 // Field names printed where they'd land, over a quarter-inch ruler — print it
@@ -123,10 +129,10 @@ function drawTest(doc, form) {
   FIELD_SPECS.check.filter(s => s.axes === "xy").forEach(s => {
     if (F[s.key].on) doc.text(`[${label[s.key]}]`, F[s.key].x, F[s.key].y, F[s.key].align === "right" ? { align: "right" } : undefined);
   });
-  [["stubTop", "footTop"], ["stubBottom", "footBottom"]].forEach(([rowsKey, footKey]) => {
+  [["stubTop", "footTop", "col"], ["stubBottom", "footBottom", "colB"]].forEach(([rowsKey, footKey, prefix]) => {
     if (!F[rowsKey].on) return;
-    COLS.forEach(([k]) => { if (F[k].on) doc.text(label[k], F[k].x, F[rowsKey].y, F[k].align === "right" ? { align: "right" } : undefined); });
-    if (F[footKey].on) ["foot.date", "foot.number", "foot.payee", "foot.discounts", "foot.amount"]
+    cols(prefix).forEach(([k]) => { if (F[k].on) doc.text(label[k], F[k].x, F[rowsKey].y, F[k].align === "right" ? { align: "right" } : undefined); });
+    if (F[footKey].on) FOOT
       .forEach(k => { if (F[k].on) doc.text(label[k], F[k].x, F[footKey].y, F[k].align === "right" ? { align: "right" } : undefined); });
   });
   doc.setDrawColor(170).setLineWidth(0.006);

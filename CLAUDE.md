@@ -553,10 +553,16 @@ reset page can itself be intercepted; clearing the site's data in the browser is
 that prints it. A check form is a field catalogue with per-field *print on/off*, X/Y in inches, and
 alignment, plus a page-wide calibration offset for a printer that drifts; the editor shows the sheet to
 scale with draggable field chips beside the numeric inputs. **TMJ 3Part Check** is the built-in form for
-the shop's stock (voucher / check / voucher, measured off the blank: panels at 0.45–3.38", 3.5–7.0",
-7.62–10.54"; column rules at 0.084 / 1.109 / 3.508 / 4.267 / 5.722 / 6.860 / 8.298"), with the stub
-columns the stock prints — Reference No. · Description · Invoice Date · Invoice Amount · Discount Taken ·
-Amount Paid — and a totals line of Check Date · Check No. · Payee · Discounts Taken · Check Amount.
+the shop's LAP98 stock (voucher / check / voucher), measured off a scan of the blank stock laid over a
+Ledger test print, so the positions already allow for the printer's drift. The stub columns are the ones
+the stock prints — Reference No. · Description · Invoice Date · Invoice Amount · Discount Taken · Amount
+Paid — and a totals line of Check Date · Check No. · Payee · Discounts Taken · Check Amount. The two
+vouchers' rules don't line up (the bottom Invoice Date column sits 0.14" right of the top one), so the
+bottom voucher has its own columns (`colB.*`, "Bottom voucher columns" in the editor); a form that
+doesn't set them uses the top voucher's. The ¾" Invoice Date column prints at 8 pt, and a field's own
+size beats the default. On the check the payee's name and address print as one block beside PAY TO THE
+ORDER OF, where the envelope window shows them (the separate payee line is off), and the memo sits
+above the MICR clear band.
 *Classic Voucher Check* keeps the old check-on-top layout, and any legacy `settings.check` positions still
 drive it. Forms live in the settings jsonb (`settings.forms`, `settings.formFor`) — no migration.
 Invoices and remittances keep their standard renderers; they are listed so every document type names its form.

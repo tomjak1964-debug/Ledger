@@ -9,6 +9,7 @@ import FilterBar from "./FilterBar.jsx";
 import PaymentGroupModal from "./PaymentGroupModal.jsx";
 import EmailModal from "./EmailModal.jsx";
 import { remittancePdf } from "../lib/remittance.js";
+import { openCheckPdf } from "../lib/checkPrint.js";
 import AccountSelect from "./AccountSelect.jsx";
 
 const METHODS = ["Check", "ACH / Wire", "Credit Card", "Cash", "Other"];
@@ -80,6 +81,22 @@ export default function PaymentRegister({ db, actions, toast, readOnly, kind }) 
     }),
     settings: db.settings,
   });
+  // A check reprints from what is on file, laid out the way the pay run printed
+  // it: one stub line per bill, with the bill's total and any discount taken.
+  const printCheck = (g) => {
+    const stubLines = g.lines.map(l => {
+      const b = db.bills.find(x => x.id === l.docId);
+      const p = b?.payments?.find(x => x.id === l.paymentId);
+      return { ref: b?.ref || l.number, date: l.docDate, desc: b?.notes || "",
+        invoiceAmount: Number(b?.amount) || 0, discount: Number(p?.discount) || 0, amount: l.amount };
+    });
+    openCheckPdf({
+      payment: { amount: g.amount, date: g.date, ref: g.ref },
+      vendor: db.contacts.find(c => c.id === g.partyId),
+      memo: stubLines.map(l => l.ref).join(", ").slice(0, 60),
+      stubLines, settings: db.settings,
+    });
+  };
   const emailModal = emailGroup && (() => {
     const args = remitArgs(emailGroup);
     return <EmailModal
@@ -95,7 +112,7 @@ export default function PaymentRegister({ db, actions, toast, readOnly, kind }) 
     {bar}
     <Register db={db} actions={actions} toast={toast} readOnly={readOnly} kind={kind}
       from={from} to={to} partyId={partyId} needle={needle} onEdit={editEntry}
-      onEditGroup={setEditGroup} onEmailGroup={isBill ? setEmailGroup : null} />
+      onEditGroup={setEditGroup} onEmailGroup={isBill ? setEmailGroup : null} onPrintCheck={isBill ? printCheck : null} />
     {editModal}
     {groupModal}
     {emailModal}
@@ -106,7 +123,7 @@ export default function PaymentRegister({ db, actions, toast, readOnly, kind }) 
    A receipt (or a payment) is what actually moved: one check or transfer, from
    or to one party, on one date. Several documents can sit under it, so the row
    expands to show what it was applied to. */
-function Register({ db, actions, toast, readOnly, kind, from, to, partyId, needle, onEdit, onEditGroup, onEmailGroup }) {
+function Register({ db, actions, toast, readOnly, kind, from, to, partyId, needle, onEdit, onEditGroup, onEmailGroup, onPrintCheck }) {
   const [open, setOpen] = useState({});
   const isBill = kind === "bill";
   const L = isBill
@@ -171,6 +188,8 @@ function Register({ db, actions, toast, readOnly, kind, from, to, partyId, needl
               <td className="num subtle">{g.count}</td>
               <td className="num" style={{ fontWeight: 600 }}>{money(g.amount)}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                {onPrintCheck && g.method === "Check" && <button className="btn ghost icon" title="Print this check again"
+                  onClick={e => { e.stopPropagation(); onPrintCheck(g); }}><Ico d={ICONS.print} size={15} /></button>}
                 {onEmailGroup && g.method !== "Check" && <button className="btn ghost icon" title="Email remittance advice to the vendor"
                   onClick={e => { e.stopPropagation(); onEmailGroup(g); }}><Ico d={ICONS.mail} size={15} /></button>}
                 {!readOnly && onEditGroup && <button className="btn ghost icon" title={`Open this ${L.one} — add or remove ${L.docs.toLowerCase()}`}

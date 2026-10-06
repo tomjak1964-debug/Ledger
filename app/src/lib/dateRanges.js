@@ -1,5 +1,6 @@
 // Shared reporting date ranges. Every report and register offers the same
 // preset list so "This Year" means the same thing everywhere.
+import { todayISO } from "./helpers.js";
 const pad2 = n => String(n).padStart(2, "0");
 const firstOf = (y, m) => `${y}-${pad2(m + 1)}-01`;
 const lastOf = (y, m) => `${y}-${pad2(m + 1)}-${pad2(new Date(y, m + 1, 0).getDate())}`;
@@ -31,5 +32,5 @@ export function rangeFor(preset, custom) {
 
 export const defaultCustom = () => {
   const y = new Date().getFullYear();
-  return { from: `${y}-01-01`, to: new Date().toISOString().slice(0, 10) };
+  return { from: `${y}-01-01`, to: todayISO() };
 };

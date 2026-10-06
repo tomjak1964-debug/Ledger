@@ -4,7 +4,7 @@
 // picked in Settings → Forms. Positions are inches from the top-left of the
 // page; print at 100% scale (no "fit to page") or nothing will line up.
 import { jsPDF } from "jspdf";
-import { money, fmtDate } from "./helpers.js";
+import { money, fmtDate, todayISO } from "./helpers.js";
 import { formFor, fieldsOf, FIELD_SPECS } from "./forms.js";
 
 const ONES = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
@@ -160,7 +160,7 @@ export function openCheckPdf(args) {
 
 // A filled-in example, for previewing a form while you edit it.
 export const sampleCheck = () => ({
-  payment: { amount: 12345.67, date: new Date().toISOString().slice(0, 10), ref: "5866" },
+  payment: { amount: 12345.67, date: todayISO(), ref: "5866" },
   vendor: { name: "Sample Vendor, Inc.", address: "123 Main St\nAnytown, MI 48000" },
   memo: "Inv 9981, 9982",
   stubLines: [

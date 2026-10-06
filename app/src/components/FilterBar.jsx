@@ -1,4 +1,4 @@
-import { fmtDate } from "../lib/helpers.js";
+import { fmtDate, todayISO } from "../lib/helpers.js";
 import { RANGE_PRESETS } from "../lib/dateRanges.js";
 
 // The one filter row used by every report and register: a date-range preset
@@ -32,4 +32,4 @@ export default function FilterBar({
 
 // "Jan 1, 2026 – Aug 31, 2026" / "All time" — the line printed on every report.
 export const rangeLabel = (from, to) =>
-  (!from && !to) ? "All time" : `${from ? fmtDate(from) : "Beginning"} – ${to ? fmtDate(to) : fmtDate(new Date().toISOString().slice(0, 10))}`;
+  (!from && !to) ? "All time" : `${from ? fmtDate(from) : "Beginning"} – ${to ? fmtDate(to) : fmtDate(todayISO())}`;

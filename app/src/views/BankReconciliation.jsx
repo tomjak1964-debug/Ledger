@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { uid, todayISO, money, fmtDate, sum } from "../lib/helpers.js";
+import { uid, todayISO, isoDate, money, fmtDate, sum } from "../lib/helpers.js";
 import { round2 } from "../calc/ledger.js";
 import { accountSettings, accountLabel, TYPE_GROUP, accountByNumber } from "../calc/accounts.js";
 import { reconcileState, matchStatement } from "../calc/bankRecon.js";
@@ -27,9 +27,9 @@ export default function BankReconciliationView({ db, actions, toast, readOnly })
   const startNew = () => {
     const acct = accountSettings(db.settings).cash;
     const last = recs.filter(r => r.account === acct && r.status === "done").sort((a, b) => b.statementDate.localeCompare(a.statementDate))[0];
-    const d = last ? new Date(last.statementDate + "T00:00:00") : new Date();
-    d.setMonth(d.getMonth() + 1); d.setDate(0);    // the last day of the next month
-    setNewRec({ id: uid(), _new: true, account: acct, statementDate: last ? d.toISOString().slice(0, 10) : todayISO(), statementBalance: "", status: "open", notes: "" });
+    const d = last && new Date(last.statementDate + "T00:00:00");
+    const next = d && new Date(d.getFullYear(), d.getMonth() + 2, 0);    // the last day of the next month
+    setNewRec({ id: uid(), _new: true, account: acct, statementDate: next ? isoDate(next) : todayISO(), statementBalance: "", status: "open", notes: "" });
   };
   const create = async () => {
     const saved = await actions.saveReconciliation(newRec);

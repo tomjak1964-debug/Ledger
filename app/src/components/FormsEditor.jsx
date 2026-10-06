@@ -170,7 +170,7 @@ function FormSheet({ form, fields, readOnly, onMove }) {
   const drag = useRef(null);
   const [held, setHeld] = useState("");
   const at = k => fields.find(f => f.key === k);
-  const rowsY = { "col": at("stubTop")?.y || 0, "foot": at("footTop")?.y || 0 };
+  const rowsY = { "col": at("stubTop")?.y || 0, "colB": at("stubBottom")?.y || 0, "foot": at("footTop")?.y || 0 };
 
   // Drag keeps the grab point, so a chip moves with the cursor rather than
   // jumping its corner under it.
@@ -210,7 +210,7 @@ function FormSheet({ form, fields, readOnly, onMove }) {
       {fields.map(f => {
         if (f.axes === "xy") return chip(f, f.x, f.y);
         if (f.axes === "y") return chip(f, 0.08, f.y, { transform: "translate(0,-100%)" });
-        const band = f.key.startsWith("foot.") ? rowsY.foot : rowsY.col;
+        const band = rowsY[f.key.split(".")[0]] ?? rowsY.col;
         return chip(f, f.x, band, { transform: (f.align === "right" ? "translate(-100%,0)" : "translate(0,0)") });
       })}
     </div>

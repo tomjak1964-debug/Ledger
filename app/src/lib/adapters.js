@@ -69,11 +69,14 @@ export const soToRow = s => ({
   id: s.id, number: s.number, quote_id: idOrNull(s.quoteId), customer_id: idOrNull(s.customerId),
   po_number: s.poNumber ?? "", date: dateOrNull(s.date), status: s.status,
   tax_rate: num(s.taxRate), invoice_id: idOrNull(s.invoiceId),
+  // migration 028 — the job this SO is
+  job_number: s.jobNumber ?? "", description: s.description ?? "", specs: s.specs || {}, budget: s.budget || [],
 });
 export const soFromRow = (r, items) => ({
   id: r.id, number: r.number, quoteId: r.quote_id || "", customerId: r.customer_id || "",
   poNumber: r.po_number, date: r.date || "", status: r.status, taxRate: num(r.tax_rate),
   ...(r.invoice_id ? { invoiceId: r.invoice_id } : {}), lineItems: items || [],
+  jobNumber: r.job_number || "", description: r.description || "", specs: r.specs || {}, budget: Array.isArray(r.budget) ? r.budget : [],
 });
 
 /* ---- invoices ---- */
@@ -135,12 +138,13 @@ export const billToRow = b => ({
   id: b.id, number: b.number, vendor_id: idOrNull(b.vendorId), date: dateOrNull(b.date),
   due_date: dateOrNull(b.dueDate), amount: num(b.amount), ref: b.ref ?? "", notes: b.notes ?? "",
   sales_order_id: idOrNull(b.salesOrderId), purchase_order_id: idOrNull(b.purchaseOrderId),
-  expense_account: b.expenseAccount ?? "",
+  expense_account: b.expenseAccount ?? "", cost_category: b.costCategory ?? "",
 });
 export const billFromRow = (r, payments) => ({
   id: r.id, number: r.number, vendorId: r.vendor_id || "", date: r.date || "", dueDate: r.due_date || "",
   amount: num(r.amount), ref: r.ref, notes: r.notes, salesOrderId: r.sales_order_id || "",
   purchaseOrderId: r.purchase_order_id || "", payments: payments || [], expenseAccount: r.expense_account || "",
+  costCategory: r.cost_category || "",
 });
 
 /* ---- purchase orders ---- */
@@ -156,8 +160,8 @@ export const poFromRow = (r, items) => ({
 });
 
 /* ---- expenses ---- */
-export const expenseToRow = e => ({ id: e.id, date: dateOrNull(e.date), category: e.category ?? "", vendor: e.vendor ?? "", amount: num(e.amount), method: e.method ?? "", notes: e.notes ?? "", sales_order_id: idOrNull(e.salesOrderId), account: e.account ?? "", cash_account: e.cashAccount ?? "" });
-export const expenseFromRow = r => ({ id: r.id, date: r.date || "", category: r.category, vendor: r.vendor, amount: num(r.amount), method: r.method, notes: r.notes, salesOrderId: r.sales_order_id || "", account: r.account || "", cashAccount: r.cash_account || "" });
+export const expenseToRow = e => ({ id: e.id, date: dateOrNull(e.date), category: e.category ?? "", vendor: e.vendor ?? "", amount: num(e.amount), method: e.method ?? "", notes: e.notes ?? "", sales_order_id: idOrNull(e.salesOrderId), account: e.account ?? "", cash_account: e.cashAccount ?? "", cost_category: e.costCategory ?? "" });
+export const expenseFromRow = r => ({ id: r.id, date: r.date || "", category: r.category, vendor: r.vendor, amount: num(r.amount), method: r.method, notes: r.notes, salesOrderId: r.sales_order_id || "", account: r.account || "", cashAccount: r.cash_account || "", costCategory: r.cost_category || "" });
 
 /* ---- chart of accounts ---- */
 export const accountToRow = a => ({ id: a.id, number: String(a.number ?? "").trim(), name: a.name ?? "", type: a.type ?? "Expenses", active: a.active !== false, sort: num(a.sort) });
@@ -165,7 +169,13 @@ export const accountFromRow = r => ({ id: r.id, number: String(r.number ?? ""), 
 
 // Manual journal entries (migration 025). Lines ride along as jsonb:
 // [{ id, account, desc, debit, credit }] — account is a chart number as text.
-const journalLine = l => ({ id: l.id || crypto.randomUUID(), account: String(l.account ?? "").trim(), desc: l.desc ?? "", debit: num(l.debit), credit: num(l.credit) });
+// A line may also name a job and a job-cost category (salesOrderId,
+// costCategory) so a reallocation lands in Job Costing; both are optional.
+const journalLine = l => ({ id: l.id || crypto.randomUUID(), account: String(l.account ?? "").trim(), desc: l.desc ?? "", debit: num(l.debit), credit: num(l.credit),
+  ...(l.salesOrderId ? { salesOrderId: l.salesOrderId, costCategory: l.costCategory || "" } : {}) });
+// Job costs booked by hand (migration 028).
+export const jobCostToRow = c => ({ id: c.id, sales_order_id: c.salesOrderId, date: dateOrNull(c.date), category: c.category || "other", description: c.description ?? "", hours: num(c.hours), amount: num(c.amount), source: c.source || "manual" });
+export const jobCostFromRow = r => ({ id: r.id, salesOrderId: r.sales_order_id, date: r.date || "", category: r.category || "other", description: r.description || "", hours: num(r.hours), amount: num(r.amount), source: r.source || "manual" });
 export const journalEntryToRow = j => ({ id: j.id, number: j.number ?? "", date: j.date, ref: j.ref ?? "", memo: j.memo ?? "", lines: (j.lines || []).map(journalLine) });
 // Bank reconciliation (migration 027).
 export const reconToRow = r => ({ id: r.id, account: String(r.account ?? ""), statement_date: dateOrNull(r.statementDate), statement_balance: num(r.statementBalance), status: r.status || "open", notes: r.notes ?? "", finished_at: r.finishedAt || null });

@@ -18,6 +18,8 @@
   --warn-wash:#FBF0DA;
   --neg:#B23A2E;           /* overdue / money out */
   --neg-wash:#FBE8E5;
+  --billed:#B35300;        /* a job milestone that has been invoiced (the sheet's orange) */
+  --billed-wash:#FFE3C2;
   --radius:10px;
   --radius-sm:7px;
   --shadow:0 1px 2px rgba(19,35,59,.06), 0 6px 20px rgba(19,35,59,.06);
@@ -408,3 +410,14 @@ tr.sub-row td{background:var(--canvas);font-size:12.5px}
   .rpt-rail-item{width:auto}
 }
 @media print{.rpt-layout{display:block}}
+
+/* ---------- job milestones (Job Tracking) ----------
+   The job-tracking sheet's colour code: plain = not invoiced, blue = ready to
+   invoice, orange = invoiced. Closed without billing is struck through. */
+.ms{display:inline-block;padding:2px 7px;margin:1px 4px 1px 0;border-radius:5px;border:1px solid var(--line);
+  background:var(--surface);font-size:11.5px;line-height:1.5;white-space:nowrap;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact}
+.ms.ready{background:var(--accent-wash);border-color:var(--accent);color:var(--accent-deep)}
+.ms.invoiced{background:var(--billed-wash);border-color:var(--billed);color:var(--billed)}
+.ms.closed{background:var(--canvas);color:var(--muted-2);text-decoration:line-through}
+.ms .mono{margin-left:5px}

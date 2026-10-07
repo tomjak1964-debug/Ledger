@@ -4,6 +4,7 @@ import { round2 } from "../calc/ledger.js";
 import { accountLabel } from "../calc/accounts.js";
 import { useFilters } from "../components/useFilters.jsx";
 import AccountSelect from "../components/AccountSelect.jsx";
+import { JobSelect, CostCategorySelect } from "../components/JobCostPicker.jsx";
 import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort, ActionMenu, MenuItem } from "../components/ui.jsx";
 
 // System → Journal Entries. What the shop books to the ledger by hand — a
@@ -122,12 +123,16 @@ export function JournalEntryModal({ db, entry, readOnly, onClose, onSave }) {
       <Field label="Memo"><input className="input" value={j.memo || ""} disabled={readOnly} placeholder="Payroll — Sep 15" onChange={e => setJ({ ...j, memo: e.target.value })} /></Field>
     </div>
     <table className="li-table"><thead><tr>
-      <th style={{ minWidth: 220 }}>Account</th><th>Description</th><th className="num" style={{ width: 130 }}>Debit</th><th className="num" style={{ width: 130 }}>Credit</th><th style={{ width: 40 }}></th>
+      <th style={{ minWidth: 220 }}>Account</th><th>Description</th>
+      <th style={{ minWidth: 170 }} title="Optional — puts this line on a job in Job Costing">Job</th>
+      <th className="num" style={{ width: 130 }}>Debit</th><th className="num" style={{ width: 130 }}>Credit</th><th style={{ width: 40 }}></th>
     </tr></thead>
       <tbody>
         {lines.map(l => <tr key={l.id}>
           <td><AccountSelect db={db} value={l.account} disabled={readOnly} onChange={v => setLine(l.id, { account: v })} blank="— account —" /></td>
           <td><input className="input" value={l.desc || ""} disabled={readOnly} placeholder="What this line is" onChange={e => setLine(l.id, { desc: e.target.value })} /></td>
+          <td><JobSelect db={db} value={l.salesOrderId} disabled={readOnly} blank="—" onChange={v => setLine(l.id, { salesOrderId: v })} />
+            {l.salesOrderId && <div style={{ marginTop: 4 }}><CostCategorySelect value={l.costCategory} disabled={readOnly} onChange={v => setLine(l.id, { costCategory: v })} /></div>}</td>
           <td><input className="input mono num" type="number" min="0" step="0.01" value={num(l.debit)} disabled={readOnly} style={{ textAlign: "right" }}
             onChange={e => setLine(l.id, { debit: e.target.value, ...(e.target.value ? { credit: "" } : {}) })}
             onKeyDown={e => { if (e.key === "=" ) { e.preventDefault(); balanceOn(l.id); } }} /></td>
@@ -137,7 +142,7 @@ export function JournalEntryModal({ db, entry, readOnly, onClose, onSave }) {
           <td>{!readOnly && <button className="btn ghost icon" title="Remove line" disabled={lines.length <= 1} onClick={() => removeLine(l.id)}><Ico d={ICONS.trash} size={14} /></button>}</td>
         </tr>)}
         <tr>
-          <td colSpan={2} style={{ paddingTop: 10 }}>
+          <td colSpan={3} style={{ paddingTop: 10 }}>
             {!readOnly && <span style={{ display: "inline-flex", gap: 8 }}>
               <button className="btn sm" onClick={addLine}><Ico d={ICONS.plus} size={14} />Add Line</button>
               {Math.abs(t.diff) > 0.005 && lines.length > 0 && <button className="btn sm" title="Put the difference on the last line" onClick={() => balanceOn(lines[lines.length - 1].id)}>Balance on last line</button>}
@@ -147,7 +152,7 @@ export function JournalEntryModal({ db, entry, readOnly, onClose, onSave }) {
           <td className="num mono" style={{ fontWeight: 700, paddingTop: 12 }}>{money(t.credits)}</td>
           <td></td>
         </tr>
-        {Math.abs(t.diff) > 0.005 && <tr><td colSpan={5} style={{ color: "var(--neg)", fontWeight: 600 }}>
+        {Math.abs(t.diff) > 0.005 && <tr><td colSpan={6} style={{ color: "var(--neg)", fontWeight: 600 }}>
           Out of balance by {money(Math.abs(t.diff))} — {t.diff > 0 ? "credits" : "debits"} are short.</td></tr>}
       </tbody></table>
     <p className="subtle" style={{ margin: "10px 0 0" }}>A payroll run, for instance: debit Wages Expense, Payroll Tax Expense and 401K Employer for the cost; credit Checking for the net pay and the payable accounts for what is withheld and owed. Typing on one side of a line clears the other; press = in an amount box to put the difference there.</p>

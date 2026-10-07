@@ -13,6 +13,7 @@ import { openCheckPdf } from "../lib/checkPrint.js";
 import { remittancePdf, openRemittancePdf } from "../lib/remittance.js";
 import EmailModal from "../components/EmailModal.jsx";
 import AccountSelect from "../components/AccountSelect.jsx";
+import JobCostPicker from "../components/JobCostPicker.jsx";
 import { expenseAccountOfBill, accountLabel, accountSettings } from "../calc/accounts.js";
 
 // The date a bill was settled — the last payment on it.
@@ -40,7 +41,6 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
   const [edit, setEdit] = useState(null);
   const [pay, setPay] = useState(null);
   const vendors = db.contacts.filter(c => c.type === "vendor");
-  const openSOs = db.salesOrders.filter(s => s.status === "open");
   const open = db.bills.filter(b => (billBalance(b)) > 0.005);
   const bk = agingBuckets(open, b => b.dueDate, b => billBalance(b));
   const totalOpen = bk.cur + bk.d30 + bk.d60 + bk.d90 + bk.d90p;
@@ -146,12 +146,8 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
       </div>
       <Field label="Expense Account" hint={edit.expenseAccount ? "Where this bill posts" : "Default: " + (accountLabel(db, expenseAccountOfBill(db, edit)) || "none set — see Settings → Accounts")}>
         <AccountSelect db={db} value={edit.expenseAccount} onChange={v => setEdit({ ...edit, expenseAccount: v })} groups={["expense", "cos", "liability", "asset"]} blank="— vendor's default —" /></Field>
-      <Field label="Job (optional)" hint="Attribute this bill to a sales order for job costing">
-        <select className="select" value={edit.salesOrderId || ""} onChange={e => setEdit({ ...edit, salesOrderId: e.target.value })}>
-          <option value="">— none —</option>
-          {openSOs.map(s => <option key={s.id} value={s.id}>{s.number} — {nameOf(db, s.customerId)}</option>)}
-          {edit.salesOrderId && !openSOs.some(s => s.id === edit.salesOrderId) && <option value={edit.salesOrderId}>{db.salesOrders.find(s => s.id === edit.salesOrderId)?.number || "(job)"}</option>}
-        </select></Field>
+      <JobCostPicker db={db} salesOrderId={edit.salesOrderId} costCategory={edit.costCategory}
+        hint="Attribute this bill to a sales order for job costing" onChange={patch => setEdit({ ...edit, ...patch })} />
       <Field label="Notes"><textarea className="input" value={edit.notes} onChange={e => setEdit({ ...edit, notes: e.target.value })} /></Field>
       {edit._new
         ? <p className="subtle" style={{ margin: "8px 0 0" }}>Save the bill first to attach receipts.</p>

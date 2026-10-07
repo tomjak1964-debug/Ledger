@@ -11,16 +11,9 @@ import { generalLedger, trialBalance, incomeStatement, balanceSheet, vendor1099,
 import { ten99Label, accountLabel, chartLoaded, isCashBasis, basisLabel } from "../calc/accounts.js";
 import { reconcileState } from "../calc/bankRecon.js";
 import FilterBar, { rangeLabel } from "../components/FilterBar.jsx";
+import { downloadCSV, ReportCard } from "../components/reportKit.jsx";
+import { SalesOrderReport, JobTrackingReport, JobCostingReport } from "./JobReports.jsx";
 
-/* ---------- CSV export ---------- */
-function downloadCSV(name, header, rows) {
-  const esc = v => { const s = String(v ?? ""); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  const csv = [header, ...rows].map(r => r.map(esc).join(",")).join("\r\n");
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-  a.download = name + "-" + todayISO() + ".csv";
-  a.click();
-}
 
 /* ---------- the report catalog ----------
    Categories mirror Sage 50's "Select a Report or Form" rail, so the list is
@@ -36,6 +29,7 @@ const REPORTS = {
   customers: { label: "Sales by Customer", blurb: "Invoiced, collected, and still open — per customer.", party: "customer", Render: SalesByCustomer },
   receipts: { label: "Receipts Register", blurb: "Every payment received, by check or reference, with the invoices it covered.", party: "customer", Render: ReceiptsReport },
   statement: { label: "Customer Statement", blurb: "One customer's open invoices, ready to print and send.", party: "customer", Render: Statements },
+  salesOrders: { label: "Sales Orders", blurb: "Each sales order: what it's worth, what's left to invoice, what's billed and unpaid, and what's paid — with the invoices and the lines they billed.", party: "customer", Render: SalesOrderReport },
   tax: { label: "Sales Tax", blurb: "Tax invoiced (accrual) and tax collected (cash).", party: "customer", Render: SalesTax },
   ap: { label: "Aged Payables", blurb: "What you owe each vendor, bucketed by how late it is.", party: "vendor", asOf: true, Render: AgedPayablesReport },
   payments: { label: "Payments Register", blurb: "Every payment made, by check or reference, with the bills it covered.", party: "vendor", Render: PaymentsReport },
@@ -45,17 +39,19 @@ const REPORTS = {
   bs: { label: "Balance Sheet", blurb: "Assets, liabilities and capital as of the end of the range — with the year's income rolled into Retained Earnings once the year has closed.", party: null, asOf: true, Render: BalanceSheetReport },
   is: { label: "Income Statement", blurb: "The standard statement: revenues, cost of sales, gross profit, expenses and net income by account, for the range and year to date, on the basis set in Settings → Accounts.", party: null, Render: IncomeStatementReport },
   reconSummary: { label: "Reconciliation Summary", blurb: "Every statement reconciled: its balance, what cleared, what was still outstanding, and the book balance.", party: null, Render: ReconciliationSummary },
+  jobTracking: { label: "Job Tracking", blurb: "Every job and proposal in flight: job #, PO, sales order, proposal, description, where it stands, and each billing milestone — not invoiced, ready to invoice, or invoiced.", party: "customer", Render: JobTrackingReport },
+  jobCosting: { label: "Job Costing", blurb: "Profit per job: the specs and proposal budget it was sold on, against the costs booked to it from bills, expenses, time, journal lines and costs entered by hand.", party: "customer", Render: JobCostingReport },
   v1099: { label: "1099 Vendor Report", blurb: "Every 1099 vendor paid in the year, each payment made, the total, and whether the $600 limit was met.", party: "vendor", Render: Vendor1099Report },
 };
 
 const CATEGORIES = [
-  { key: "ar", label: "Accounts Receivable", icon: ICONS.ar, blurb: "Customers, what they owe, what they've paid, and sales tax.", reports: ["ar", "customers", "receipts", "statement", "tax"] },
+  { key: "ar", label: "Accounts Receivable", icon: ICONS.ar, blurb: "Customers, what they owe, what they've paid, and sales tax.", reports: ["ar", "customers", "salesOrders", "receipts", "statement", "tax"] },
   { key: "ap", label: "Accounts Payable", icon: ICONS.ap, blurb: "Vendors, open bills, the checks that paid them, and the 1099s.", reports: ["ap", "payments", "v1099"] },
   { key: "payroll", label: "Payroll", icon: ICONS.contacts, blurb: "Wages and payroll taxes.", reports: [] },
   { key: "gl", label: "General Ledger", icon: ICONS.catalog, blurb: "Account activity and the trial balance, posted from the documents and the journal entries booked by hand.", reports: ["gl", "tb"] },
   { key: "financial", label: "Financial Statements", icon: ICONS.reports, blurb: "The balance sheet, the income statement, cash-basis profit and loss, and cash in versus cash out.", reports: ["bs", "is", "pl", "ie"] },
   { key: "inventory", label: "Inventory", icon: ICONS.catalog, blurb: "Stock on hand and item movement.", reports: [] },
-  { key: "jobs", label: "Job Reports", icon: ICONS.job, blurb: "Cost and profit per job.", reports: [] },
+  { key: "jobs", label: "Job Reports", icon: ICONS.job, blurb: "Where each job stands, and what it cost against what it was sold for.", reports: ["jobTracking", "jobCosting"] },
   { key: "recon", label: "Account Reconciliation", icon: ICONS.check, blurb: "Bank statements against the register.", reports: ["reconSummary"] },
   { key: "time", label: "Time/Expense Reports", icon: ICONS.clock, blurb: "Hours logged and business spending.", reports: ["expenses"] },
   { key: "company", label: "Company Reports", icon: ICONS.settings, blurb: "Company-wide lists and settings.", reports: [] },
@@ -122,12 +118,6 @@ export default function ReportsView({ db }) {
   </div>;
 }
 
-function ReportCard({ title, rangeLabel, right, children }) {
-  return <div className="card" style={{ marginBottom: 16 }}>
-    <div className="card-head"><h3>{title}</h3><span className="subtle" style={{ marginLeft: "auto" }}>{rangeLabel}</span>{right}</div>
-    {children}
-  </div>;
-}
 
 /* ---------- Receipts / Payments register ----------
    Same shape both ways: one row per check or transfer, optionally expanded to

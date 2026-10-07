@@ -4,6 +4,7 @@ import { useFilters } from "../components/useFilters.jsx";
 import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort } from "../components/ui.jsx";
 import Attachments from "../components/Attachments.jsx";
 import AccountSelect from "../components/AccountSelect.jsx";
+import JobCostPicker from "../components/JobCostPicker.jsx";
 import { expenseAccountOfExpense, accountLabel, accountSettings } from "../calc/accounts.js";
 
 export default function ExpensesView({ db, actions, toast, readOnly }) {
@@ -16,7 +17,6 @@ export default function ExpensesView({ db, actions, toast, readOnly }) {
     if (await actions.deleteExpense(id)) toast("Expense deleted", { actionLabel: "Undo", onAction: async () => { if (await actions.restoreRecord("expense", rec)) toast("Expense restored"); } });
   };
   const startNew = () => setEdit({ id: uid(), _new: true, date: todayISO(), category: "Materials", vendor: "", amount: 0, method: "Credit Card", notes: "", salesOrderId: "", account: "", cashAccount: "" });
-  const openSOs = db.salesOrders.filter(s => s.status === "open");
   const f = useFilters();
   const shown = db.expenses.filter(e => f.keep(e.date));
   const byCat = {};
@@ -80,12 +80,8 @@ export default function ExpensesView({ db, actions, toast, readOnly }) {
         <Field label="Paid From" hint={"Default: " + (accountLabel(db, accountSettings(db.settings).cash) || "Checking")}>
           <AccountSelect db={db} value={edit.cashAccount} onChange={v => setEdit({ ...edit, cashAccount: v })} types={["Cash"]} blank="— default cash account —" /></Field>
       </div>
-      <Field label="Job (optional)" hint="Attribute this cost to a sales order for job costing">
-        <select className="select" value={edit.salesOrderId || ""} onChange={e => setEdit({ ...edit, salesOrderId: e.target.value })}>
-          <option value="">— none —</option>
-          {openSOs.map(s => <option key={s.id} value={s.id}>{s.number} — {nameOf(db, s.customerId)}</option>)}
-          {edit.salesOrderId && !openSOs.some(s => s.id === edit.salesOrderId) && <option value={edit.salesOrderId}>{db.salesOrders.find(s => s.id === edit.salesOrderId)?.number || "(job)"}</option>}
-        </select></Field>
+      <JobCostPicker db={db} salesOrderId={edit.salesOrderId} costCategory={edit.costCategory}
+        hint="Attribute this cost to a sales order for job costing" onChange={patch => setEdit({ ...edit, ...patch })} />
       <Field label="Notes"><textarea className="input" value={edit.notes} onChange={e => setEdit({ ...edit, notes: e.target.value })} /></Field>
       {edit._new
         ? <p className="subtle" style={{ margin: "8px 0 0" }}>Save the expense first to attach a receipt.</p>

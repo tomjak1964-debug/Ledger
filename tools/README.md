@@ -131,3 +131,21 @@ account, 1099 type, and tax id / vendor id (where blank); customers get their sa
 Contacts are matched on name with case, spaces and punctuation ignored, and the last statement
 lists any contact on file the lists did not name, so those can be set by hand. Needs
 `pdfplumber` for the customer list.
+
+## job-sheet-sql.py — the job-tracking sheet → sales orders
+
+```
+python3 tools/job-sheet-sql.py VENTURE_SECONDARY_ESTIMATES_261007.xlsx --only TMJ880,TMJ881,… > fix.sql
+```
+
+Reads the shop's job-tracking sheet and writes a SQL data fix (migration 028)
+that gives each matching sales order its job number (A, plus B as `-F1`),
+description (T), specs (U–AD), proposal budget (AE–AM) and the material costs
+the sheet carried (L, N, O, P, Q → `job_costs` rows with source `sheet`). A row
+matches by SO number (column E: `914` is `TMJ914`), or PO number when E is
+blank. `--only` limits the fix to the SOs Ledger has
+(`select string_agg(number, ',') from sales_orders`). Re-runnable: typed job
+numbers and descriptions are kept, specs and budget fill only when empty, and
+the sheet's cost rows are replaced, not doubled. Apply it on the NUC like any
+data fix (backup first, one transaction). The 2026-10-07 run is
+`app/supabase/data-fixes/2026-10-07_job_sheet_import.sql`.

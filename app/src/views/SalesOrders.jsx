@@ -130,6 +130,10 @@ function SalesOrderEditor({ so, customers, catalog, onCancel, onSave, db, action
         <Field label="Customer PO #"><input className="input mono" value={o.poNumber || ""} onChange={e => set("poNumber", e.target.value)} /></Field>
         <Field label="Order Date"><input className="input" type="date" value={o.date} onChange={e => set("date", e.target.value)} /></Field>
       </div>
+      <div className="row">
+        <Field label="Job #" hint="The job and fixture, e.g. 4724-F3"><input className="input mono" value={o.jobNumber || ""} onChange={e => set("jobNumber", e.target.value)} /></Field>
+        <Field label="Description" hint="What the job is — shows on Job Tracking and Job Costing"><input className="input" value={o.description || ""} onChange={e => set("description", e.target.value)} /></Field>
+      </div>
       <div className="divider"></div>
       {!o._new && (o.lineItems || []).some(li => li.invoiced) &&
         <p className="subtle" style={{ margin: "0 0 10px", color: "var(--warn)" }}>

@@ -16,6 +16,7 @@ import { CREDIT_METHOD } from "./credits.js";
 import { uid, todayISO, addDays, pad4, money, sum } from "./helpers.js";
 import { defaultSettings, sampleData } from "./seed.js";
 import { proposalConfig, phaseAmount } from "../calc/proposals.js";
+import { proposalSpecs, proposalBudget } from "../calc/jobs.js";
 import { round2, lineTotals, balance } from "../calc/ledger.js";
 import { checkNumberTaken, isCheckPayment, normRef } from "./checks.js";
 import { incomeAccountOf, expenseAccountOfBill } from "../calc/accounts.js";
@@ -35,7 +36,7 @@ const th = (res) => { if (res.error) throw res.error; return res.data; };
 
 async function fetchAll() {
   const [settings, sequences, contacts, catalog, quotes, qli, sos, soli, invoices, invli, payments, bills, expenses,
-    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments, pos, poli, accounts, journal, recons, cleared] = await Promise.all([
+    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments, pos, poli, accounts, journal, recons, cleared, jobCosts] = await Promise.all([
     supabase.from("settings").select("*").maybeSingle(),
     supabase.from("org_sequences").select("*"),
     supabase.from("contacts").select("*").order("created_at"),
@@ -65,6 +66,7 @@ async function fetchAll() {
     supabase.from("journal_entries").select("*").order("date").order("number"),
     supabase.from("bank_reconciliations").select("*").order("statement_date"),
     supabase.from("bank_cleared_items").select("*"),
+    supabase.from("job_costs").select("*").order("date"),
   ]);
   return {
     settingsRow: th(settings), sequences: th(sequences),
@@ -87,6 +89,7 @@ async function fetchAll() {
     journal: journal && !journal.error ? (journal.data || []) : [],        // migration 025
     recons: recons && !recons.error ? (recons.data || []) : [],            // migration 027
     cleared: cleared && !cleared.error ? (cleared.data || []) : [],
+    jobCosts: jobCosts && !jobCosts.error ? (jobCosts.data || []) : [],      // migration 028
   };
 }
 
@@ -124,6 +127,7 @@ function assemble(raw) {
     journalEntries: (raw.journal || []).map(A.journalEntryFromRow),
     bankReconciliations: (raw.recons || []).map(A.reconFromRow),
     bankCleared: (raw.cleared || []).map(A.clearedFromRow),
+    jobCosts: (raw.jobCosts || []).map(A.jobCostFromRow),
   };
 }
 
@@ -1143,6 +1147,24 @@ export function useLedger(session, onError) {
         return entry;
       } catch (e) { return fail(e); }
     },
+    /* ---- job costs booked by hand (migration 028) ---- */
+    async saveJobCost(c) {
+      try {
+        if (!c.salesOrderId) throw new Error("A job cost needs a job.");
+        if (!(Number(c.amount) || Number(c.hours))) throw new Error("Enter an amount or hours.");
+        const cost = { ...c }; delete cost._new;
+        th(await supabase.from("job_costs").upsert(A.jobCostToRow(cost)));
+        setDb(d => ({ ...d, jobCosts: upsertList(d.jobCosts || [], cost) }));
+        return cost;
+      } catch (e) { return fail(e); }
+    },
+    async deleteJobCost(id) {
+      try {
+        th(await supabase.from("job_costs").delete().eq("id", id));
+        setDb(d => ({ ...d, jobCosts: (d.jobCosts || []).filter(c => c.id !== id) }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
     async deleteJournalEntry(id) {
       try {
         th(await supabase.from("journal_entries").delete().eq("id", id));
@@ -1276,6 +1298,9 @@ export function useLedger(session, onError) {
         const so = {
           id: uid(), number: d0.settings.soPrefix + "-" + pad4(await claimNumber("so")),
           quoteId: "", customerId: p.customerId, poNumber: po, date: todayISO(), status: "open",
+          // The job this SO is, as sold: Job Tracking and Job Costing read these.
+          jobNumber: p.jobNumber || "", description: p.description || "",
+          specs: proposalSpecs(d0, p), budget: proposalBudget(p),
           taxRate: 0, lineItems: groups.length
             ? groups.map(([label, amt]) => ({ id: uid(), desc: `${label} — ${p.description} (${p.number})`, qty: 1, unit: "lot", unitPrice: Number(amt) || 0 }))
             : [{
@@ -1399,6 +1424,7 @@ export function useLedger(session, onError) {
         const invoices = arr("invoices").map(i => ({ ...i, id: nid(i.id), salesOrderId: nid(i.salesOrderId), quoteId: nid(i.quoteId), customerId: nid(i.customerId), lineItems: remapItems(i.lineItems), payments: (i.payments || []).map(p => ({ ...p, id: uid() })) }));
         const bills = arr("bills").map(b => ({ ...b, id: nid(b.id), vendorId: nid(b.vendorId), payments: (b.payments || []).map(p => ({ ...p, id: uid() })) }));
         const expenses = arr("expenses").map(e => ({ ...e, id: uid() }));
+        const jobCosts = arr("jobCosts").filter(c => c.salesOrderId).map(c => ({ ...c, id: uid(), salesOrderId: nid(c.salesOrderId) }));
 
         const orgId = dbRef.current.org.id;
         await wipe(orgId);
@@ -1419,6 +1445,7 @@ export function useLedger(session, onError) {
         ]);
         await ins("bills", bills.map(A.billToRow));
         await ins("expenses", expenses.map(A.expenseToRow));
+        await ins("job_costs", jobCosts.map(A.jobCostToRow));
         await ins("journal_entries", arr("journalEntries").map(j => A.journalEntryToRow({ ...j, id: uid(), lines: (j.lines || []).map(l => ({ ...l, id: uid() })) })));
         // The chart is reference data (kept by wipe, like machine rates); a
         // backup that carries one only adds the numbers not already on file.
@@ -1445,7 +1472,7 @@ export function useLedger(session, onError) {
 async function wipe(orgId) {
   // Children first (payments have no FK; line items cascade from parents).
   for (const table of ["payments", "quote_line_items", "sales_order_line_items", "invoice_line_items",
-    "quotes", "sales_orders", "invoices", "proposals", "contact_people", "bills", "expenses", "journal_entries", "bank_cleared_items", "bank_reconciliations",
+    "job_costs", "quotes", "sales_orders", "invoices", "proposals", "contact_people", "bills", "expenses", "journal_entries", "bank_cleared_items", "bank_reconciliations",
     "contacts", "catalog_items", "org_sequences"]) {
     const { error } = await supabase.from(table).delete().eq("org_id", orgId);
     if (error) throw error;

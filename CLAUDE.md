@@ -749,6 +749,27 @@ payments. `tools/so-report-sql.py` turns a Sage Sales Order Report PDF into a SQ
 (kept in `app/supabase/data-fixes/`) that fills blank PO numbers and brings each SO line's
 invoiced / closed state into line with Sage's shipped / remaining quantities. See `tools/README.md`.
 
+**Jobs: tracking and costing** (`src/calc/jobs.js`, `views/JobReports.jsx`, migration 028). A job is a sales
+order, and it now carries what the shop's job-tracking sheet did: `jobNumber` (the job and fixture, `4724-F3`),
+`description`, `specs` (the counts it was priced from — fixture type, sonic gen, horns, I/O blocks, cameras,
+Data National…) and `budget` (the proposal's price lines as sold, `[{ key, label, amount }]`, keyed by
+`BUDGET_LINES` — the sheet's AE–AM). A won proposal stamps all four onto its SO (`winProposal`); an SO with
+no proposal has them typed in on the SO editor or brought in from the sheet (`tools/job-sheet-sql.py`). Where
+the SO's own copy is empty, `budgetOf()` / `specsOf()` read the linked proposal. **Three reports:** Accounts
+Receivable → **Sales Orders** (each SO's amount, Open/Closed, left to invoice, outstanding invoices and paid —
+paid is settled, so the four add up; detail lists each invoice with the SO lines it billed, then what's left;
+left to invoice never exceeds the order less what's been invoiced, which covers a one-line Sage SO invoiced
+without its line flagged), Job Reports → **Job Tracking** (every SO plus every proposal not yet won, with each
+billing milestone coloured like the sheet: plain not invoiced, blue ready, orange invoiced — `--billed` in
+`styles.css`) and **Job Costing** (budget against actual, summary or all columns, a row opens to specs,
+budget, actual by category and every cost line). **Actual cost** is read wherever it was booked
+(`jobCostItems()`): vendor bills and expenses tagged to the job, by their `costCategory`
+(`COST_CATEGORIES` — panel, HMI/bingo, base cables, I/O blocks, Data National material are *material*, the
+sheet's L–Q; then field wiring, labor, travel, other); time logged to the job at its snapshot cost rate;
+journal-entry lines that name a job (`salesOrderId` + `costCategory` on the jsonb line); and `job_costs` —
+costs entered by hand on the Jobs page ($ button), or imported from the sheet (`source: 'sheet'`).
+Eng / Profit is the PO less material, as the sheet worked it; Profit is the PO less every cost.
+
 **Sortable lists:** every list view — Quotes, Sales Orders, Invoices, Receivables, Payables,
 Purchase Orders, Expenses, Customers, Vendors, Catalog, Jobs, Tasks, Proposals, Fixture Rates, Job Costing,
 Time Tracking, the Payments/Receipts register, and the report tables — sorts on any column heading,

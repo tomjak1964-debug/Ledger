@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from "react";
 import { uid, money, todayISO } from "../lib/helpers.js";
-import { proposalConfig, priceProposal, ioBlocks, TMJ_DEFAULT_RATES } from "../calc/proposals.js";
+import { proposalConfig, priceProposal, ioBlocks, TMJ_DEFAULT_RATES, defaultProposalCustomer, dateJobNumber } from "../calc/proposals.js";
 import { readChartFile, parseDelimited, mapChart, matchMachineType, typeKey } from "../lib/quoteChart.js";
 import { Ico, ICONS, Modal, Field } from "./ui.jsx";
 
@@ -9,8 +9,9 @@ import { Ico, ICONS, Modal, Field } from "./ui.jsx";
 export default function ImportProposalsModal({ db, actions, toast, onClose, onDone }) {
   const cfg = proposalConfig(db.settings);
   const customers = db.contacts.filter(c => c.type === "customer");
-  // Venture Global is the customer this chart is for, so pick it if it's there.
-  const guess = customers.find(c => /venture\s*global/i.test(c.name)) || customers[0];
+  // The chart is Venture Global's; the default follows the last proposal's
+  // customer, which starts out as Venture Global.
+  const guess = defaultProposalCustomer(db);
   const [customerId, setCustomerId] = useState(guess?.id || "");
   const [date, setDate] = useState(todayISO());
   const [rows, setRows] = useState(null);       // [{ rec, machineTypeId, take }]
@@ -80,15 +81,20 @@ export default function ImportProposalsModal({ db, actions, toast, onClose, onDo
   const run = async () => {
     setBusy(true);
     const out = [];
+    const given = [];   // date job numbers handed out in this run
     for (const r of ready) {
       const { specs, pricing } = priced(r);
       const { rec } = r;
       const note = [rec.quoteNumber && "Quote " + rec.quoteNumber, rec.endUser && "End user: " + rec.endUser]
         .filter(Boolean).join(" · ");
+      // No job number on the chart: the quote number stands in, and with
+      // neither, the date and a sequence for the day (261008-01).
+      let jobNumber = (rec.jobNumber || "").trim() || (rec.quoteNumber || "").trim();
+      if (!jobNumber) { jobNumber = dateJobNumber(db.proposals, date, given); given.push(jobNumber); }
       const saved = await actions.saveProposal({
         id: uid(), _new: true, customerId, contactPersonId: "",
         contactName: db.contacts.find(c => c.id === customerId)?.contact || "",
-        date, status: "draft", jobNumber: rec.jobNumber || "", description: rec.description || "",
+        date, status: "draft", jobNumber, description: rec.description || "",
         location: rec.location || cfg.location, machineTypeId: r.machineTypeId,
         specs, pricing, phases: cfg.phases.map(ph => ({ ...ph })), notes: note,
       });
@@ -107,7 +113,7 @@ export default function ImportProposalsModal({ db, actions, toast, onClose, onDo
       <tbody>{results.map((r, i) => <tr key={i}>
         <td className="doc-id">{r.saved ? r.saved.number : <span className="subtle">not created</span>}</td>
         <td className="mono subtle">{r.rec.quoteNumber || "—"}</td>
-        <td className="mono subtle">{r.rec.jobNumber || "—"}</td>
+        <td className="mono subtle">{r.saved?.jobNumber || r.rec.jobNumber || "—"}</td>
         <td>{r.rec.description}</td>
         <td className="num mono">{money(r.total)}</td>
       </tr>)}</tbody></table>
@@ -161,7 +167,7 @@ export default function ImportProposalsModal({ db, actions, toast, onClose, onDo
             <td><input type="checkbox" checked={r.take}
               onChange={e => setRows(rs => rs.map((x, j) => j === i ? { ...x, take: e.target.checked } : x))} /></td>
             <td className="mono subtle">{r.rec.quoteNumber || "—"}</td>
-            <td className="mono subtle">{r.rec.jobNumber || "—"}</td>
+            <td className="mono subtle">{r.rec.jobNumber || r.rec.quoteNumber || <span title="No job or quote number: one is made from the date, e.g. 261008-01">dated</span>}</td>
             <td>{r.rec.description || "—"}</td>
             <td><select className="select" value={r.machineTypeId}
               style={r.machineTypeId ? {} : { borderColor: "var(--neg)" }}

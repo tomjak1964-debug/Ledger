@@ -226,7 +226,9 @@ export default function ControlsEstimateEditor({ p, db, cfg, customers, onCancel
       <div className="row">
         <Field label="Customer"><select className="select" value={x.customerId} onChange={e => {
           const cid = e.target.value, cc = db.contacts.find(c => c.id === cid)?.contact || "";
-          setX(prev => ({ ...prev, customerId: cid, contactPersonId: "", contactName: prev.contactName || cc }));
+          // The contact belongs to the customer: a new customer brings its own
+          // contact, or none — never the one picked for the customer before.
+          setX(prev => ({ ...prev, customerId: cid, contactPersonId: "", contactName: cc }));
         }}>
           <option value="">Select customer…</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select></Field>

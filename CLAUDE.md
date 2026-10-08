@@ -756,8 +756,10 @@ Data National…) and `budget` (the proposal's price lines as sold, `[{ key, lab
 `BUDGET_LINES` — the sheet's AE–AM). A won proposal stamps all four onto its SO (`winProposal`); an SO with
 no proposal has them typed in on the SO editor or brought in from the sheet (`tools/job-sheet-sql.py`). Where
 the SO's own copy is empty, `budgetOf()` / `specsOf()` read the linked proposal. **Three reports:** Accounts
-Receivable → **Sales Orders** (each SO's amount, Open/Closed, left to invoice, outstanding invoices and paid —
-paid is settled, so the four add up; detail lists each invoice with the SO lines it billed, then what's left;
+Receivable → **Sales Orders** (each SO's amount, **extras invoiced** — start-up or extra work billed beyond the
+order's lines — Open/Closed, left to invoice, outstanding invoices and paid; paid is settled, so Amount + Extras
+= Left + Outstanding + Paid, less any line closed unbilled — and a closed line counts as unbilled only as far as
+the invoices fall short of the order, since Sage carried some invoiced lines over as closed; detail lists each invoice with the SO lines it billed, then what's left;
 left to invoice never exceeds the order less what's been invoiced, which covers a one-line Sage SO invoiced
 without its line flagged), Job Reports → **Job Tracking** (every SO plus every proposal not yet won, with each
 billing milestone coloured like the sheet: plain not invoiced, blue ready, orange invoiced — `--billed` in
@@ -768,7 +770,8 @@ budget, actual by category and every cost line). **Actual cost** is read whereve
 sheet's L–Q; then field wiring, labor, travel, other); time logged to the job at its snapshot cost rate;
 journal-entry lines that name a job (`salesOrderId` + `costCategory` on the jsonb line); and `job_costs` —
 costs entered by hand on the Jobs page ($ button), or imported from the sheet (`source: 'sheet'`).
-Eng / Profit is the PO less material, as the sheet worked it; Profit is the PO less every cost.
+Eng / Profit is revenue less material, as the sheet worked it; Profit is revenue less every cost, where revenue
+is the PO plus extras invoiced, less lines closed unbilled.
 
 **Sortable lists:** every list view — Quotes, Sales Orders, Invoices, Receivables, Payables,
 Purchase Orders, Expenses, Customers, Vendors, Catalog, Jobs, Tasks, Proposals, Fixture Rates, Job Costing,

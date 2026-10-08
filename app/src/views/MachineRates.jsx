@@ -24,6 +24,15 @@ const COLUMNS = [
 export default function MachineRatesView({ db, actions, toast, readOnly }) {
   const [edit, setEdit] = useState(null);
   const save = async (m) => {
+    // A copy starts with the same name as its source, so a blank or repeated
+    // name is refused: the proposal's type list would show two the same.
+    const name = (m.name || "").trim();
+    if (!name) { toast("Give the fixture type a name."); return; }
+    if (db.machineTypes.some(x => x.id !== m.id && (x.name || "").trim().toLowerCase() === name.toLowerCase())) {
+      toast(`There's already a fixture type called "${name}".`); return;
+    }
+    const { copyOf, ...rest } = m;
+    m = { ...rest, name };
     const clean = Object.fromEntries(Object.entries(m).map(([k, v]) => [k, RATE_FIELDS.some(([f]) => f === k) ? Number(v) || 0 : v]));
     if (await actions.saveMachineType(clean)) { setEdit(null); toast("Rates saved"); }
   };
@@ -51,11 +60,13 @@ export default function MachineRatesView({ db, actions, toast, readOnly }) {
             {COLUMNS.map(([col]) => <td key={col} className="num">{Number(m[col]) > 0 ? money(m[col]) : "—"}</td>)}
             <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
               {!readOnly && <button className="btn ghost icon" onClick={() => setEdit({ ...m })} title="Edit"><Ico d={ICONS.edit} size={15} /></button>}
+              {!readOnly && <button className="btn ghost icon" title="Copy to a new fixture type — every rate carries over"
+                onClick={() => setEdit({ ...m, id: uid(), _new: true, copyOf: m.name, name: m.name + " (copy)", sort: db.machineTypes.length })}><Ico d={ICONS.copy} size={15} /></button>}
               {!readOnly && <button className="btn ghost icon" onClick={() => del(m.id)} title="Delete"><Ico d={ICONS.trash} size={15} /></button>}
             </td>
           </tr>)}</tbody></table>}
     </div>
-    {edit && <Modal title={edit._new ? "New Fixture Type" : "Edit " + edit.name} onClose={() => setEdit(null)}
+    {edit && <Modal title={edit.copyOf ? "New Fixture Type from " + edit.copyOf : edit._new ? "New Fixture Type" : "Edit " + edit.name} onClose={() => setEdit(null)}
       foot={<><button className="btn" onClick={() => setEdit(null)}>Cancel</button><button className="btn primary" onClick={() => save(edit)}>Save Rates</button></>}>
       <Field label="Fixture Type Name"><input className="input" value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} placeholder="Big Sonic" /></Field>
       <div className="row">

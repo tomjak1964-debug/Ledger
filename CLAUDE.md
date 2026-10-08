@@ -611,7 +611,8 @@ page is a one-line edit there. **Customers and Vendors** are the two halves of t
 old name) is the costing table behind a fixture proposal, one row per fixture type. Per-unit adders —
 `camera_rate`, `torque_rate`, `io_link_rate` (migration 023) — multiply by the count on the proposal
 (`specs.cameras` / `torque` / `ioLink`) and roll into the Engineering/Start-Up line; `remote_hmi` and
-`remote_sonic` (migration 023) are base-pricing lines of their own with a scope bullet each. **A rate of 0
+`remote_sonic` (migration 023) are base-pricing lines of their own with a scope bullet each. The copy button on a row opens a new type with every rate
+carried over, named "… (copy)"; a blank or repeated name is refused. **A rate of 0
 is left off the proposal**: `priceProposal()` drops any line worth nothing (a 0 rate, an unchecked Data
 National, a fixture with no I/O blocks), `buildProposalContent()` drops them again from a pricing snapshot
 saved before that rule, and both the printable and the Word export skip the Premium Pricing section when

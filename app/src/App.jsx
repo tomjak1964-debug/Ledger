@@ -110,7 +110,9 @@ export default function App({ session }) {
   }, []);
   useUpdateNudge(toast);
   const { db, loading, loadError, actions } = useLedger(session, toast);
-  const openDoc = (kind, d) => setDoc({ kind, doc: d });
+  // opts.autoPrint goes straight to the print dialog and closes after it;
+  // opts.onPrinted runs when the document is printed.
+  const openDoc = (kind, d, opts) => setDoc({ kind, doc: d, ...(opts || {}) });
   // "contacts" was the combined page before Customers and Vendors split; a stale link lands on Customers.
   // The page area scrolls on its own (the sidebar stays put), so a new page
   // starts at its top by scrolling .main, not the window.
@@ -207,8 +209,8 @@ export default function App({ session }) {
 
     {doc && <DocumentView kind={doc.kind} doc={doc.doc}
       contact={db.contacts.find(c => c.id === (doc.doc.customerId || doc.doc.vendorId))} settings={db.settings}
-      onPrinted={doc.kind === "invoice" ? () => actions.markInvoicePrinted(doc.doc.id) : undefined}
-      onClose={() => setDoc(null)} />}
+      onPrinted={doc.kind === "invoice" ? () => { actions.markInvoicePrinted(doc.doc.id); doc.onPrinted?.(); } : doc.onPrinted}
+      autoPrint={doc.autoPrint} onClose={() => setDoc(null)} />}
     {toastMsg && <div className="toast"><Ico d={ICONS.check} size={16} />{toastMsg.text}
       {toastMsg.onAction && <button className="link-btn" style={{ color: "#7FB0FF", marginLeft: 10, fontWeight: 600 }}
         onClick={() => { toastMsg.onAction(); setToastMsg(null); }}>{toastMsg.actionLabel || "Undo"}</button>}

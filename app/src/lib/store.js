@@ -379,9 +379,15 @@ export function useLedger(session, onError) {
         const fullyBilled = (so.lineItems || []).length > 0 && (so.lineItems || []).every(li => li.invoiced || li.closed || billedIds.includes(li.id));
         if (fullyBilled)
           th(await supabase.from("sales_orders").update({ status: "invoiced", invoice_id: inv.id }).eq("id", so.id));
+        // A milestone billed from the SO is that proposal phase billed, so the
+        // proposal's Invoice Phases won't offer it again.
+        const prop = dbRef.current.proposals.find(x => x.salesOrderId === so.id && (x.phases || []).some(ph => !ph.invoiceId && billedIds.includes(ph.soLineId)));
+        const propPhases = prop && prop.phases.map(ph => !ph.invoiceId && billedIds.includes(ph.soLineId) ? { ...ph, invoiceId: inv.id } : ph);
+        if (prop) th(await supabase.from("proposals").update({ phases: propPhases }).eq("id", prop.id));
         setDb(d => ({
           ...d,
           invoices: [...d.invoices, inv],
+          proposals: prop ? d.proposals.map(x => x.id === prop.id ? { ...x, phases: propPhases } : x) : d.proposals,
           timeEntries: d.timeEntries.map(te => timeBilledIds.includes(te.id) ? { ...te, invoiceId: inv.id } : te),
           salesOrders: d.salesOrders.map(x => x.id === so.id ? {
             ...x,
@@ -1288,9 +1294,18 @@ export function useLedger(session, onError) {
     async winProposal(p, po) {
       try {
         const d0 = dbRef.current;
-        // A controls estimate lands on the SO as one line per group it priced,
-        // so the job reads the way it was sold; a machine proposal is one lot.
+        // With no invoicing schedule, a controls estimate lands on the SO as one
+        // line per group it priced, and anything else as one lot.
         const pr = p.pricing || {};
+        // The job bills through the proposal's invoicing schedule, so each phase
+        // becomes an SO line — a milestone Jobs can mark ready and Job Tracking
+        // colours — however many phases the proposal has. Each phase remembers
+        // its line (soLineId), so billing it from either side marks both.
+        const schedule = p.phases?.length ? p.phases : p.kind === "controls" ? [] : proposalConfig(d0.settings).phases;
+        const total = Number(pr.total) || 0;
+        const job = p.jobNumber || p.number;
+        const milestones = schedule.map(ph => ({ ph, line: { id: uid(), desc: `${job} ${ph.label}`, qty: 1, unit: "", unitPrice: phaseAmount(total, ph.pct) } }));
+        const phases = milestones.length ? milestones.map(m => ({ ...m.ph, soLineId: m.line.id })) : p.phases || [];
         const groups = p.kind === "controls" ? [
           ["Controls Engineering", pr.engineeringTotal], ["Control Hardware", pr.hardwareTotal],
           ["Field Services — Start-Up / Debug", pr.fieldTotal], ["Contingency", pr.contingency],
@@ -1301,7 +1316,7 @@ export function useLedger(session, onError) {
           // The job this SO is, as sold: Job Tracking and Job Costing read these.
           jobNumber: p.jobNumber || "", description: p.description || "",
           specs: proposalSpecs(d0, p), budget: proposalBudget(p),
-          taxRate: 0, lineItems: groups.length
+          taxRate: 0, lineItems: milestones.length ? milestones.map(m => m.line) : groups.length
             ? groups.map(([label, amt]) => ({ id: uid(), desc: `${label} — ${p.description} (${p.number})`, qty: 1, unit: "lot", unitPrice: Number(amt) || 0 }))
             : [{
               id: uid(), desc: `Turnkey Controls — ${p.description} (${p.number})`,
@@ -1310,11 +1325,11 @@ export function useLedger(session, onError) {
         };
         th(await supabase.from("sales_orders").insert(A.soToRow(so)));
         await replaceLineItems("sales_order_line_items", "sales_order_id", so.id, so.lineItems, A.soLineItemsToRows);
-        th(await supabase.from("proposals").update({ status: "won", po_number: po, sales_order_id: so.id }).eq("id", p.id));
+        th(await supabase.from("proposals").update({ status: "won", po_number: po, sales_order_id: so.id, phases }).eq("id", p.id));
         setDb(d => ({
           ...d,
           salesOrders: [...d.salesOrders, so],
-          proposals: d.proposals.map(x => x.id === p.id ? { ...x, status: "won", poNumber: po, salesOrderId: so.id } : x),
+          proposals: d.proposals.map(x => x.id === p.id ? { ...x, status: "won", poNumber: po, salesOrderId: so.id, phases } : x),
         }));
         return so;
       } catch (e) { return fail(e); }
@@ -1325,7 +1340,7 @@ export function useLedger(session, onError) {
       try {
         const next = {
           ...p, id: uid(), rev: (Number(p.rev) || 0) + 1, status: "draft", date: todayISO(),
-          poNumber: "", salesOrderId: "", phases: (p.phases || []).map(({ invoiceId, ...ph }) => ph),
+          poNumber: "", salesOrderId: "", phases: (p.phases || []).map(({ invoiceId, soLineId, ...ph }) => ph),
         };
         th(await supabase.from("proposals").insert(A.proposalToRow(next)));
         th(await supabase.from("proposals").update({ status: "superseded" }).eq("id", p.id));
@@ -1365,6 +1380,10 @@ export function useLedger(session, onError) {
         await replaceLineItems("invoice_line_items", "invoice_id", inv.id, inv.lineItems);
         const phases = (p.phases || []).map(ph => sel.some(s => s.key === ph.key) ? { ...ph, invoiceId: inv.id } : ph);
         th(await supabase.from("proposals").update({ phases }).eq("id", p.id));
+        // The phases' milestone lines on the SO are billed too.
+        const lineIds = sel.map(ph => ph.soLineId).filter(Boolean);
+        if (lineIds.length)
+          th(await supabase.from("sales_order_line_items").update({ invoiced: true, invoice_id: inv.id, ready: false }).in("id", lineIds));
         const allBilled = phases.every(ph => ph.invoiceId);
         if (allBilled && p.salesOrderId)
           th(await supabase.from("sales_orders").update({ status: "invoiced", invoice_id: inv.id }).eq("id", p.salesOrderId));
@@ -1372,10 +1391,12 @@ export function useLedger(session, onError) {
           ...d,
           invoices: [...d.invoices, inv],
           proposals: d.proposals.map(x => x.id === p.id ? { ...x, phases } : x),
-          salesOrders: allBilled && p.salesOrderId
-            ? d.salesOrders.map(s => s.id === p.salesOrderId ? { ...s, status: "invoiced", invoiceId: inv.id } : s)
-            : d.salesOrders,
+          salesOrders: d.salesOrders.map(s => s.id !== p.salesOrderId ? s : {
+            ...s, ...(allBilled ? { status: "invoiced", invoiceId: inv.id } : {}),
+            lineItems: (s.lineItems || []).map(li => lineIds.includes(li.id) ? { ...li, invoiced: true, invoiceId: inv.id, ready: false } : li),
+          }),
         }));
+        if (p.salesOrderId) await reconcileJobTask(p.salesOrderId);
         return inv;
       } catch (e) { return fail(e); }
     },

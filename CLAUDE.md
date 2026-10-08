@@ -450,8 +450,13 @@ controls engineering-only, controls with hardware — toggling hardware swaps th
 stock one), and the standard assumptions/exclusions. Hour and rate defaults are trade-standard starting
 points, not the shop's own numbers. **Revisions:** New Revision writes the same number at `rev + 1` as a
 fresh draft and marks the row it replaces `superseded` (a fifth status); the rev prints as *Rev A* on the
-document and in the file name. A won controls estimate lands on the sales order as one line per group it
-priced (Engineering / Hardware / Field Services / Contingency) rather than one lot.
+document and in the file name. A won proposal — either kind — lands on the sales order as **one line per
+phase of its invoicing schedule** (`{job} {phase label}`, priced at the phase's share), however many phases it
+has, so the job bills, marks ready and shows in Job Tracking milestone by milestone, like the Sage SOs. Each phase
+keeps its line's id (`phases[].soLineId`), and billing works from either side: Invoice Phases on the proposal
+flags the SO lines invoiced, and invoicing the SO marks the proposal's phases billed, so a milestone can't be
+billed twice. A controls estimate with no schedule still lands as one line per group it priced
+(Engineering / Hardware / Field Services / Contingency).
 
 **Estimating from a lineup** (`src/lib/lineup.js`, `src/components/ImportLineupModal.jsx`): an integrator's
 *Electrical Engineering Line-up* — one document per fixture with a header (job #, end user, fixture, PLC, HMI,

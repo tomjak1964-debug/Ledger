@@ -25,22 +25,22 @@ export function SalesOrderReport({ db, from, to, partyId, rangeLabel }) {
   const r = salesOrderReport(db, { from, to, partyId, statusFilter });
   const { sorted, sort, onSort } = useTableSort(r.rows, {
     number: x => x.so.number, customer: x => x.customer, job: x => x.job, po: x => x.so.poNumber || "",
-    amount: x => x.amount, status: x => x.status, left: x => x.leftToInvoice, outstanding: x => x.outstanding, paid: x => x.paid,
+    amount: x => x.amount, extras: x => x.extras, status: x => x.status, left: x => x.leftToInvoice, outstanding: x => x.outstanding, paid: x => x.paid,
   });
 
   const exportCSV = () => {
-    const head = ["Sales Order", "Customer", "Job", "PO Number", "SO Amount", "Status", "Left to Invoice", "Outstanding Invoices", "Paid"];
+    const head = ["Sales Order", "Customer", "Job", "PO Number", "SO Amount", "Extras Invoiced", "Status", "Left to Invoice", "Outstanding Invoices", "Paid"];
     const rows = [];
     sorted.forEach(x => {
-      rows.push([x.so.number, x.customer, x.job, x.so.poNumber || "", x.amount.toFixed(2), x.status === "open" ? "Open" : "Closed", x.leftToInvoice.toFixed(2), x.outstanding.toFixed(2), x.paid.toFixed(2)]);
+      rows.push([x.so.number, x.customer, x.job, x.so.poNumber || "", x.amount.toFixed(2), x.extras.toFixed(2), x.status === "open" ? "Open" : "Closed", x.leftToInvoice.toFixed(2), x.outstanding.toFixed(2), x.paid.toFixed(2)]);
       if (!detail) return;
       x.invoiceRows.forEach(iv => {
-        rows.push(["", "  Invoice " + iv.inv.number, fmtDate(iv.inv.date), "", iv.total.toFixed(2), invoiceStatus(iv.inv), "", Math.max(0, iv.balance).toFixed(2), iv.paid.toFixed(2)]);
-        linesOf(iv).forEach(l => rows.push(["", "    " + l.desc.split("\n")[0], "", "", l.amount.toFixed(2), "", "", "", ""]));
+        rows.push(["", "  Invoice " + iv.inv.number, fmtDate(iv.inv.date), "", iv.total.toFixed(2), "", invoiceStatus(iv.inv), "", Math.max(0, iv.balance).toFixed(2), iv.paid.toFixed(2)]);
+        linesOf(iv).forEach(l => rows.push(["", "    " + l.desc.split("\n")[0], "", "", l.amount.toFixed(2), "", "", "", "", ""]));
       });
-      x.unbilled.forEach(li => rows.push(["", "  To invoice: " + (li.desc || "").split("\n")[0], "", "", lineTotals([li], x.so.taxRate).total.toFixed(2), "", "", "", ""]));
+      x.unbilled.forEach(li => rows.push(["", "  To invoice: " + (li.desc || "").split("\n")[0], "", "", lineTotals([li], x.so.taxRate).total.toFixed(2), "", "", "", "", ""]));
     });
-    rows.push(["TOTAL", "", "", "", r.totals.amount.toFixed(2), "", r.totals.leftToInvoice.toFixed(2), r.totals.outstanding.toFixed(2), r.totals.paid.toFixed(2)]);
+    rows.push(["TOTAL", "", "", "", r.totals.amount.toFixed(2), r.totals.extras.toFixed(2), "", r.totals.leftToInvoice.toFixed(2), r.totals.outstanding.toFixed(2), r.totals.paid.toFixed(2)]);
     downloadCSV("sales-orders", head, rows);
   };
 
@@ -57,6 +57,7 @@ export function SalesOrderReport({ db, from, to, partyId, rangeLabel }) {
         <SortTh label="Job" col="job" sort={sort} onSort={onSort} />
         <SortTh label="PO #" col="po" sort={sort} onSort={onSort} />
         <SortTh label="SO Amount" col="amount" sort={sort} onSort={onSort} num />
+        <SortTh label="Extras Invoiced" col="extras" sort={sort} onSort={onSort} num />
         <SortTh label="Status" col="status" sort={sort} onSort={onSort} />
         <SortTh label="Left to Invoice" col="left" sort={sort} onSort={onSort} num />
         <SortTh label="Outstanding Invoices" col="outstanding" sort={sort} onSort={onSort} num />
@@ -69,6 +70,7 @@ export function SalesOrderReport({ db, from, to, partyId, rangeLabel }) {
             <td className="mono">{x.job || dash}</td>
             <td className="mono subtle">{x.so.poNumber || "—"}</td>
             <td className="num mono">{money(x.amount)}</td>
+            <td className="num mono">{amt(x.extras)}</td>
             <td><Badge status={x.status} /></td>
             <td className="num mono">{amt(x.leftToInvoice)}</td>
             <td className="num mono">{amt(x.outstanding)}</td>
@@ -78,34 +80,36 @@ export function SalesOrderReport({ db, from, to, partyId, rangeLabel }) {
             <tr className="sub-row">
               <td></td>
               <td colSpan={3}><span className="doc-id">{iv.inv.number}</span> <span className="subtle">· {fmtDate(iv.inv.date)}</span> <Badge status={invoiceStatus(iv.inv)} /></td>
-              <td className="num mono">{money(iv.total)}</td><td></td><td></td>
+              <td className="num mono">{money(iv.total)}</td><td></td><td></td><td></td>
               <td className="num mono">{amt(Math.max(0, iv.balance))}</td>
               <td className="num mono">{amt(iv.paid)}</td>
             </tr>
             {linesOf(iv).map(l => <tr key={l.id} className="sub-row">
               <td></td><td colSpan={3} style={{ paddingLeft: 28, whiteSpace: "pre-line" }}>{l.desc}</td>
-              <td className="num mono subtle">{money(l.amount)}</td><td colSpan={4}></td>
+              <td className="num mono subtle">{money(l.amount)}</td><td colSpan={5}></td>
             </tr>)}
           </Fragment>)}
           {detail && x.unbilled.length > 0 && x.unbilled.map(li => <tr key={li.id} className="sub-row">
             <td></td><td colSpan={3} style={{ whiteSpace: "pre-line" }}><span className="subtle">To invoice · </span>{li.desc}{li.ready ? <> <Badge status="ready" /></> : null}</td>
-            <td></td><td></td><td className="num mono">{money(lineTotals([li], x.so.taxRate).total)}</td><td colSpan={2}></td>
+            <td></td><td></td><td></td><td className="num mono">{money(lineTotals([li], x.so.taxRate).total)}</td><td colSpan={2}></td>
           </tr>)}
           {detail && x.closedLines.map(li => <tr key={li.id} className="sub-row">
             <td></td><td colSpan={3} className="subtle" style={{ whiteSpace: "pre-line", textDecoration: "line-through" }}>Closed · {li.desc}</td>
-            <td colSpan={5}></td>
+            <td colSpan={6}></td>
           </tr>)}
-          {detail && x.invoiceRows.length === 0 && x.unbilled.length === 0 && <tr className="sub-row"><td></td><td colSpan={8} className="subtle">No invoices.</td></tr>}
+          {detail && x.invoiceRows.length === 0 && x.unbilled.length === 0 && <tr className="sub-row"><td></td><td colSpan={9} className="subtle">No invoices.</td></tr>}
         </Fragment>)}
           <tr><td style={{ fontWeight: 700 }}>Total</td><td colSpan={3} className="subtle">{r.rows.length} sales order{r.rows.length === 1 ? "" : "s"}</td>
-            <td className="num mono" style={{ fontWeight: 700 }}>{money(r.totals.amount)}</td><td></td>
+            <td className="num mono" style={{ fontWeight: 700 }}>{money(r.totals.amount)}</td>
+            <td className="num mono" style={{ fontWeight: 700 }}>{money(r.totals.extras)}</td><td></td>
             <td className="num mono" style={{ fontWeight: 700 }}>{money(r.totals.leftToInvoice)}</td>
             <td className="num mono" style={{ fontWeight: 700 }}>{money(r.totals.outstanding)}</td>
             <td className="num mono" style={{ fontWeight: 700 }}>{money(r.totals.paid)}</td></tr>
         </tbody></table>}
     <p className="subtle" style={{ margin: "10px 16px 14px" }}>
       Open: something is still to be invoiced or an invoice is unpaid. Closed: every line is invoiced or closed, and every invoice is paid.
-      Paid includes any early-payment discount the customer took, so SO Amount = Left to Invoice + Outstanding + Paid when every invoice bills only the order's lines.
+      Extras Invoiced is anything billed beyond the order's own lines — start-up or extra work added when the job was invoiced.
+      Paid includes any early-payment discount the customer took, so SO Amount + Extras = Left to Invoice + Outstanding + Paid (less any line closed without billing).
     </p>
   </ReportCard>;
 }
@@ -310,7 +314,8 @@ export function JobCostingReport({ db, from, to, partyId, rangeLabel }) {
     <p className="subtle" style={{ margin: "10px 16px 14px" }}>
       Budget is the proposal's price lines as sold. Actual cost comes from vendor bills and expenses tagged to the job (their Job Cost Category sets the column),
       time logged to the job (hours × the cost rate), journal-entry lines that name the job, and costs entered by hand on the Jobs page (the $ button).
-      Material is panel, HMI, cables, I/O blocks and Data National material; Eng / Profit is the PO less material, as the old sheet worked it.
+      Material is panel, HMI, cables, I/O blocks and Data National material. Profit and Eng / Profit (the sheet's S column) are taken on what the job
+      brought in: the PO plus any extras invoiced beyond the order's lines, less lines closed without billing.
     </p>
   </ReportCard>;
 }

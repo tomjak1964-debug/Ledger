@@ -119,11 +119,21 @@ export function soSummary(db, so) {
   const outstanding = round2(sum(invoices, i => Math.max(0, balance(i))));
   const paidAmt = round2(sum(invoices, i => settled(i)));
   const cash = round2(sum(invoices, i => paid(i)));
+  // Extras: what was invoiced beyond the order's own lines — field start-up
+  // or extra work added as lines when the job was billed. With them, the
+  // order reads Amount + Extras − Closed = Left + Outstanding + Paid.
+  // A line closed unbilled only counts as unbilled as far as the invoices
+  // actually fall short of the order: Sage carried some lines over as closed
+  // that were in fact invoiced.
+  const closedLines = round2(sum(lines.filter(li => li.closed && !li.invoiced), li => lineAmount(li, so.taxRate)));
+  const closedAmt = Math.min(closedLines, Math.max(0, round2(amount - leftToInvoice - invoicedAmt)));
+  const extras = Math.max(0, round2(invoicedAmt - (amount - leftToInvoice - closedAmt)));
+  const revenue = round2(amount + extras - closedAmt);   // what the job is worth as billed
   const open = leftToInvoice > 0.005 || outstanding > 0.005;
   const anyInvoiced = invoices.length > 0 || lines.some(li => li.invoiced);
   // The job-tracking reading of the same numbers.
   const stage = leftToInvoice > 0.005 ? (anyInvoiced ? "partial" : "notStarted") : outstanding > 0.005 ? "invoiced" : "paid";
-  return { amount, leftToInvoice, outstanding, paid: paidAmt, cash, invoicedAmt, invoices, open, status: open ? "open" : "closed", stage };
+  return { amount, extras, closedAmt, revenue, leftToInvoice, outstanding, paid: paidAmt, cash, invoicedAmt, invoices, open, status: open ? "open" : "closed", stage };
 }
 export const STAGE_LABEL = { notStarted: "Not invoiced", partial: "Partial", invoiced: "Invoiced", paid: "Paid" };
 
@@ -147,7 +157,7 @@ export function salesOrderReport(db, { from, to, partyId, statusFilter = "all" }
     })
     .filter(r => statusFilter === "all" || r.status === statusFilter);
   const tot = k => round2(sum(rows, r => r[k]));
-  return { rows, totals: { amount: tot("amount"), leftToInvoice: tot("leftToInvoice"), outstanding: tot("outstanding"), paid: tot("paid") } };
+  return { rows, totals: { amount: tot("amount"), extras: tot("extras"), leftToInvoice: tot("leftToInvoice"), outstanding: tot("outstanding"), paid: tot("paid") } };
 }
 
 /* ---------- report 2: job tracking ---------- */
@@ -224,16 +234,17 @@ export function jobCostingReport(db, { from, to, partyId, statusFilter = "all" }
       return {
         so, prop, key: so.id, job: jobNumberOf(db, so), po: so.poNumber || "", soNumber: so.number, proposalNumber: prop?.number || "",
         description: jobDescriptionOf(db, so), customer: nameOf(db, so.customerId), date: so.date,
-        amount: s.amount, stage: s.stage, open: s.stage !== "paid",
+        amount: s.amount, extras: s.extras, revenue: s.revenue, stage: s.stage, open: s.stage !== "paid",
         specs: specsOf(db, so, prop), budget, budgetBy: budgetByKey(budget), budgetTotal: round2(sum(budget, b => b.amount)),
         items, actual, material, totalCost, hours,
         // The sheet's S column: the PO less material — what engineering earned.
-        engProfit: round2(s.amount - material),
-        profit: round2(s.amount - totalCost),
-        margin: s.amount > 0.005 ? (s.amount - totalCost) / s.amount * 100 : null,
+        // Profit is on the revenue — the PO plus any extras invoiced, less lines closed unbilled.
+        engProfit: round2(s.revenue - material),
+        profit: round2(s.revenue - totalCost),
+        margin: s.revenue > 0.005 ? (s.revenue - totalCost) / s.revenue * 100 : null,
       };
     })
     .filter(r => statusFilter === "all" || (statusFilter === "open" ? r.open : !r.open));
   const tot = k => round2(sum(rows, r => r[k]));
-  return { rows, totals: { amount: tot("amount"), budgetTotal: tot("budgetTotal"), material: tot("material"), totalCost: tot("totalCost"), profit: tot("profit"), engProfit: tot("engProfit") } };
+  return { rows, totals: { amount: tot("amount"), extras: tot("extras"), budgetTotal: tot("budgetTotal"), material: tot("material"), totalCost: tot("totalCost"), profit: tot("profit"), engProfit: tot("engProfit") } };
 }

@@ -15,7 +15,6 @@ import MachineRatesView from "./views/MachineRates.jsx";
 import QuotesView from "./views/Quotes.jsx";
 import SalesOrdersView from "./views/SalesOrders.jsx";
 import JobsView from "./views/Jobs.jsx";
-import JobCostingView from "./views/JobCosting.jsx";
 import TasksView from "./views/Tasks.jsx";
 import TimeTrackingView from "./views/TimeTracking.jsx";
 import FieldView from "./views/Field.jsx";
@@ -37,7 +36,6 @@ const NAV = [
     group: "Overview", items: [
       { k: "dashboard", label: "Dashboard", icon: ICONS.dash },
       { k: "reports", label: "Reports", icon: ICONS.reports },
-      { k: "jobCosting", label: "Job Costing", icon: ICONS.job },
     ]
   },
   {
@@ -94,7 +92,6 @@ const TITLES = {
   journal: ["Journal Entries", "What you book to the ledger by hand — payroll, adjustments, depreciation"],
   recon: ["Bank Reconciliation", "Tick what cleared the bank until the statement and the books agree"],
   reports: ["Reports", "P&L, sales tax, customers, and statements"],
-  jobCosting: ["Job Costing", "Profit per job — revenue vs labor and materials"],
   proposals: ["Proposals", "Fixture and system proposals — priced, tracked, and documented"],
   machineRates: ["Fixture Rates", "The costing table behind fixture proposal pricing"],
 };
@@ -184,7 +181,6 @@ export default function App({ session }) {
       <div className="content">
         {activeView === "dashboard" && <Dashboard {...props} />}
         {activeView === "reports" && <ReportsView {...props} />}
-        {activeView === "jobCosting" && <JobCostingView {...props} />}
         {activeView === "proposals" && <ProposalsView {...props} />}
         {activeView === "machineRates" && <MachineRatesView {...props} />}
         {activeView === "quotes" && <QuotesView {...props} />}

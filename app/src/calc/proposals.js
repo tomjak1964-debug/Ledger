@@ -114,6 +114,29 @@ export const phaseAmount = (total, pct) => round2(total * pct / 100);
 
 export const proposalTotal = p => n(p.pricing?.total);
 
+// The customer a new proposal starts on: whoever the last proposal was for,
+// so the default follows the work; before there are any, Venture Global.
+export function defaultProposalCustomer(db) {
+  const customers = db.contacts.filter(c => c.type === "customer");
+  const last = [...(db.proposals || [])].reverse().find(p => customers.some(c => c.id === p.customerId));
+  return (last && customers.find(c => c.id === last.customerId))
+    || customers.find(c => /^venture\s*global\s*engineering$/i.test((c.name || "").trim()))
+    || customers.find(c => /venture\s*global/i.test(c.name || ""))
+    || customers[0] || null;
+}
+
+// A job number for a proposal that came without one: the proposal's date as
+// YYMMDD and a two-digit sequence for that day — 261008-01, 261008-02 —
+// following any already used (taken: job numbers this run has handed out).
+export function dateJobNumber(proposals, date, taken = []) {
+  const stem = String(date || "").replace(/-/g, "").slice(2, 8);
+  const re = new RegExp("^" + stem + "-(\\d+)$");
+  const used = [...(proposals || []).map(p => p.jobNumber), ...taken]
+    .map(j => re.exec(String(j || "").trim())).filter(Boolean).map(m => Number(m[1]));
+  const next = (used.length ? Math.max(...used) : 0) + 1;
+  return stem + "-" + String(next).padStart(2, "0");
+}
+
 // TMJ Costing.xlsx defaults for the Fixture Rates seed. The sheet has no
 // torque, IO-Link or remote sonic panel figures, so those start at 0 (and a
 // 0 rate is simply left off the proposal).

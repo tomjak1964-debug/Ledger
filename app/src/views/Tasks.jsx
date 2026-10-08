@@ -3,6 +3,7 @@ import { money, fmtDate, nameOf } from "../lib/helpers.js";
 import { lineTotals } from "../calc/ledger.js";
 import { Ico, ICONS, Empty, Modal, SortTh, useTableSort } from "../components/ui.jsx";
 import InvoiceFromSOModal from "../components/InvoiceFromSOModal.jsx";
+import { invoicePdf } from "../lib/invoicePdf.js";
 
 // Work waiting on the user. Today's only task type is "create invoice" — raised
 // when a job has items marked ready. Acting on it opens the invoice modal
@@ -17,6 +18,8 @@ export default function TasksView({ db, actions, toast, openDoc, readOnly }) {
   const [confirmBatch, setConfirmBatch] = useState(null);   // { withTime }
   const [queue, setQueue] = useState(null);    // { sos, i } — the one-by-one run
   const [results, setResults] = useState(null); // what a run produced
+  const [handled, setHandled] = useState({});   // invoice id -> "printed" | "saved"
+  const [showHandled, setShowHandled] = useState(false);
   const [busy, setBusy] = useState(false);
   const openTasks = (db.tasks || []).filter(t => t.status === "open");
   const soOf = t => db.salesOrders.find(s => s.id === t.salesOrderId);
@@ -38,6 +41,23 @@ export default function TasksView({ db, actions, toast, openDoc, readOnly }) {
     if (inv) { toast("Invoice " + inv.number + " generated"); if (print) openDoc("invoice", inv); }
     return inv;
   };
+  // After a run, each invoice is printed or saved and then drops off the list,
+  // so what is left is what still needs doing.
+  const markHandled = (inv, how) => setHandled(h => ({ ...h, [inv.id]: how }));
+  const printInv = (inv) => openDoc("invoice", inv, { autoPrint: true, onPrinted: () => markHandled(inv, "printed") });
+  const saveInv = async (inv) => {
+    try {
+      const { blob, filename } = await invoicePdf(inv, db);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      // Saved to send is on its way out, the same as printed.
+      await actions.markInvoicePrinted(inv.id, true);
+      markHandled(inv, "saved");
+      toast(filename + " saved");
+    } catch (e) { toast("Couldn't save the PDF: " + (e.message || e)); }
+  };
+  const openResults = (list) => { setHandled({}); setShowHandled(false); setResults(list); };
   const dismiss = async (t) => { if (confirm("Dismiss this task?") && await actions.setTaskStatus(t.id, "dismissed")) toast("Task dismissed"); };
 
   // Create every selected job's invoice in one pass. Sequential on purpose:
@@ -56,7 +76,7 @@ export default function TasksView({ db, actions, toast, openDoc, readOnly }) {
     setBusy(false);
     setConfirmBatch(null);
     setSel({});
-    setResults(out);
+    openResults(out);
     const made = out.filter(r => r.inv).length;
     toast(made ? `${made} invoice${made === 1 ? "" : "s"} created` : "No invoices created");
   };
@@ -69,7 +89,7 @@ export default function TasksView({ db, actions, toast, openDoc, readOnly }) {
   const finishQueue = () => {
     setQueue(null);
     setSel({});
-    if (made.current.length) setResults(made.current.slice());
+    if (made.current.length) openResults(made.current.slice());
   };
   // The dialog calls onClose after a successful generate too, so advancing
   // belongs here and nowhere else — otherwise a job gets skipped.
@@ -147,20 +167,36 @@ export default function TasksView({ db, actions, toast, openDoc, readOnly }) {
       </label>
     </Modal>}
 
-    {results && <Modal title={`${results.filter(r => r.inv).length} Invoice${results.filter(r => r.inv).length === 1 ? "" : "s"} Created`} onClose={() => setResults(null)}
-      foot={<button className="btn primary" onClick={() => setResults(null)}><Ico d={ICONS.check} size={15} />Done</button>}>
-      <table><thead><tr><th>Job</th><th>Invoice</th><th>Date</th><th className="num">Total</th><th></th></tr></thead>
-        <tbody>{results.map((r, i) => <tr key={i}>
+    {results && (() => {
+      const created = results.filter(r => r.inv);
+      const left = results.filter(r => !r.inv || !handled[r.inv.id]);
+      const done = created.filter(r => handled[r.inv.id]);
+      const rows = showHandled ? results : left;
+      return <Modal title={`${created.length} Invoice${created.length === 1 ? "" : "s"} Created`} onClose={() => setResults(null)}
+      foot={<>
+        {done.length > 0 && <label className="subtle" style={{ marginRight: "auto", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+          <input type="checkbox" checked={showHandled} onChange={e => setShowHandled(e.target.checked)} />Show printed / saved ({done.length})</label>}
+        <button className="btn primary" onClick={() => setResults(null)}><Ico d={ICONS.check} size={15} />Done</button></>}>
+      {created.length > 0 && <p className="subtle" style={{ marginTop: 0 }}>
+        {done.length === created.length ? "Every invoice has been printed or saved."
+          : `${created.length - done.length} to print or save. Each drops off the list once it's done.`}</p>}
+      {rows.length > 0 && <table><thead><tr><th>Job</th><th>Invoice</th><th>Date</th><th className="num">Total</th><th></th></tr></thead>
+        <tbody>{rows.map((r, i) => <tr key={i}>
           <td className="doc-id">{r.so?.number || "—"}</td>
           <td className="doc-id">{r.inv ? r.inv.number : <span className="subtle">{r.skipped || "not created"}</span>}</td>
           <td className="subtle">{r.inv ? fmtDate(r.inv.date) : "—"}</td>
           <td className="num mono">{r.inv ? money(lineTotals(r.inv.lineItems, r.inv.taxRate).total) : "—"}</td>
-          <td style={{ textAlign: "right" }}>{r.inv &&
-            <button className="btn sm" onClick={() => openDoc("invoice", r.inv)}><Ico d={ICONS.print} size={14} />Print</button>}</td>
-        </tr>)}</tbody></table>
+          <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{r.inv && (handled[r.inv.id]
+            ? <span className="subtle">{handled[r.inv.id] === "saved" ? "Saved" : "Printed"}</span>
+            : <>
+              <button className="btn sm" title="Open the print dialog" onClick={() => printInv(r.inv)}><Ico d={ICONS.print} size={14} />Print</button>
+              <button className="btn sm" style={{ marginLeft: 6 }} title={"Save " + r.inv.number + ".pdf without printing"} onClick={() => saveInv(r.inv)}><Ico d={ICONS.download} size={14} />Save</button>
+            </>)}</td>
+        </tr>)}</tbody></table>}
       {results.some(r => r.failed) && <p className="subtle" style={{ marginBottom: 0, color: "var(--neg)" }}>
         A job with no invoice against it wasn't written — the reason was shown at the time. Its task is still open, so nothing is lost.</p>}
-    </Modal>}
+    </Modal>;
+    })()}
 
     {queue && queue.sos[queue.i] && <InvoiceFromSOModal so={queue.sos[queue.i]} db={db} onlyReady
       queue={{ index: queue.i + 1, total: queue.sos.length, onStop: finishQueue }}

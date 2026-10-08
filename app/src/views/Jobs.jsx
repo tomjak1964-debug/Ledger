@@ -13,12 +13,14 @@ export default function JobsView({ db, actions, toast, readOnly }) {
   const [showClosed, setShowClosed] = useState(false);
   const closedCount = db.salesOrders.filter(s => s.status !== "open").length;
   const jobs = db.salesOrders.filter(s => showClosed || s.status === "open");
-  const readyOf = so => (so.lineItems || []).filter(li => li.ready).length;
+  // Available = ready to invoice: marked ready and not yet billed or closed.
+  const availableOf = so => (so.lineItems || []).filter(li => li.ready && !li.invoiced && !li.closed).length;
+  const invoicedOf = so => (so.lineItems || []).filter(li => li.invoiced).length;
   const { sorted: jobRows, sort, onSort } = useTableSort(jobs.slice().reverse(), {
     number: so => so.number, job: so => jobNumberOf(db, so), desc: so => jobDescriptionOf(db, so),
     customer: so => nameOf(db, so.customerId), po: so => so.poNumber || "",
-    progress: so => { const t = (so.lineItems || []).length; return t ? readyOf(so) / t : 0; },
-    ready: so => readyOf(so),
+    progress: so => { const t = (so.lineItems || []).length; return t ? invoicedOf(so) / t : 0; },
+    available: so => availableOf(so),
   });
 
   const toggleReady = async (so, li, ready) => {
@@ -39,14 +41,16 @@ export default function JobsView({ db, actions, toast, readOnly }) {
           <SortTh label="Customer" col="customer" sort={sort} onSort={onSort} />
           <SortTh label="PO #" col="po" sort={sort} onSort={onSort} />
           <SortTh label="Progress" col="progress" sort={sort} onSort={onSort} />
-          <SortTh label="Ready / Total" col="ready" sort={sort} onSort={onSort} num />
+          <SortTh label="Available / Total" col="available" sort={sort} onSort={onSort} num />
           <th></th></tr></thead>
           <tbody>{jobRows.map(so => {
             const lines = so.lineItems || [];
             const total = lines.length;
-            const ready = lines.filter(li => li.ready).length;
-            const invoiced = lines.filter(li => li.invoiced).length;
-            const pct = total ? Math.round((ready / total) * 100) : 0;
+            const available = availableOf(so);
+            const invoiced = invoicedOf(so);
+            // The bar fills as lines are billed; the available share shows ahead of it.
+            const pctInv = total ? (invoiced / total) * 100 : 0;
+            const pctAvail = total ? (available / total) * 100 : 0;
             const isOpen = open === so.id;
             return <Fragment key={so.id}>
               <tr className="clickable" onClick={() => setOpen(isOpen ? null : so.id)}>
@@ -57,11 +61,14 @@ export default function JobsView({ db, actions, toast, readOnly }) {
                 <td className="mono subtle">{so.poNumber || "—"}</td>
                 <td style={{ minWidth: 160 }}>
                   <div style={{ height: 8, background: "var(--canvas)", borderRadius: 5, overflow: "hidden" }}>
-                    <div style={{ width: pct + "%", height: "100%", background: "var(--accent)" }}></div>
+                    <div style={{ display: "flex", height: "100%" }}>
+                      <div style={{ width: pctInv + "%", background: "var(--billed)" }}></div>
+                      <div style={{ width: pctAvail + "%", background: "var(--accent)" }}></div>
+                    </div>
                   </div>
-                  <span className="subtle" style={{ fontSize: 12 }}>{pct}% ready{invoiced ? ` · ${invoiced} invoiced` : ""}</span>
+                  <span className="subtle" style={{ fontSize: 12 }}>{available} available · {invoiced} invoiced</span>
                 </td>
-                <td className="num mono">{ready} / {total}</td>
+                <td className="num mono">{available} / {total}</td>
                 <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                   <button className="btn ghost icon" title="Job costs — what's been spent on this job" onClick={e => { e.stopPropagation(); setCostsFor(so); }}><Ico d={ICONS.money} size={15} /></button>
                   <Ico d={ICONS.arrow} size={14} /></td>

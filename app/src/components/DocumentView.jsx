@@ -6,7 +6,7 @@ import { termsLabel } from "../lib/terms.js";
 import { isCreditMemo } from "../lib/credits.js";
 import { Ico, ICONS } from "./ui.jsx";
 
-export default function DocumentView({ kind, doc, contact, settings, onClose, onPrinted }) {
+export default function DocumentView({ kind, doc, contact, settings, onClose, onPrinted, autoPrint }) {
   // While a document overlay is open, flag the body so print hides the app
   // content behind it (otherwise the list page prints along with the document),
   // and make the tab title the document number: Print / Save PDF offers the
@@ -19,6 +19,13 @@ export default function DocumentView({ kind, doc, contact, settings, onClose, on
     return () => { document.body.classList.remove("doc-open"); document.title = title; };
   }, [doc?.number]);
   const print = () => { onPrinted?.(); window.print(); };
+  // Opened just to print it: once the page has laid out, bring up the print
+  // dialog, then close — window.print() returns when the dialog does.
+  useEffect(() => {
+    if (!autoPrint) return;
+    const t = setTimeout(() => { print(); onClose?.(); }, 250);
+    return () => clearTimeout(t);
+  }, []);   // eslint-disable-line react-hooks/exhaustive-deps
   if (kind === "invoice") return <InvoiceDoc inv={doc} contact={contact} settings={settings} onClose={onClose} print={print} />;
   const t = lineTotals(doc.lineItems, doc.taxRate);
   const isQuote = kind === "quote";

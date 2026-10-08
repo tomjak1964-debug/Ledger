@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { uid, money, fmtDate, todayISO, nameOf, cls } from "../lib/helpers.js";
-import { proposalConfig, priceProposal, ioBlocks, phaseAmount, SPEC_FIELDS, DEFAULT_PHASES } from "../calc/proposals.js";
+import { proposalConfig, priceProposal, ioBlocks, phaseAmount, SPEC_FIELDS, DEFAULT_PHASES, defaultProposalCustomer } from "../calc/proposals.js";
 import { Ico, ICONS, Badge, Empty, Field, MenuItem, ActionMenu, Modal, SortTh, useTableSort } from "../components/ui.jsx";
 import { downloadProposalDocx, proposalDocxBlob, proposalFileStem } from "../lib/proposalDocx.js";
 import EmailModal from "../components/EmailModal.jsx";
@@ -96,15 +96,18 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
     date: p => p.date || "", status: p => p.status || "", total: p => Number(p.pricing?.total) || 0,
   });
 
+  // A new proposal starts on the customer the last one was for (Venture Global
+  // before there are any), with that customer's contact.
+  const startCustomer = defaultProposalCustomer(db);
   const startNewControls = () => setEdit({
-    id: uid(), _new: true, kind: "controls", rev: 0, number: "(assigned at save)", customerId: customers[0]?.id || "",
-    contactPersonId: "", contactName: customers[0]?.contact || "", date: todayISO(), status: "draft", jobNumber: "", description: "",
+    id: uid(), _new: true, kind: "controls", rev: 0, number: "(assigned at save)", customerId: startCustomer?.id || "",
+    contactPersonId: "", contactName: startCustomer?.contact || "", date: todayISO(), status: "draft", jobNumber: "", description: "",
     location: "", machineTypeId: "", specs: newEstimate(cfg), pricing: {},
     phases: cfg.controlsPhases.engineering.map(ph => ({ ...ph })), notes: "",
   });
   const startNew = () => setEdit({
-    id: uid(), _new: true, kind: "machine", rev: 0, number: "(assigned at save)", customerId: customers[0]?.id || "",
-    contactPersonId: "", contactName: customers[0]?.contact || "", date: todayISO(), status: "draft", jobNumber: "", description: "",
+    id: uid(), _new: true, kind: "machine", rev: 0, number: "(assigned at save)", customerId: startCustomer?.id || "",
+    contactPersonId: "", contactName: startCustomer?.contact || "", date: todayISO(), status: "draft", jobNumber: "", description: "",
     location: cfg.location, machineTypeId: db.machineTypes[0]?.id || "",
     specs: { ...emptySpecs(), dataNational: true, ioBlocks: "" },
     pricing: {}, phases: cfg.phases.map(ph => ({ ...ph })), notes: "",
@@ -232,7 +235,9 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
       <div className="row">
         <Field label="Customer"><select className="select" value={x.customerId} onChange={e => {
           const cid = e.target.value, cc = db.contacts.find(c => c.id === cid)?.contact || "";
-          setX(prev => ({ ...prev, customerId: cid, contactPersonId: "", contactName: prev.contactName || cc }));
+          // The contact belongs to the customer: a new customer brings its own
+          // contact, or none — never the one picked for the customer before.
+          setX(prev => ({ ...prev, customerId: cid, contactPersonId: "", contactName: cc }));
         }}>
           <option value="">Select customer…</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select></Field>

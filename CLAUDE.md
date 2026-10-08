@@ -385,7 +385,10 @@ unbilled time (a tick turns time off for the whole run), and what the invoice co
 sequentially, so each claims its own number; a job the store refuses is reported and its task stays open
 rather than stopping the run. **Review One by One** opens the normal `InvoiceFromSOModal` per job with a
 `queue` prop: it shows *2 of 5*, Cancel reads **Skip**, and **Stop** ends the run. Either way the run ends
-on a list of what was created, with a Print button per invoice. The dialog closes itself after a
+on a list of what was created with **Print** (straight to the print dialog — `openDoc(kind, doc, { autoPrint,
+onPrinted })` opens the document, prints and closes it) and **Save** (downloads `INV-….pdf` from `invoicePdf()`
+without the dialog, and marks the invoice printed) per invoice; each drops off the list once it's printed or
+saved, so what's left is what still needs doing (*Show printed / saved* brings them back). The dialog closes itself after a
 successful generate, so the queue advances in `onClose` and nowhere else — advancing in `onGenerate` too
 skips a job.
 
@@ -412,7 +415,12 @@ number. The preview prices every row, pre-matches the machine type by name (*Son
 and gives any row it can't match a dropdown — rates are never invented. Where the chart names a type
 from the TMJ rate card that isn't set up yet, one button adds it: `seedMachineRates()` skips names
 already present, so it both seeds an empty list and tops one up. Proposals are written one at a time so
-each claims its own number; the chart's quote number and end user go in the notes.
+each claims its own number; the chart's quote number and end user go in the notes. A row with no job number
+takes the quote number as its job number, and with neither, the proposal date and a sequence for the day
+(`dateJobNumber()` in `calc/proposals.js` — `261008-01`, `261008-02`…, following any already used).
+**A new proposal starts on the customer the last proposal was for** (`defaultProposalCustomer()`: the newest
+proposal's customer, else Venture Global Engineering), with that customer's contact; the quote-chart import
+uses the same default. Changing the customer replaces the contact with the new customer's own, or blank.
 
 **A printable document overlay belongs outside `.main`.** Printing hides the app behind the document
 with `body.doc-open .main{display:none}` (`styles.css`), which needs both halves: the overlay adds
@@ -753,6 +761,10 @@ applied twice to the same document, which is how the original import mis-filed f
 payments. `tools/so-report-sql.py` turns a Sage Sales Order Report PDF into a SQL data fix
 (kept in `app/supabase/data-fixes/`) that fills blank PO numbers and brings each SO line's
 invoiced / closed state into line with Sage's shipped / remaining quantities. See `tools/README.md`.
+
+**The Jobs page counts lines, not percentages:** Progress reads *N available · N invoiced* — available is
+ready to invoice (marked ready, not yet billed or closed) — over a bar that fills orange as lines are invoiced
+and blue for what's available, and the count column is **Available / Total**.
 
 **Jobs: tracking and costing** (`src/calc/jobs.js`, `views/JobReports.jsx`, migration 028). A job is a sales
 order, and it now carries what the shop's job-tracking sheet did: `jobNumber` (the job and fixture, `4724-F3`),

@@ -266,7 +266,7 @@ function TimeCategoriesCard({ db, actions, toast }) {
   const del = async (id) => { if (confirm("Delete this category? Existing time entries keep their snapshot rate.") && await actions.deleteTimeCategory(id)) toast("Removed"); };
   return <div className="card" style={{ marginBottom: 16 }}>
     <div className="card-head"><h3>Time Categories</h3>
-      <button className="btn primary sm" style={{ marginLeft: "auto" }} onClick={() => setEdit({ id: uid(), _new: true, name: "", rate: 0, costRate: 0, active: true, sort: cats.length })}><Ico d={ICONS.plus} size={14} />New Category</button>
+      <button className="btn primary sm" style={{ marginLeft: "auto" }} onClick={() => setEdit({ id: uid(), _new: true, name: "", rate: "", costRate: "", active: true, sort: cats.length })}><Ico d={ICONS.plus} size={14} />New Category</button>
     </div>
     <div className="card-body">
       <p className="subtle" style={{ marginTop: 0 }}>Categories and flat hourly rates users pick when logging time. The rate is snapshotted onto each time entry.</p>
@@ -284,8 +284,8 @@ function TimeCategoriesCard({ db, actions, toast }) {
       {edit && <div style={{ background: "var(--canvas)", borderRadius: 9, padding: 12, marginTop: 10 }}>
         <div className="row">
           <Field label="Name"><input className="input" value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} placeholder="Engineering" /></Field>
-          <Field label="Bill Rate ($/hr)" hint="Charged to the customer"><input className="input mono" type="number" step="any" value={edit.rate} onChange={e => setEdit({ ...edit, rate: e.target.value })} /></Field>
-          <Field label="Cost Rate ($/hr)" hint="What it costs you"><input className="input mono" type="number" step="any" value={edit.costRate || 0} onChange={e => setEdit({ ...edit, costRate: e.target.value })} /></Field>
+          <Field label="Bill Rate ($/hr)" hint="Charged to the customer"><input className="input mono" type="number" step="any" value={edit.rate ?? ""} placeholder="0.00" onChange={e => setEdit({ ...edit, rate: e.target.value })} /></Field>
+          <Field label="Cost Rate ($/hr)" hint="What it costs you"><input className="input mono" type="number" step="any" value={edit.costRate ?? ""} placeholder="0.00" onChange={e => setEdit({ ...edit, costRate: e.target.value })} /></Field>
           <Field label="Active"><select className="select" value={edit.active ? "1" : "0"} onChange={e => setEdit({ ...edit, active: e.target.value === "1" })}><option value="1">Active</option><option value="0">Inactive</option></select></Field>
         </div>
         <div style={{ display: "flex", gap: 8 }}>

@@ -36,7 +36,7 @@ const th = (res) => { if (res.error) throw res.error; return res.data; };
 
 async function fetchAll() {
   const [settings, sequences, contacts, catalog, quotes, qli, sos, soli, invoices, invli, payments, bills, expenses,
-    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments, pos, poli, accounts, journal, recons, cleared, jobCosts] = await Promise.all([
+    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments, pos, poli, accounts, journal, recons, cleared, jobCosts, serviceReports] = await Promise.all([
     supabase.from("settings").select("*").maybeSingle(),
     supabase.from("org_sequences").select("*"),
     supabase.from("contacts").select("*").order("created_at"),
@@ -67,6 +67,7 @@ async function fetchAll() {
     supabase.from("bank_reconciliations").select("*").order("statement_date"),
     supabase.from("bank_cleared_items").select("*"),
     supabase.from("job_costs").select("*").order("date"),
+    supabase.from("service_reports").select("*").order("date", { ascending: false }),
   ]);
   return {
     settingsRow: th(settings), sequences: th(sequences),
@@ -90,6 +91,7 @@ async function fetchAll() {
     recons: recons && !recons.error ? (recons.data || []) : [],            // migration 027
     cleared: cleared && !cleared.error ? (cleared.data || []) : [],
     jobCosts: jobCosts && !jobCosts.error ? (jobCosts.data || []) : [],      // migration 028
+    serviceReports: serviceReports && !serviceReports.error ? (serviceReports.data || []) : [],   // migration 029
   };
 }
 
@@ -128,6 +130,7 @@ function assemble(raw) {
     bankReconciliations: (raw.recons || []).map(A.reconFromRow),
     bankCleared: (raw.cleared || []).map(A.clearedFromRow),
     jobCosts: (raw.jobCosts || []).map(A.jobCostFromRow),
+    serviceReports: (raw.serviceReports || []).map(A.serviceReportFromRow),
   };
 }
 
@@ -526,6 +529,99 @@ export function useLedger(session, onError) {
       try {
         th(await supabase.from("time_entries").delete().eq("id", id));
         setDb(d => ({ ...d, timeEntries: d.timeEntries.filter(e => e.id !== id) }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
+    /* ---- service reports (migration 029) ----
+       One write per report: the job (made first when it's a new one), the
+       report, its hours as time entries pointing back at it, and any billed
+       parts as ready lines on the job's sales order. */
+    async saveServiceReport(report, { lines = [], newJob = null } = {}) {
+      try {
+        const d0 = dbRef.current;
+        let soId = report.salesOrderId;
+        // A visit that isn't on a job yet opens one: an open sales order with
+        // the job number typed, so its time and parts bill like any job's.
+        if (newJob) {
+          const jobNumber = (newJob.jobNumber || "").trim();
+          if (!newJob.customerId) throw new Error("Pick the customer for the new job.");
+          if (!jobNumber) throw new Error("Enter a job number for the new job.");
+          if (d0.salesOrders.some(s => (s.jobNumber || "").trim().toLowerCase() === jobNumber.toLowerCase()))
+            throw new Error(`Job ${jobNumber} already exists — pick it from the list instead.`);
+          const so = {
+            id: uid(), number: d0.settings.soPrefix + "-" + pad4(await claimNumber("so")),
+            quoteId: "", customerId: newJob.customerId, poNumber: (newJob.poNumber || "").trim(), date: report.date || todayISO(),
+            status: "open", taxRate: 0, jobNumber, description: (newJob.description || "").trim(), specs: {}, budget: [], lineItems: [],
+          };
+          th(await supabase.from("sales_orders").insert(A.soToRow(so)));
+          setDb(d => ({ ...d, salesOrders: [...d.salesOrders, so] }));
+          soId = so.id;
+        }
+        if (!soId) throw new Error("Pick the job this visit was for, or enter a new job.");
+        const isNew = !!report._new;
+        const sr = { ...report, salesOrderId: soId };
+        delete sr._new;
+        if (isNew) sr.number = "SR-" + pad4(await claimNumber("service"));
+
+        // Billed parts with a price go onto the job as ready lines, once.
+        const so = dbRef.current.salesOrders.find(s => s.id === soId);
+        const addLines = [];
+        sr.parts = (sr.parts || []).filter(pt => (pt.desc || "").trim() || Number(pt.qty)).map(pt => {
+          if (!pt.bill || pt.soLineId || !(Number(pt.unitPrice) > 0)) return pt;
+          const line = { id: uid(), desc: `${pt.desc} (${sr.number})`, qty: Number(pt.qty) || 1, unit: "", unitPrice: Number(pt.unitPrice) || 0, ready: true };
+          addLines.push(line);
+          return { ...pt, soLineId: line.id };
+        });
+        th(await supabase.from("service_reports").upsert(A.serviceReportToRow(sr)));
+        if (addLines.length) {
+          const start = (so?.lineItems || []).length;
+          th(await supabase.from("sales_order_line_items").insert(A.soLineItemsToRows(addLines, so.id).map((r, i) => ({ ...r, sort: start + i }))));
+        }
+
+        // Hours: each line is a time entry. An entry already invoiced is left
+        // as it was; the rest are rewritten, and lines taken off are deleted.
+        const cats = d0.timeCategories || [];
+        const existing = (d0.timeEntries || []).filter(t => t.serviceReportId === sr.id);
+        const locked = existing.filter(t => t.invoiceId);
+        const keep = lines.filter(l => (Number(l.hours) || 0) > 0 && l.categoryId && !locked.some(t => t.id === l.id));
+        const entries = keep.map(l => {
+          const was = existing.find(t => t.id === l.id);
+          const cat = cats.find(c => c.id === l.categoryId);
+          const changed = !was || was.categoryId !== l.categoryId || Number(was.hours) !== Number(l.hours);
+          return {
+            id: was ? was.id : uid(), salesOrderId: soId, categoryId: l.categoryId, date: sr.date, hours: Number(l.hours) || 0,
+            rate: was && was.categoryId === l.categoryId ? was.rate : cat?.rate || 0, cost: was && was.categoryId === l.categoryId ? was.cost : cat?.costRate || 0,
+            description: l.description || "", userEmail: sr.userEmail || session.user.email, invoiceId: "",
+            // Approval stands unless the hours or category changed.
+            approved: !!was?.approved && !changed, approvedBy: was && !changed ? was.approvedBy : "", serviceReportId: sr.id,
+          };
+        });
+        const drop = existing.filter(t => !t.invoiceId && !entries.some(e => e.id === t.id)).map(t => t.id);
+        if (drop.length) th(await supabase.from("time_entries").delete().in("id", drop));
+        if (entries.length) th(await supabase.from("time_entries").upsert(entries.map(A.timeEntryToRow)));
+
+        setDb(d => ({
+          ...d,
+          serviceReports: upsertList(d.serviceReports || [], sr),
+          timeEntries: [...entries, ...(d.timeEntries || []).filter(t => !drop.includes(t.id) && !entries.some(e => e.id === t.id))],
+          salesOrders: addLines.length ? d.salesOrders.map(s => s.id === soId ? { ...s, status: "open", lineItems: [...(s.lineItems || []), ...addLines] } : s) : d.salesOrders,
+        }));
+        if (addLines.length) {
+          if (so?.status !== "open") th(await supabase.from("sales_orders").update({ status: "open" }).eq("id", soId));
+          await reconcileJobTask(soId);
+        }
+        return sr;
+      } catch (e) { return fail(e); }
+    },
+    // Deleting a report deletes its hours, unless any are invoiced; billed
+    // parts already on the job stay there (they're the job's lines now).
+    async deleteServiceReport(id) {
+      try {
+        const te = (dbRef.current.timeEntries || []).filter(t => t.serviceReportId === id);
+        if (te.some(t => t.invoiceId)) throw new Error("Some of this report's hours are on an invoice, so it can't be deleted.");
+        if (te.length) th(await supabase.from("time_entries").delete().in("id", te.map(t => t.id)));
+        th(await supabase.from("service_reports").delete().eq("id", id));
+        setDb(d => ({ ...d, serviceReports: (d.serviceReports || []).filter(s => s.id !== id), timeEntries: d.timeEntries.filter(t => t.serviceReportId !== id) }));
         return true;
       } catch (e) { return fail(e); }
     },
@@ -1493,7 +1589,7 @@ export function useLedger(session, onError) {
 async function wipe(orgId) {
   // Children first (payments have no FK; line items cascade from parents).
   for (const table of ["payments", "quote_line_items", "sales_order_line_items", "invoice_line_items",
-    "job_costs", "quotes", "sales_orders", "invoices", "proposals", "contact_people", "bills", "expenses", "journal_entries", "bank_cleared_items", "bank_reconciliations",
+    "job_costs", "service_reports", "quotes", "sales_orders", "invoices", "proposals", "contact_people", "bills", "expenses", "journal_entries", "bank_cleared_items", "bank_reconciliations",
     "contacts", "catalog_items", "org_sequences"]) {
     const { error } = await supabase.from(table).delete().eq("org_id", orgId);
     if (error) throw error;

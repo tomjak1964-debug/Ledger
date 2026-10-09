@@ -74,7 +74,7 @@ export function ActionMenu({ children, title = "More", minWidth = 180 }) {
 
 // A textarea that grows with its content — line-item descriptions are typed
 // here, and Enter starts a new line rather than doing nothing.
-export function AutoTextarea({ value, onChange, placeholder, className, style, rows = 1 }) {
+export function AutoTextarea({ value, onChange, placeholder, className, style, rows = 1, disabled }) {
   const ref = useRef();
   useLayoutEffect(() => {
     const el = ref.current;
@@ -83,7 +83,7 @@ export function AutoTextarea({ value, onChange, placeholder, className, style, r
     el.style.height = el.scrollHeight + "px";
   }, [value]);
   return <textarea ref={ref} rows={rows} className={(className || "input") + " grow"} style={style}
-    value={value ?? ""} placeholder={placeholder} onChange={onChange} />;
+    value={value ?? ""} placeholder={placeholder} onChange={onChange} disabled={disabled} />;
 }
 
 export const Ico = ({ d, size = 17 }) => <svg className="ico" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>;

@@ -129,10 +129,13 @@ export function soSummary(db, so) {
   const closedAmt = Math.min(closedLines, Math.max(0, round2(amount - leftToInvoice - invoicedAmt)));
   const extras = Math.max(0, round2(invoicedAmt - (amount - leftToInvoice - closedAmt)));
   const revenue = round2(amount + extras - closedAmt);   // what the job is worth as billed
-  const open = leftToInvoice > 0.005 || outstanding > 0.005;
+  // Hours logged to the job and not yet invoiced keep it open: a service job
+  // can be nothing but time.
+  const unbilledTime = round2(sum((db.timeEntries || []).filter(t => t.salesOrderId === so.id && !t.invoiceId), t => n(t.hours) * n(t.rate)));
+  const open = leftToInvoice > 0.005 || outstanding > 0.005 || unbilledTime > 0.005;
   const anyInvoiced = invoices.length > 0 || lines.some(li => li.invoiced);
   // The job-tracking reading of the same numbers.
-  const stage = leftToInvoice > 0.005 ? (anyInvoiced ? "partial" : "notStarted") : outstanding > 0.005 ? "invoiced" : "paid";
+  const stage = leftToInvoice > 0.005 || unbilledTime > 0.005 ? (anyInvoiced ? "partial" : "notStarted") : outstanding > 0.005 ? "invoiced" : "paid";
   return { amount, extras, closedAmt, revenue, leftToInvoice, outstanding, paid: paidAmt, cash, invoicedAmt, invoices, open, status: open ? "open" : "closed", stage };
 }
 export const STAGE_LABEL = { notStarted: "Not invoiced", partial: "Partial", invoiced: "Invoiced", paid: "Paid" };

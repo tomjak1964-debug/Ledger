@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { uid, money, fmtDate, todayISO, nameOf } from "../lib/helpers.js";
 import { Ico, ICONS, Empty, Field, Badge, SortTh, useTableSort } from "../components/ui.jsx";
+import ServiceReports from "../components/ServiceReports.jsx";
 
 // Log time against a job. Pick the job, add one or more lines (date, category,
 // hours, description), and save. The category's flat rate is snapshotted onto
@@ -82,6 +83,8 @@ export default function TimeTrackingView({ db, actions, toast, readOnly, session
         </div>
       </div>
     </div>}
+
+    <ServiceReports db={db} actions={actions} toast={toast} readOnly={readOnly} session={session} isAdmin={isAdmin} />
 
     {isAdmin && (() => {
       return <div className="card" style={{ marginBottom: 16 }}>

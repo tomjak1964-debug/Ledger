@@ -78,7 +78,8 @@ export default function ExpensesView({ db, actions, toast, readOnly }) {
         <Field label="Expense Account" hint={edit.account ? "Where this expense posts" : "Default for " + (edit.category || "this category") + ": " + (accountLabel(db, expenseAccountOfExpense(db, edit)) || "none")}>
           <AccountSelect db={db} value={edit.account} onChange={v => setEdit({ ...edit, account: v })} groups={["expense", "cos", "liability", "asset"]} blank="— category default —" /></Field>
         <Field label="Paid From" hint={"Default: " + (accountLabel(db, accountSettings(db.settings).cash) || "Checking")}>
-          <AccountSelect db={db} value={edit.cashAccount} onChange={v => setEdit({ ...edit, cashAccount: v })} types={["Cash"]} blank="— default cash account —" /></Field>
+          <AccountSelect db={db} value={edit.cashAccount} onChange={v => setEdit({ ...edit, cashAccount: v })} types={["Cash"]}
+            extra={(accountSettings(db.settings).cards || []).map(c => String(c.account))} blank="— default cash account —" /></Field>
       </div>
       <JobCostPicker db={db} salesOrderId={edit.salesOrderId} costCategory={edit.costCategory}
         hint="Attribute this cost to a sales order for job costing" onChange={patch => setEdit({ ...edit, ...patch })} />

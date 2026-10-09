@@ -145,7 +145,7 @@ export function parseStatementCsv(text, { year } = {}) {
   return { period: lines.length ? { from: lines[0].date, to: lines[lines.length - 1].date } : null, endingBalance: last, lines };
 }
 
-function csvRows(text) {
+export function csvRows(text) {
   const rows = [], sep = /\t/.test(text.split("\n")[0]) ? "\t" : ",";
   let row = [], cell = "", q = false;
   for (let i = 0; i < text.length; i++) {

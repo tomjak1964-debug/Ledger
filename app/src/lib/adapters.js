@@ -190,3 +190,16 @@ export const reconFromRow = r => ({ id: r.id, account: String(r.account || ""), 
 export const clearedToRow = c => ({ id: c.id, reconciliation_id: c.reconciliationId, account: String(c.account ?? ""), item_key: c.itemKey, item_date: dateOrNull(c.itemDate), amount: num(c.amount) });
 export const clearedFromRow = r => ({ id: r.id, reconciliationId: r.reconciliation_id, account: String(r.account || ""), itemKey: r.item_key, itemDate: r.item_date || "", amount: num(r.amount) });
 export const journalEntryFromRow = r => ({ id: r.id, number: r.number || "", date: r.date, ref: r.ref || "", memo: r.memo || "", lines: (Array.isArray(r.lines) ? r.lines : []).map(journalLine) });
+
+// Credit card statements (migration 031). lines: [{ id, date, desc, amount,
+// kind, use, account, expenseId }] — amount as the card prints it.
+const cardLine = l => ({ id: l.id || crypto.randomUUID(), date: l.date || "", desc: l.desc ?? "", amount: num(l.amount), kind: l.kind || "charge",
+  use: l.use || "", account: String(l.account ?? ""), ...(l.expenseId ? { expenseId: l.expenseId } : {}) });
+export const cardStatementToRow = s => ({ id: s.id, card_account: String(s.cardAccount), card_name: s.cardName ?? "", closing_date: dateOrNull(s.closingDate),
+  period_from: dateOrNull(s.periodFrom), previous_balance: s.previousBalance == null || s.previousBalance === "" ? null : num(s.previousBalance),
+  new_balance: s.newBalance == null || s.newBalance === "" ? null : num(s.newBalance), business_total: num(s.businessTotal), personal_total: num(s.personalTotal),
+  lines: (s.lines || []).map(cardLine), draw_entry_id: idOrNull(s.drawEntryId), opening_entry_id: idOrNull(s.openingEntryId) });
+export const cardStatementFromRow = r => ({ id: r.id, cardAccount: String(r.card_account || ""), cardName: r.card_name || "", closingDate: r.closing_date || "",
+  periodFrom: r.period_from || "", previousBalance: r.previous_balance == null ? null : num(r.previous_balance), newBalance: r.new_balance == null ? null : num(r.new_balance),
+  businessTotal: num(r.business_total), personalTotal: num(r.personal_total), lines: (Array.isArray(r.lines) ? r.lines : []).map(cardLine),
+  drawEntryId: r.draw_entry_id || "", openingEntryId: r.opening_entry_id || "", createdAt: r.created_at });

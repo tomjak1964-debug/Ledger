@@ -19,7 +19,7 @@ import { proposalConfig, phaseAmount } from "../calc/proposals.js";
 import { proposalSpecs, proposalBudget } from "../calc/jobs.js";
 import { round2, lineTotals, balance } from "../calc/ledger.js";
 import { checkNumberTaken, isCheckPayment, normRef } from "./checks.js";
-import { incomeAccountOf, expenseAccountOfBill } from "../calc/accounts.js";
+import { incomeAccountOf, expenseAccountOfBill, accountSettings } from "../calc/accounts.js";
 
 const SEQ_TYPES = ["quote", "so", "invoice", "bill"];
 // Placeholder shown in the invoice-number field; means "use the auto sequence".
@@ -36,7 +36,7 @@ const th = (res) => { if (res.error) throw res.error; return res.data; };
 
 async function fetchAll() {
   const [settings, sequences, contacts, catalog, quotes, qli, sos, soli, invoices, invli, payments, bills, expenses,
-    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments, pos, poli, accounts, journal, recons, cleared, jobCosts, serviceReports] = await Promise.all([
+    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments, pos, poli, accounts, journal, recons, cleared, jobCosts, serviceReports, cardStatements] = await Promise.all([
     supabase.from("settings").select("*").maybeSingle(),
     supabase.from("org_sequences").select("*"),
     supabase.from("contacts").select("*").order("created_at"),
@@ -68,6 +68,7 @@ async function fetchAll() {
     supabase.from("bank_cleared_items").select("*"),
     supabase.from("job_costs").select("*").order("date"),
     supabase.from("service_reports").select("*").order("date", { ascending: false }),
+    supabase.from("card_statements").select("*").order("closing_date", { ascending: false }),
   ]);
   return {
     settingsRow: th(settings), sequences: th(sequences),
@@ -92,6 +93,7 @@ async function fetchAll() {
     cleared: cleared && !cleared.error ? (cleared.data || []) : [],
     jobCosts: jobCosts && !jobCosts.error ? (jobCosts.data || []) : [],      // migration 028
     serviceReports: serviceReports && !serviceReports.error ? (serviceReports.data || []) : [],   // migration 029
+    cardStatements: cardStatements && !cardStatements.error ? (cardStatements.data || []) : [],   // migration 031
   };
 }
 
@@ -131,6 +133,7 @@ function assemble(raw) {
     bankCleared: (raw.cleared || []).map(A.clearedFromRow),
     jobCosts: (raw.jobCosts || []).map(A.jobCostFromRow),
     serviceReports: (raw.serviceReports || []).map(A.serviceReportFromRow),
+    cardStatements: (raw.cardStatements || []).map(A.cardStatementFromRow),
   };
 }
 
@@ -1315,6 +1318,98 @@ export function useLedger(session, onError) {
         return true;
       } catch (e) { return fail(e); }
     },
+    /* ---- credit card statements (migration 031) ----
+       Posting a reviewed statement writes an expense per business charge paid
+       from the card's account, one journal entry for the personal charges
+       (Dr Distributions / Cr card), and — on a card's first statement, when
+       asked — the balance it carried from before Ledger (Dr Retained Earnings
+       / Cr card). If any part is refused, what was written is taken back. */
+    async postCardStatement(st, { opening = null } = {}) {
+      const written = { expenses: [], entries: [] };
+      try {
+        const d0 = dbRef.current;
+        const acct = accountSettings(d0.settings);
+        const card = (acct.cards || []).find(c => String(c.account) === String(st.cardAccount));
+        if (!card) throw new Error("Pick the card this statement is for.");
+        if (!st.closingDate) throw new Error("Enter the statement's closing date.");
+        if ((d0.cardStatements || []).some(x => x.cardAccount === String(card.account) && x.closingDate === st.closingDate))
+          throw new Error(`The ${card.name} statement closing ${st.closingDate} has already been posted.`);
+        const lines = st.lines || [];
+        if (lines.some(l => l.kind !== "payment" && !l.use)) throw new Error("Mark every charge Business or Personal first.");
+        if (lines.some(l => l.use === "business" && !l.account)) throw new Error("Pick an expense account for every business charge.");
+        const lock = acct.lockDate;
+        const dates = [...lines.filter(l => l.use === "business").map(l => l.date), st.closingDate, ...(opening ? [opening.date] : [])];
+        if (lock && dates.some(d => d && d <= lock)) throw new Error(`The books are locked through ${lock}. Move the lock date in Settings → Accounts to post this statement.`);
+
+        // Business charges → expenses paid from the card (a credit is a negative expense).
+        const tag = `${card.name} statement ${st.closingDate}`;
+        const posted = lines.map(l => (l.use === "business" ? { ...l, expenseId: uid() } : l));
+        const expenses = posted.filter(l => l.use === "business").map(l => ({
+          id: l.expenseId, date: l.date, category: "Other", vendor: l.desc, amount: round2(Number(l.amount) || 0), method: card.name,
+          notes: tag, salesOrderId: "", account: l.account, cashAccount: String(card.account), costCategory: "",
+        }));
+        if (expenses.length) th(await supabase.from("expenses").insert(expenses.map(A.expenseToRow)));
+        written.expenses = expenses.map(e => e.id);
+        setDb(d => ({ ...d, expenses: [...expenses, ...d.expenses] }));
+
+        // Personal charges → the owner's draws, one entry for the statement.
+        const personal = round2(sum(posted.filter(l => l.use === "personal"), l => Number(l.amount) || 0));
+        let drawEntryId = "";
+        if (Math.abs(personal) > 0.005) {
+          const draws = String(acct.draws || "3940");
+          const je = await actions.saveJournalEntry({ id: uid(), _new: true, date: st.closingDate, ref: tag, memo: `Personal charges on the ${card.name} — owner draws`,
+            lines: personal > 0
+              ? [{ id: uid(), account: draws, desc: "Personal charges", debit: personal, credit: "" }, { id: uid(), account: String(card.account), desc: card.name, debit: "", credit: personal }]
+              : [{ id: uid(), account: String(card.account), desc: card.name, debit: -personal, credit: "" }, { id: uid(), account: draws, desc: "Personal credits", debit: "", credit: -personal }] });
+          if (!je) throw new Error("The owner-draw entry wasn't saved.");
+          drawEntryId = je.id; written.entries.push(je.id);
+        }
+        // A first statement's balance from before Ledger started.
+        let openingEntryId = "";
+        const ob = round2(Number(opening?.amount) || 0);
+        if (opening && Math.abs(ob) > 0.005) {
+          const re = String(acct.retainedEarnings || "3910");
+          const je = await actions.saveJournalEntry({ id: uid(), _new: true, date: opening.date, ref: `${card.name} opening balance`, memo: `${card.name} balance owed when Ledger started`,
+            lines: ob > 0
+              ? [{ id: uid(), account: re, desc: "Owed on the card before Ledger", debit: ob, credit: "" }, { id: uid(), account: String(card.account), desc: card.name, debit: "", credit: ob }]
+              : [{ id: uid(), account: String(card.account), desc: card.name, debit: -ob, credit: "" }, { id: uid(), account: re, desc: "Credit on the card before Ledger", debit: "", credit: -ob }] });
+          if (!je) throw new Error("The opening-balance entry wasn't saved.");
+          openingEntryId = je.id; written.entries.push(je.id);
+        }
+
+        const row = { ...st, id: st.id || uid(), cardAccount: String(card.account), cardName: card.name, lines: posted,
+          businessTotal: round2(sum(posted.filter(l => l.use === "business"), l => Number(l.amount) || 0)), personalTotal: personal, drawEntryId, openingEntryId };
+        th(await supabase.from("card_statements").insert(A.cardStatementToRow(row)));
+        setDb(d => ({ ...d, cardStatements: [row, ...(d.cardStatements || [])] }));
+        return row;
+      } catch (e) {
+        // Take back whatever part was written, so a refused statement leaves nothing behind.
+        try {
+          for (const id of written.entries) await supabase.from("journal_entries").delete().eq("id", id);
+          if (written.expenses.length) await supabase.from("expenses").delete().in("id", written.expenses);
+          setDb(d => ({ ...d, expenses: d.expenses.filter(x => !written.expenses.includes(x.id)), journalEntries: (d.journalEntries || []).filter(j => !written.entries.includes(j.id)) }));
+        } catch (_) { /* reported below */ }
+        return fail(e);
+      }
+    },
+    // Unpost a statement: its expenses and entries go, and it can be imported again.
+    async deleteCardStatement(st) {
+      try {
+        const lock = accountSettings(dbRef.current.settings).lockDate;
+        const exp = (st.lines || []).map(l => l.expenseId).filter(Boolean);
+        const dates = [...(st.lines || []).filter(l => l.expenseId).map(l => l.date), st.closingDate];
+        const opening = (dbRef.current.journalEntries || []).find(j => j.id === st.openingEntryId);
+        if (opening) dates.push(opening.date);
+        if (lock && dates.some(d => d && d <= lock)) throw new Error(`The books are locked through ${lock}. Move the lock date in Settings → Accounts to unpost this statement.`);
+        for (const id of [st.openingEntryId, st.drawEntryId].filter(Boolean)) th(await supabase.from("journal_entries").delete().eq("id", id));
+        if (exp.length) th(await supabase.from("expenses").delete().in("id", exp));
+        th(await supabase.from("card_statements").delete().eq("id", st.id));
+        const gone = [st.openingEntryId, st.drawEntryId].filter(Boolean);
+        setDb(d => ({ ...d, cardStatements: (d.cardStatements || []).filter(x => x.id !== st.id), expenses: d.expenses.filter(x => !exp.includes(x.id)),
+          journalEntries: (d.journalEntries || []).filter(j => !gone.includes(j.id)) }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
     async deleteJournalEntry(id) {
       try {
         th(await supabase.from("journal_entries").delete().eq("id", id));
@@ -1638,7 +1733,7 @@ export function useLedger(session, onError) {
 async function wipe(orgId) {
   // Children first (payments have no FK; line items cascade from parents).
   for (const table of ["payments", "quote_line_items", "sales_order_line_items", "invoice_line_items",
-    "job_costs", "service_reports", "quotes", "sales_orders", "invoices", "proposals", "contact_people", "bills", "expenses", "journal_entries", "bank_cleared_items", "bank_reconciliations",
+    "card_statements", "job_costs", "service_reports", "quotes", "sales_orders", "invoices", "proposals", "contact_people", "bills", "expenses", "journal_entries", "bank_cleared_items", "bank_reconciliations",
     "contacts", "catalog_items", "org_sequences"]) {
     const { error } = await supabase.from(table).delete().eq("org_id", orgId);
     if (error) throw error;

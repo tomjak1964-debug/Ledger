@@ -4,7 +4,7 @@ import { termsLabelFor } from "../lib/terms.js";
 import { proposalConfig } from "../calc/proposals.js";
 import { COMPONENTS, IO_FIELDS, DEVICE_FIELDS, STRUCTURE_FIELDS, LINEUP_FIELDS, SAFETY_OPTIONS, STANDARD_ELEMENTS, ROLE_LABELS,
   priceEstimate, suggestAll, derivedIo, contentSummary } from "../calc/estimates.js";
-import { Ico, ICONS, Field } from "../components/ui.jsx";
+import { Ico, ICONS, Field, blankZero } from "../components/ui.jsx";
 
 // The controls estimate — a job for any customer. This file holds the editor,
 // the document content (shared by the screen view and the Word export) and
@@ -267,24 +267,24 @@ export default function ControlsEstimateEditor({ p, db, cfg, customers, onCancel
             <input className="input mono" type="number" min="0" value={sp.drivers.ioDiscrete ?? ""} placeholder={String(dio.total)} onChange={e => setDriver("ioDiscrete", e.target.value)} />
           </Field>
           <Field label="Analog / IO-Link points" hint="transducers, analog channels">
-            <input className="input mono" type="number" min="0" value={sp.drivers.ioAnalog ?? 0} onChange={e => setDriver("ioAnalog", e.target.value)} />
+            <input className="input mono" type="number" min="0" value={blankZero(sp.drivers.ioAnalog)} placeholder="0" onChange={e => setDriver("ioAnalog", e.target.value)} />
           </Field>
           <Field label="Safety system"><select className="select" value={sp.drivers.safety} onChange={e => setDriver("safety", e.target.value)}>
             {SAFETY_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
           <Field label="Reuse from reference job (%)" hint="base hardware, cycle start, an HMI to copy">
-            <input className="input mono" type="number" min="0" max="90" value={sp.drivers.reusePct ?? 0} onChange={e => setDriver("reusePct", e.target.value)} />
+            <input className="input mono" type="number" min="0" max="90" value={blankZero(sp.drivers.reusePct)} placeholder="0" onChange={e => setDriver("reusePct", e.target.value)} />
           </Field>
         </div>
         <div className="subtle" style={{ fontWeight: 600, margin: "6px 0" }}>Devices — count them off the lineup</div>
         <div className="row" style={{ flexWrap: "wrap" }}>
           {DEVICE_FIELDS.map(f => <Field key={f.key} label={f.label} hint={f.hint || undefined}>
-            <input className="input mono" type="number" min="0" value={sp.drivers[f.key] ?? 0} onChange={e => setDriver(f.key, e.target.value)} />
+            <input className="input mono" type="number" min="0" value={blankZero(sp.drivers[f.key])} placeholder="0" onChange={e => setDriver(f.key, e.target.value)} />
           </Field>)}
         </div>
         <div className="subtle" style={{ fontWeight: 600, margin: "6px 0" }}>Program and documents</div>
         <div className="row" style={{ flexWrap: "wrap" }}>
           {STRUCTURE_FIELDS.map(([k, label]) => <Field key={k} label={label}>
-            <input className="input mono" type="number" min="0" value={sp.drivers[k] ?? 0} onChange={e => setDriver(k, e.target.value)} />
+            <input className="input mono" type="number" min="0" value={blankZero(sp.drivers[k])} placeholder="0" onChange={e => setDriver(k, e.target.value)} />
           </Field>)}
         </div>
         <div className="row" style={{ alignItems: "center" }}>

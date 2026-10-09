@@ -74,6 +74,10 @@ export function ActionMenu({ children, title = "More", minWidth = 180 }) {
 
 // A textarea that grows with its content — line-item descriptions are typed
 // here, and Enter starts a new line rather than doing nothing.
+// A count box shows blank, with a 0 placeholder, rather than a 0 the user has
+// to delete before typing — the value still reads as 0 everywhere it's used.
+export const blankZero = v => (v === 0 || v === "0" || v == null ? "" : v);
+
 export function AutoTextarea({ value, onChange, placeholder, className, style, rows = 1, disabled }) {
   const ref = useRef();
   useLayoutEffect(() => {

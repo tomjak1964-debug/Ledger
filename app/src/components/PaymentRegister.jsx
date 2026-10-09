@@ -4,7 +4,7 @@ import { round2 } from "../calc/ledger.js";
 import { receiptGroups } from "../calc/reports.js";
 import { checkNumberTaken, normRef, remitEmail } from "../lib/checks.js";
 import { rangeFor, defaultCustom } from "../lib/dateRanges.js";
-import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort } from "./ui.jsx";
+import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort, blankZero } from "./ui.jsx";
 import FilterBar from "./FilterBar.jsx";
 import PaymentGroupModal from "./PaymentGroupModal.jsx";
 import EmailModal from "./EmailModal.jsx";
@@ -258,7 +258,7 @@ function EditPayment({ db, actions, toast, kind, entry, onClose }) {
       <button className="btn primary" disabled={busy || !!err} onClick={save}>{busy ? "Saving…" : "Save Payment"}</button></>}>
     <div className="row">
       <Field label="Amount"><input className="input mono" type="number" step="any" value={p.amount} onChange={e => setP({ ...p, amount: e.target.value })} /></Field>
-      <Field label="Discount taken"><input className="input mono" type="number" step="any" value={p.discount || 0} onChange={e => setP({ ...p, discount: e.target.value })} /></Field>
+      <Field label="Discount taken"><input className="input mono" type="number" step="any" value={blankZero(p.discount)} placeholder="0.00" onChange={e => setP({ ...p, discount: e.target.value })} /></Field>
       <Field label="Date"><input className="input" type="date" value={p.date || ""} onChange={e => setP({ ...p, date: e.target.value })} /></Field>
       <Field label={kind === "bill" ? "Paid From" : "Deposit To"}>
         <AccountSelect db={db} value={p.cashAccount} onChange={v => setP({ ...p, cashAccount: v })} types={["Cash"]} blank="— default cash account —" /></Field>

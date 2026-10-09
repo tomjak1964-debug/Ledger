@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { uid, money } from "../lib/helpers.js";
 import { TMJ_DEFAULT_RATES } from "../calc/proposals.js";
-import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort } from "../components/ui.jsx";
+import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort, blankZero } from "../components/ui.jsx";
 
 // Fixture Rates: the costing table behind fixture proposals, one row per
 // fixture type. (The table and the code still call them machine types.) A
@@ -71,7 +71,7 @@ export default function MachineRatesView({ db, actions, toast, readOnly }) {
       <Field label="Fixture Type Name"><input className="input" value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} placeholder="Big Sonic" /></Field>
       <div className="row">
         {RATE_FIELDS.map(([k, label]) => <Field key={k} label={label}>
-          <input className="input mono" type="number" step="any" value={edit[k] ?? 0} onChange={e => setEdit({ ...edit, [k]: e.target.value })} />
+          <input className="input mono" type="number" step="any" value={blankZero(edit[k])} placeholder="0" onChange={e => setEdit({ ...edit, [k]: e.target.value })} />
         </Field>)}
       </div>
       <p className="subtle">Per-camera, per-torque tool and per-IO-Link adders multiply by the count on the proposal and roll into the Engineering/Start-Up line. Data National amounts only apply when a proposal has "Data National" checked. Remote HMI and Remote Sonic Panel &gt; 0 each add a Base Pricing line and a scope bullet. Any rate left at 0 is left off the proposal.</p>

@@ -18,7 +18,7 @@
 // reconciled balance" to carry, because the cleared items carry it.
 import { journal } from "./gl.js";
 import { accountSettings } from "./accounts.js";
-import { round2 } from "./ledger.js";
+import { round2, billBalance } from "./ledger.js";
 import { sum, daysBetween } from "../lib/helpers.js";
 
 export const itemKey = (source, lineIdx) =>
@@ -93,4 +93,25 @@ export function matchStatement(lines, items, { days = 10 } = {}) {
   pass((it, ln) => !!(ln.checkNo || checkNo(ln.desc)) && checkNo(it.ref) === (ln.checkNo || checkNo(ln.desc)));   // a check that took a long time to clear
   lines.forEach((ln, i) => { if (!out[i]) out[i] = { line: ln, item: null }; });
   return out;
+}
+
+// A payment to a vendor the books don't have: an open bill for exactly this
+// amount (narrowed to the vendor the line names, if it names one), else just
+// the vendor whose name the statement line carries. Recording it as that
+// vendor's bill payment — not a bare expense — keeps their account and their
+// 1099 right. → { vendorId, billId } or null.
+const nameWords = s => String(s || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/)
+  .filter(w => w.length >= 3 && !/^(inc|llc|ltd|corp|co|the|and|services?)$/.test(w));
+export function vendorNamedIn(db, desc) {
+  const d = " " + String(desc || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ") + " ";
+  return db.contacts.filter(c => c.type === "vendor").find(v => { const w = nameWords(v.name); return w.length && w.slice(0, 2).every(x => d.includes(" " + x + " ")); }) || null;
+}
+export function suggestVendorPayment(db, line) {
+  if (!line || line.amount >= 0) return null;
+  const amt = Math.abs(line.amount);
+  const named = vendorNamedIn(db, line.desc);
+  const open = db.bills.filter(b => Math.abs(billBalance(b) - amt) < 0.005 && (!named || b.vendorId === named.id));
+  if (open.length === 1) return { vendorId: open[0].vendorId, billId: open[0].id };
+  if (named) return { vendorId: named.id, billId: "" };
+  return null;
 }

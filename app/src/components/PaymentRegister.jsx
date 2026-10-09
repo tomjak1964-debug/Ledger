@@ -42,7 +42,7 @@ export default function PaymentRegister({ db, actions, toast, readOnly, kind }) 
 
   const filters = <>
     <div className="search" style={{ maxWidth: 250 }}><Ico d={ICONS.search} size={15} />
-      <input className="input" placeholder={`Search ${partyLabel.toLowerCase()}, ${docLabel.toLowerCase()} #, check #…`}
+      <input className="input" placeholder={`Search ${partyLabel.toLowerCase()}, ${docLabel.toLowerCase()} #, ${isBill ? "vendor inv #, " : ""}check #…`}
         value={q} onChange={e => setQ(e.target.value)} /></div>
     {(q || preset !== "all" || partyId) && <button className="btn sm"
       onClick={() => { setQ(""); setPreset("all"); setPartyId(""); }}>Clear</button>}
@@ -130,8 +130,11 @@ function Register({ db, actions, toast, readOnly, kind, from, to, partyId, needl
     ? { title: "Payments", one: "payment", ref: "Check / Ref #", party: "Vendor", when: "Date Paid", docs: "Bills", doc: "bill" }
     : { title: "Receipts", one: "receipt", ref: "Reference #", party: "Customer", when: "Date Received", docs: "Invoices", doc: "invoice" };
   const all = receiptGroups(db, { kind, from, to, partyId });
+  // A bill carries the vendor's own invoice number (bill.ref): it's what the
+  // vendor quotes, so it shows on each line and the search finds it.
+  const vendorRef = l => (isBill ? db.bills.find(b => b.id === l.docId)?.ref || "" : "");
   const rows = needle
-    ? all.rows.filter(g => [g.ref, g.method, nameOf(db, g.partyId), ...g.lines.map(l => l.number)]
+    ? all.rows.filter(g => [g.ref, g.method, nameOf(db, g.partyId), ...g.lines.map(l => l.number), ...g.lines.map(vendorRef)]
       .some(v => String(v || "").toLowerCase().includes(needle)))
     : all.rows;
   const total = round2(sum(rows, g => g.amount));
@@ -202,7 +205,7 @@ function Register({ db, actions, toast, readOnly, kind, from, to, partyId, needl
               <td></td><td className="subtle" style={{ paddingLeft: 8 }}>applied to</td>
               <td className="doc-id">{l.number}</td>
               <td className="subtle">{fmtDate(l.docDate)}</td>
-              <td colSpan={2}></td>
+              <td colSpan={2}>{isBill && vendorRef(l) ? <span><span className="subtle">Vendor inv # </span><span className="mono">{vendorRef(l)}</span></span> : null}</td>
               <td className="num">{money(l.amount)}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                 {!readOnly && <button className="btn ghost icon" title="Edit this line" onClick={() => onEdit(l.paymentId, l.docId)}><Ico d={ICONS.edit} size={14} /></button>}

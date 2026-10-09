@@ -197,6 +197,7 @@ export function useLedger(session, onError) {
       onError("⚠ Couldn't reach the server, so the change was not saved. Check the connection and try again; if it keeps happening, refresh the app.", { ms: 8000 });
     else if (/didn't answer/.test(m))
       onError("⚠ " + m + " — the change was not saved. Try again; if this one record keeps timing out, something else is holding it (see supabase/data-fixes/stuck_locks.sql).", { ms: 10000 });
+    else if (/books are locked/i.test(m)) onError("🔒 " + m, { ms: 10000 });
     else onError("⚠ " + m);
     return null;
   };

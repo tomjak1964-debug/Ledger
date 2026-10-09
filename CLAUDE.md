@@ -689,6 +689,17 @@ started in Ledger part-way through the shop's life, so the Sage balances at the 
 loans, Retained Earnings… — on the cash basis no A/R or A/P) belong in one journal entry dated the day
 before the first Ledger transaction.
 
+**Locking the books** (migration 030, Settings → Accounts → *Books locked through*, `settings.accounts.lockDate`).
+With a lock date set, **the database** refuses to add, delete or change the money on anything dated on or before
+it — invoices and their lines, bills, payments/receipts, expenses and journal entries — so a reconciled month or
+a filed year can't move. Triggers `lock_*` call `guard_locked_period(<money columns>)`: an update to a locked row
+that changes none of the listed columns goes through (marking an invoice printed, notes, due date, PO, number, a
+payment's reference); invoice lines are locked with their invoice (`guard_locked_invoice_lines`). It holds for
+every device, user and data fix — a data fix on a locked period moves the lock back first. The refusal reads
+"The books are locked through Sep 30, 2026…" and `fail()` shows it with a 🔒. *End of Last Month* sets the usual
+date. A new payment dated after the lock on an old document is fine. Clear All Data and a backup import are
+refused while anything is locked.
+
 **Journal entries by hand** (System → Journal Entries, `views/JournalEntries.jsx`, the `journal_entries`
 table, migration 025): what no document covers — a payroll run (Wages Expense, Payroll Tax Expense, 401K
 Employer against Checking and the payables), depreciation, an adjustment. An entry is a date, an optional

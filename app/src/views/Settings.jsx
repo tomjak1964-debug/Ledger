@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { uid, money, todayISO, fmtDate } from "../lib/helpers.js";
+import { uid, money, todayISO, fmtDate, isoDate } from "../lib/helpers.js";
 import { Ico, ICONS, Field, PasswordInput } from "../components/ui.jsx";
 import { AREAS, isAdminRole } from "../lib/permissions.js";
 import { supabase } from "../lib/supabaseClient.js";
@@ -479,6 +479,19 @@ function AccountsTab({ db, s, set, readOnly, saveAll }) {
           <select className="select" value={Number(a.fiscalYearEndMonth) || 12} disabled={readOnly} onChange={e => setA("fiscalYearEndMonth", Number(e.target.value))}>
             {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((mn, i) => <option key={mn} value={i + 1}>{mn}</option>)}
           </select></Field>
+      </div>
+      <div className="divider"></div>
+      <h4 style={{ margin: "0 0 4px" }}>Lock the books</h4>
+      <p className="subtle" style={{ marginTop: 0 }}>Once a month is reconciled or a year is filed, lock it. Nothing dated on or before the lock date can be added,
+        deleted or have its money changed — invoices, bills, payments and receipts, expenses and journal entries — on any device. Marking an invoice printed,
+        notes and references still work. To correct something locked, move the date back, fix it, and lock again.</p>
+      <div className="row" style={{ alignItems: "flex-end" }}>
+        <Field label="Books locked through" hint={a.lockDate ? "Locked through " + fmtDate(a.lockDate) + " once saved" : "Blank — nothing is locked"}>
+          <input className="input" type="date" value={a.lockDate || ""} disabled={readOnly} onChange={e => setA("lockDate", e.target.value)} /></Field>
+        <div style={{ display: "flex", gap: 8, paddingBottom: 18 }}>
+          <button className="btn" disabled={readOnly} onClick={() => { const d = new Date(); setA("lockDate", isoDate(new Date(d.getFullYear(), d.getMonth(), 0))); }}>End of Last Month</button>
+          {a.lockDate && <button className="btn ghost" disabled={readOnly} onClick={() => setA("lockDate", "")}>Remove Lock</button>}
+        </div>
       </div>
       <button className="btn primary" disabled={readOnly} onClick={saveAll}><Ico d={ICONS.check} size={15} />Save Settings</button>
     </div>

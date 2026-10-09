@@ -1,16 +1,37 @@
 // Supabase Edge Function: send an email (with optional attachments) via Resend.
-// Secrets to set (Dashboard → Edge Functions → send-document → Secrets, or CLI):
-//   RESEND_API_KEY  — from resend.com (API Keys)
-//   EMAIL_FROM      — e.g. "TMJ Engineering <invoices@tmjengineering.com>"
-//                     (domain must be verified in Resend; until then use
-//                      "onboarding@resend.dev", which can only email yourself)
-// Deploy: supabase functions deploy send-document   (or paste in the dashboard)
+// Settings (in ~/apps/ledger/.env on the NUC, passed to the functions
+// container by HomeServer's docker-compose.homeserver.yml):
+//   RESEND_API_KEY          — from resend.com (API Keys)
+//   EMAIL_FROM_INVOICE      — e.g. "TMJ Engineering <invoices@tmjengineering.com>"
+//   EMAIL_FROM_REMITTANCE   — e.g. "TMJ Engineering <remittances@tmjengineering.com>"
+//   EMAIL_FROM              — the sender for anything else, and the fallback
+//                             while a per-type setting isn't there yet
+// The sender is chosen HERE from the document type the app names (FROM_BY_TYPE)
+// — never an address from the browser, which could otherwise send as anyone
+// on the verified domain. An unknown type is refused.
+// Deploy: cp -r app/supabase/functions/send-document ~/apps/ledger/volumes/functions/
+//         && cd ~/apps/ledger && docker compose restart functions
 //
 // Only a signed-in member of a company may send: the public (anon) key alone
 // passes the gateway's key check, so without this anyone could use the key in
 // the web app to send email through the Resend account. SUPABASE_URL,
 // SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY are injected automatically.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// Document type → the setting that holds its sender. A copy of the app from
+// before types were sent names none and gets the general sender.
+const FROM_BY_TYPE: Record<string, string> = {
+  invoice: "EMAIL_FROM_INVOICE",       // invoices, credit memos, payment reminders
+  remittance: "EMAIL_FROM_REMITTANCE", // remittance advice for vendor payments
+  proposal: "EMAIL_FROM",              // proposals and quotes
+};
+function senderFor(docType: unknown): string {
+  const general = Deno.env.get("EMAIL_FROM") || "onboarding@resend.dev";
+  if (docType == null || docType === "") return general;
+  const setting = FROM_BY_TYPE[String(docType)];
+  if (!setting) throw new Error(`Unknown document type "${docType}"`);
+  return Deno.env.get(setting) || general;
+}
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -36,11 +57,11 @@ Deno.serve(async (req) => {
       .select("org_id").eq("user_id", user.id).limit(1).maybeSingle();
     if (!member) throw new Error("Not a member of any company");
 
-    const { to, subject, html, attachments } = await req.json();
+    const { to, subject, html, attachments, docType } = await req.json();
     if (!to || !subject) throw new Error("Missing to/subject");
     const key = Deno.env.get("RESEND_API_KEY");
     if (!key) throw new Error("RESEND_API_KEY secret is not set");
-    const from = Deno.env.get("EMAIL_FROM") ?? "onboarding@resend.dev";
+    const from = senderFor(docType);
 
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",

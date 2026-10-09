@@ -362,7 +362,7 @@ function ProposalDoc({ p, db, onClose, toast }) {
       <button className="btn" disabled={busy} onClick={word}>{busy ? "Building…" : "Download Word"}</button>
       <button className="btn primary" onClick={() => window.print()}><Ico d={ICONS.print} size={16} />Print / Save PDF</button>
     </div>
-    {email && <EmailModal
+    {email && <EmailModal docType="proposal"
       title={"Email · " + p.number}
       defaultTo={c.person?.email || c.customer?.email || ""}
       defaultSubject={`Proposal ${p.number}${revLabel(p) ? " " + revLabel(p) : ""} — ${[p.jobNumber, p.description].filter(Boolean).join(" – ")}`}

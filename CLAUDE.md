@@ -37,7 +37,13 @@ reach the database, by design.
   `cd ~/apps/ledger && docker compose restart functions`. Check with `docker compose logs --since 10m functions`.
   The Supabase dashboard paste is retired. Key checks are on (`FUNCTIONS_VERIFY_JWT=true`), and each function must
   still check the caller itself (a signed-in member), like `send-document` and `admin-create-user` do.
-- **Function secrets** (`RESEND_API_KEY`, `EMAIL_FROM`=`remittances@tmjengineering.com`, `CRON_SECRET`) live in
+- **Email senders are chosen by document type, in `send-document`** (`FROM_BY_TYPE`): the app sends only a
+  `docType` (`invoice` — invoices, credit memos, reminders; `remittance`; `proposal`), never an address, and the
+  function maps it to `EMAIL_FROM_INVOICE` (invoices@tmjengineering.com) / `EMAIL_FROM_REMITTANCE`
+  (remittances@) / `EMAIL_FROM`. An unknown type is refused; no type, or a per-type setting not set yet, uses
+  `EMAIL_FROM`. Every `<EmailModal>` passes its `docType`.
+- **Function secrets** (`RESEND_API_KEY`, `EMAIL_FROM`=`remittances@tmjengineering.com`, `EMAIL_FROM_INVOICE`,
+  `EMAIL_FROM_REMITTANCE`, `CRON_SECRET`) live in
   `~/apps/ledger/.env` on the NUC, never in git. A new secret also has to be listed under `functions:` in
   HomeServer's `apps/ledger/docker-compose.homeserver.yml`, then `docker compose up -d functions`.
 - **Storage** (`attachments`, `backups` buckets) is on the NUC's disk (`~/apps/ledger/volumes/storage`); its access

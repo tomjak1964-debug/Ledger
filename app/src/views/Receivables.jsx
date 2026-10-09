@@ -138,7 +138,7 @@ export default function ReceivablesView({ db, actions, toast, openDoc, readOnly 
         if (ok) toast("Receipt recorded");
         return ok;
       }} />}
-    {remind && <EmailModal
+    {remind && <EmailModal docType="invoice"
       title={"Payment Reminder · " + remind.number}
       defaultTo={db.contactPeople.find(p => p.id === remind.contactPersonId)?.email || db.contacts.find(c => c.id === remind.customerId)?.email || ""}
       defaultSubject={`Payment reminder — invoice ${remind.number} (${db.settings.company})`}

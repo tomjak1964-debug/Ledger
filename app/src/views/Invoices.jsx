@@ -139,7 +139,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
     {invoiceSO && <InvoiceFromSOModal so={invoiceSO} db={db} onClose={() => setInvoiceSO(null)}
       onGenerate={(ids, opts, print) => generateFromSO(invoiceSO, ids, opts, print)}
       onCloseLine={async (lineId, closed) => { if (await actions.setLineClosed(invoiceSO.id, lineId, closed)) toast(closed ? "Line closed" : "Line reopened"); }} />}
-    {email && <EmailModal
+    {email && <EmailModal docType="invoice"
       title={"Email · " + email.number}
       defaultTo={db.contactPeople.find(p => p.id === email.contactPersonId)?.email || db.contacts.find(c => c.id === email.customerId)?.email || ""}
       defaultSubject={`Invoice ${email.number} — ${db.settings.company}`}

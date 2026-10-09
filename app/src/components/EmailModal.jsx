@@ -9,8 +9,11 @@ const blobToBase64 = blob => new Promise(res => {
 });
 
 // Generic "email this document" dialog. buildAttachment is async and returns
-// { blob, filename } (or null for no attachment).
-export default function EmailModal({ title, defaultTo, defaultSubject, defaultBody, buildAttachment, onClose, onSent, toast }) {
+// { blob, filename } (or null for no attachment). docType ("invoice" |
+// "remittance" | "proposal") is all the app says about the sender: the
+// send-document function picks the From address for that type from its own
+// fixed list.
+export default function EmailModal({ title, defaultTo, defaultSubject, defaultBody, buildAttachment, onClose, onSent, toast, docType }) {
   const [to, setTo] = useState(defaultTo || "");
   const [subject, setSubject] = useState(defaultSubject || "");
   const [body, setBody] = useState(defaultBody || "");
@@ -23,7 +26,7 @@ export default function EmailModal({ title, defaultTo, defaultSubject, defaultBo
       const attachments = att ? [{ filename: att.filename, content: await blobToBase64(att.blob) }] : [];
       const html = body.split("\n").map(l => l.trim() === "" ? "<br/>" : `<p style="margin:0 0 2px">${l.replace(/</g, "&lt;")}</p>`).join("");
       const { data, error } = await supabase.functions.invoke("send-document", {
-        body: { to: to.trim(), subject, html, attachments },
+        body: { to: to.trim(), subject, html, attachments, docType },
       });
       if (error) throw error;
       if (data && data.ok === false) throw new Error(data.error);

@@ -96,12 +96,13 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
     date: p => p.date || "", status: p => p.status || "", total: p => Number(p.pricing?.total) || 0,
   });
 
-  // A new proposal starts on the customer the last one was for (Venture Global
-  // before there are any), with that customer's contact.
-  const startCustomer = defaultProposalCustomer(db);
+  // A new proposal starts on the customer the last one of its kind was for
+  // (Venture Global before there are any), with that customer's contact.
+  const startCustomer = defaultProposalCustomer(db, "machine");
+  const startSystemCustomer = defaultProposalCustomer(db, "controls");
   const startNewControls = () => setEdit({
-    id: uid(), _new: true, kind: "controls", rev: 0, number: "(assigned at save)", customerId: startCustomer?.id || "",
-    contactPersonId: "", contactName: startCustomer?.contact || "", date: todayISO(), status: "draft", jobNumber: "", description: "",
+    id: uid(), _new: true, kind: "controls", rev: 0, number: "(assigned at save)", customerId: startSystemCustomer?.id || "",
+    contactPersonId: "", contactName: startSystemCustomer?.contact || "", date: todayISO(), status: "draft", jobNumber: "", description: "",
     location: "", machineTypeId: "", specs: newEstimate(cfg), pricing: {},
     phases: cfg.controlsPhases.engineering.map(ph => ({ ...ph })), notes: "",
   });

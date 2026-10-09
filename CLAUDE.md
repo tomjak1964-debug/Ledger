@@ -418,8 +418,9 @@ already present, so it both seeds an empty list and tops one up. Proposals are w
 each claims its own number; the chart's quote number and end user go in the notes. A row with no job number
 takes the quote number as its job number, and with neither, the proposal date and a sequence for the day
 (`dateJobNumber()` in `calc/proposals.js` — `261008-01`, `261008-02`…, following any already used).
-**A new proposal starts on the customer the last proposal was for** (`defaultProposalCustomer()`: the newest
-proposal's customer, else Venture Global Engineering), with that customer's contact; the quote-chart import
+**A new proposal starts on the customer the last proposal of its kind was for** (`defaultProposalCustomer(db,
+kind)`: the newest fixture or system proposal's customer, so a system proposal for someone else leaves the
+fixture default alone; else Venture Global Engineering), with that customer's contact; the quote-chart import
 uses the same default. Changing the customer replaces the contact with the new customer's own, or blank.
 
 **A printable document overlay belongs outside `.main`.** Printing hides the app behind the document

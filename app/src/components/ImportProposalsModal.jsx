@@ -11,7 +11,7 @@ export default function ImportProposalsModal({ db, actions, toast, onClose, onDo
   const customers = db.contacts.filter(c => c.type === "customer");
   // The chart is Venture Global's; the default follows the last proposal's
   // customer, which starts out as Venture Global.
-  const guess = defaultProposalCustomer(db);
+  const guess = defaultProposalCustomer(db, "machine");
   const [customerId, setCustomerId] = useState(guess?.id || "");
   const [date, setDate] = useState(todayISO());
   const [rows, setRows] = useState(null);       // [{ rec, machineTypeId, take }]

@@ -114,11 +114,13 @@ export const phaseAmount = (total, pct) => round2(total * pct / 100);
 
 export const proposalTotal = p => n(p.pricing?.total);
 
-// The customer a new proposal starts on: whoever the last proposal was for,
-// so the default follows the work; before there are any, Venture Global.
-export function defaultProposalCustomer(db) {
+// The customer a new proposal starts on: whoever the last proposal of the
+// same kind was for, so a system proposal for someone else doesn't move the
+// fixture default; before there are any of that kind, Venture Global.
+export function defaultProposalCustomer(db, kind = "machine") {
   const customers = db.contacts.filter(c => c.type === "customer");
-  const last = [...(db.proposals || [])].reverse().find(p => customers.some(c => c.id === p.customerId));
+  const sameKind = p => (p.kind || "machine") === kind;
+  const last = [...(db.proposals || [])].reverse().find(p => sameKind(p) && customers.some(c => c.id === p.customerId));
   return (last && customers.find(c => c.id === last.customerId))
     || customers.find(c => /^venture\s*global\s*engineering$/i.test((c.name || "").trim()))
     || customers.find(c => /venture\s*global/i.test(c.name || ""))

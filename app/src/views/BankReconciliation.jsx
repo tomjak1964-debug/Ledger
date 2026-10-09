@@ -209,11 +209,31 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
   const year = Number((recon.statementDate || todayISO()).slice(0, 4));
   const acct = accountSettings(db.settings);
 
+  // A card payment: money out whose description names one of the company
+  // cards (Settings → the card's bank statement words), or whose amount is a
+  // posted statement's balance. It goes to the card's account — the charges
+  // are already on the books from the card statement.
+  const cards = acct.cards || [];
+  const cardPaid = (line) => {
+    if (line.amount >= 0) return null;
+    const amt = Math.abs(line.amount), desc = (line.desc || "").toUpperCase();
+    const byWords = cards.find(c => (c.match || "").split(/[,;]/).map(w => w.trim().toUpperCase()).filter(Boolean).some(w => desc.includes(w)));
+    const st = (db.cardStatements || []).filter(s => s.newBalance != null && Math.abs(Number(s.newBalance) - amt) < 0.005 && s.closingDate <= line.date)
+      .sort((a, b) => b.closingDate.localeCompare(a.closingDate)).find(s => !byWords || s.cardAccount === String(byWords.account));
+    const card = byWords || (st && cards.find(c => String(c.account) === st.cardAccount));
+    if (!card) return null;
+    const stmt = st || (db.cardStatements || []).filter(s => s.cardAccount === String(card.account) && s.closingDate <= line.date).sort((a, b) => b.closingDate.localeCompare(a.closingDate))[0];
+    return { card, stmt };
+  };
   const load = (p) => {
     const inRange = p.lines.filter(l => l.date <= recon.statementDate);
     const matched = matchStatement(inRange, state.items);
     setParsed({ ...p, skippedLater: p.lines.length - inRange.length });
-    setRows(matched.map(m => ({ ...m, take: true, action: m.item ? "clear" : "post", account: m.line.amount < 0 ? "" : "4300", payee: guessPayee(m.line.desc), recordAs: m.line.amount < 0 ? "expense" : "journal" })));
+    setRows(matched.map(m => {
+      const cp = !m.item && cardPaid(m.line);
+      return { ...m, take: true, action: m.item ? "clear" : "post", account: cp ? String(cp.card.account) : m.line.amount < 0 ? "" : "4300",
+        payee: cp ? cp.card.name : guessPayee(m.line.desc), recordAs: cp ? "journal" : m.line.amount < 0 ? "expense" : "journal", cardPay: cp || null };
+    }));
   };
   const onFile = async (f) => {
     if (!f) return;
@@ -291,6 +311,8 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
                 {r.action === "post" && <>
                   <AccountSelect db={db} value={r.account} onChange={v => setRow(i, { account: v, recordAs: (r.line.amount < 0 && ["expense", "cos"].includes(TYPE_GROUP[accountByNumber(db, v)?.type])) ? "expense" : "journal" })}
                     groups={postAccounts(r.line.amount < 0)} blank={r.line.amount < 0 ? "— what was it? (Distributions, Office Supplies, a loan…) —" : "— what was it? (Other Income, Interest, a loan…) —"} />
+                  {r.cardPay && String(r.account) === String(r.cardPay.card.account) && <span className="subtle" style={{ fontSize: 12 }}>
+                    💳 Pays the {r.cardPay.card.name}{r.cardPay.stmt ? <> — statement {fmtDate(r.cardPay.stmt.closingDate)}: business <span className="mono">{money(r.cardPay.stmt.businessTotal)}</span> (already expensed) + personal <span className="mono">{money(r.cardPay.stmt.personalTotal)}</span> (already owner draws)</> : <> — no statement posted for it yet; import it under System → Credit Cards</>}</span>}
                   {r.line.amount < 0 && <input className="input" value={r.payee} placeholder="Payee" onChange={e => setRow(i, { payee: e.target.value })} />}
                   {r.line.amount < 0 && r.account && <label className="subtle" style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12 }}>
                     <input type="checkbox" checked={r.recordAs === "expense"} onChange={e => setRow(i, { recordAs: e.target.checked ? "expense" : "journal" })} />Record as an expense entry (shows under Expenses); unticked, a journal entry</label>}

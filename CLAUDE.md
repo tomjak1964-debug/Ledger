@@ -740,6 +740,28 @@ Receivables against its invoice. Reports → Account Reconciliation → **Reconc
 statement with its cleared balance, outstanding items and book balance. Cleared keys are not carried by a
 JSON backup import, because the import gives payments new ids.
 
+**Company credit cards** (System → Credit Cards, `views/CreditCards.jsx`, `lib/cardStatement.js`, migration 031
+`card_statements`). The owner's two cards carry business and personal charges and are paid from checking. Cards
+are set up in **Set Up Cards** (`settings.accounts.cards`: `{ id, name, account, match }` — the liability
+account, added to the chart as Other Current Liabilities from 2150 up, and the words that name the card's payment
+on a bank statement) with the owner-draws account (`settings.accounts.draws`, default 3940 Distributions). Each
+month **Import Statement** reads the card's .csv download (one signed Amount column, or Debit/Credit — a file
+whose purchases are negative is flipped), a statement PDF, or pasted rows (`parseCardText()`: a line that starts
+with one or two dates and ends in an amount; a minus sign or a "Payments / Credits" section makes it a credit;
+a closing date, previous and new balance are read off the page, and a year is wound back for a January statement
+listing December charges). Payments are skipped (they're the bank side); every other line is marked **Business**
+(with an expense account) or **Personal**, pre-filled from how that merchant went on earlier statements
+(`merchantKey()` / `learnedChoices()`). The review checks previous balance + every line = new balance. **Post**
+(`postCardStatement()`) writes an expense per business line paid from the card's account (Dr expense / Cr card;
+a credit is a negative expense), one journal entry for the personal total (Dr Distributions / Cr card, dated the
+closing date) and — on a card's first statement, when ticked — the balance it carried from before Ledger
+(Dr Retained Earnings / Cr card, Dec 31 2025); a part refused takes the rest back. **Unpost** deletes them all.
+In **Bank Reconciliation** a money-out line naming a card (its match words) or equal to a posted statement's
+balance defaults to *Post to* the card's account as a journal entry (Dr card / Cr checking) with a note of that
+statement's business and personal totals — the charges are already on the books. What a card owes per the books
+is its account's balance, shown on the Credit Cards page. Expenses' *Paid From* lists the card accounts too
+(`AccountSelect`'s `extra`).
+
 **Network failures on a save:** every PostgREST request goes through `ledgerFetch()` in
 `lib/supabaseClient.js` — a request the browser could not send at all ("Failed to fetch", typically
 a PWA window waking from sleep) is sent once more after a short pause, and one the server never

@@ -6,8 +6,10 @@ import { accountsOfType, TYPE_GROUP } from "../calc/accounts.js";
 // doesn't hold is still shown, so a document booked before the chart existed
 // keeps reading what it says. Until a chart is loaded under System → Chart of
 // Accounts the list is the built-in TMJ chart.
-export default function AccountSelect({ db, value, onChange, types, groups, blank, disabled, style }) {
-  const list = accountsOfType(db, null).filter(a => (!types || types.includes(a.type)) && (!groups || groups.includes(TYPE_GROUP[a.type])));
+// `extra` adds specific account numbers outside those filters (a company
+// card's liability account among the cash accounts an expense is paid from).
+export default function AccountSelect({ db, value, onChange, types, groups, blank, disabled, style, extra }) {
+  const list = accountsOfType(db, null).filter(a => ((!types || types.includes(a.type)) && (!groups || groups.includes(TYPE_GROUP[a.type]))) || (extra || []).includes(String(a.number)));
   const has = list.some(a => String(a.number) === String(value || ""));
   const byType = {};
   list.forEach(a => (byType[a.type] ||= []).push(a));

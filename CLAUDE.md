@@ -618,6 +618,9 @@ National, a fixture with no I/O blocks), `buildProposalContent()` drops them aga
 saved before that rule, and both the printable and the Word export skip the Premium Pricing section when
 nothing is in it.
 
+**The phone menu closes on a tap outside it.** Below 900px the sidebar slides over the page; while it's open a
+`.nav-scrim` backdrop covers the rest, and tapping it (or Escape) closes the menu without navigating.
+
 **The page area scrolls on its own.** `.app` is one viewport tall and never scrolls; the sidebar stays put
 and `.main` is the scroll box, so `go()` scrolls `.main` (and the window, for good measure) to the top.
 Printing undoes that (`height:auto; overflow:visible`) or a report would print as one screen. **A wide

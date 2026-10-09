@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useUpdateNudge } from "./lib/version.js";
 import { supabase } from "./lib/supabaseClient.js";
 import { useLedger } from "./lib/store.js";
@@ -101,6 +101,12 @@ export default function App({ session }) {
   const [doc, setDoc] = useState(null); // {kind,doc}
   const [toastMsg, setToastMsg] = useState(null);
   const [navOpen, setNavOpen] = useState(false);
+  useEffect(() => {
+    if (!navOpen) return;
+    const onKey = e => { if (e.key === "Escape") setNavOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navOpen]);
   // toast("msg") or toast("msg", { actionLabel, onAction }) for an Undo button;
   // { ms } holds a message up longer than the default (errors worth reading).
   const toast = useCallback((m, opts) => {
@@ -144,6 +150,9 @@ export default function App({ session }) {
   const props = { db, actions, toast, openDoc, go, session, readOnly, isAdmin: admin, member };
 
   return <div className="app">
+    {/* On a phone the open menu covers part of the page; a tap on the page
+        behind it (or Escape) closes it without picking anything. */}
+    {navOpen && <div className="nav-scrim" onClick={() => setNavOpen(false)} />}
     <div className={cls("sidebar", navOpen && "open")}>
       <div className="brand">
         <div className="brand-mark">L</div>

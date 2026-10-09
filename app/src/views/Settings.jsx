@@ -6,7 +6,7 @@ import { supabase } from "../lib/supabaseClient.js";
 import FormsTab from "../components/FormsEditor.jsx";
 import { proposalConfig } from "../calc/proposals.js";
 import { ROLE_LABELS, HOUR_MODEL_LABELS } from "../calc/estimates.js";
-import { REV, BUILD, checkForUpdate, updateNow } from "../lib/version.js";
+import { REV } from "../lib/version.js";
 import AccountSelect from "../components/AccountSelect.jsx";
 import { accountSettings } from "../calc/accounts.js";
 
@@ -23,7 +23,6 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
     ["accounts", "Accounts"],
     ...(isAdmin ? [["users", "Users & Access"], ["time", "Time Categories"], ["backups", "Backups"]] : []),
     ["activity", "Activity"],
-    ["revision", "Revision"],
     ["account", "Account"],
   ];
   const set = (k, v) => setS(p => ({ ...p, [k]: v }));
@@ -133,51 +132,16 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
       </div>
     </div>}
 
-    {tab === "revision" && <RevisionCard />}
 
     {tab === "account" && <div className="card">
       <div className="card-head"><h3>Account</h3></div>
       <div className="card-body">
         <div className="kv"><dt>Signed in as</dt><dd>{session.user.email}</dd></div>
-        <div className="kv"><dt>App revision</dt><dd className="mono">Rev {REV} <span className="subtle">— see the Revision tab to check for an update</span></dd></div>
+        <div className="kv"><dt>App revision</dt><dd className="mono">Rev {REV} <span className="subtle">— shown at the foot of the menu, with Update when a newer one is out</span></dd></div>
         <div className="divider"></div>
         <ChangePassword toast={toast} />
       </div>
     </div>}
-  </div>;
-}
-
-// Settings → Revision: what is running, and whether the server has newer.
-// Update Now throws away this device's cached copy and reloads — the way a
-// home-screen install gets the latest build.
-function RevisionCard() {
-  const [check, setCheck] = useState(null);     // null = not checked · { busy } · result of checkForUpdate
-  const run = async () => { setCheck({ busy: true }); setCheck(await checkForUpdate()); };
-  const latest = check?.latest;
-  return <div className="card">
-    <div className="card-head"><h3>Revision</h3></div>
-    <div className="card-body">
-      <div className="kv"><dt>Revision</dt><dd className="mono" style={{ fontWeight: 700, fontSize: 18 }}>Rev {REV}</dd></div>
-      <div className="kv"><dt>Build</dt><dd className="mono">{BUILD}</dd></div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
-        <button className="btn" disabled={!!check?.busy} onClick={run}><Ico d={ICONS.refresh} size={15} />{check?.busy ? "Checking…" : "Check for Update"}</button>
-        {check && !check.busy && (check.error
-          ? <span style={{ color: "var(--neg)" }}>Couldn't reach the server — {check.error}</span>
-          : check.updateAvailable
-            ? <span style={{ color: "var(--accent)", fontWeight: 600 }}>Rev {latest.rev} is available <span className="mono subtle" style={{ fontWeight: 400 }}>({latest.build})</span></span>
-            : <span style={{ color: "var(--pos)", fontWeight: 600 }}>You're on the latest — Rev {latest.rev}</span>)}
-      </div>
-      {check?.updateAvailable && <div style={{ marginTop: 12 }}>
-        <button className="btn primary" onClick={updateNow}><Ico d={ICONS.check} size={15} />Update Now</button>
-        <span className="subtle" style={{ marginLeft: 10 }}>Replaces this device's cached copy with Rev {latest.rev} and reloads. Your data isn't touched.</span>
-      </div>}
-      <div className="divider"></div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <button className="btn" onClick={updateNow}>Reload Latest Version</button>
-        <span className="subtle">Same thing without checking first — for a copy that seems stuck.
-          On a device too stuck to get this far, open <span className="mono">/reset</span> on this site instead.</span>
-      </div>
-    </div>
   </div>;
 }
 

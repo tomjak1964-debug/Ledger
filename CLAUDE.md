@@ -548,11 +548,14 @@ in `vercel.json` / `netlify.toml`, so a fetch of it always says what the server 
 `src/lib/version.js` — `checkForUpdate()` compares the served build stamp to the running one (a hot-fix
 without a rev bump still counts), `updateNow()` unregisters the worker, clears the caches and reloads,
 and `useUpdateNudge(toast)` runs the check once a few seconds after load and offers **Update now** on
-the toast. **Settings → Revision** shows the rev and build, **Check for Update**, **Update Now** when
-there is one, and *Reload Latest Version* for a copy that seems stuck.
+the toast. **The revision sits at the foot of the menu** (`components/RevisionFoot.jsx`), for every user —
+Settings is admin-only, so it used to be out of reach for the rest. It checks on load, every half hour and when
+the app comes back into view: *Rev 1.26 · ✓ Up to date*, or an **Update to Rev X** button when the server has a
+newer build. Clicking the rev checks again (hover shows the build stamp); *Reload* throws away a copy that seems
+stuck. There is no Settings → Revision tab any more.
 
 **Unsticking a cached copy:** the app is a PWA, so a browser can keep serving the build it cached.
-Settings → Revision shows the running rev and build and *Reload Latest Version* / *Update Now*
+The foot of the menu shows the running rev, and its *Reload* / *Update to Rev X*
 unregister the service worker and clear the caches. For a device too stuck to reach that button,
 **`/reset`** (`app/public/reset.html`) does the same from a standalone page and reports what it
 cleared. It is deliberately outside the service worker's reach — `globIgnores` keeps it out of the

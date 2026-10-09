@@ -1,12 +1,13 @@
 import { useState, useCallback, useEffect } from "react";
 import { useUpdateNudge } from "./lib/version.js";
 import RevisionFoot from "./components/RevisionFoot.jsx";
+import ChangePassword from "./components/ChangePassword.jsx";
 import { supabase } from "./lib/supabaseClient.js";
 import { useLedger } from "./lib/store.js";
 import { cls } from "./lib/helpers.js";
 import { invoiceStatus, paid, billBalance } from "./calc/ledger.js";
 import { NAV_AREA, currentMember, canRead, canWrite, isAdminRole } from "./lib/permissions.js";
-import { Ico, ICONS } from "./components/ui.jsx";
+import { Ico, ICONS, Modal } from "./components/ui.jsx";
 import DocumentView from "./components/DocumentView.jsx";
 import GlobalSearch from "./components/GlobalSearch.jsx";
 import Dashboard from "./views/Dashboard.jsx";
@@ -105,6 +106,7 @@ export default function App({ session }) {
   const [doc, setDoc] = useState(null); // {kind,doc}
   const [toastMsg, setToastMsg] = useState(null);
   const [navOpen, setNavOpen] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);   // anyone can change their own password, Settings or not
   useEffect(() => {
     if (!navOpen) return;
     const onKey = e => { if (e.key === "Escape") setNavOpen(false); };
@@ -182,6 +184,7 @@ export default function App({ session }) {
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.user.email}</span>
           <button className="link-btn" style={{ color: "#7FB0FF", flex: "none" }} onClick={() => supabase.auth.signOut()}>Sign out</button>
         </div>
+        <button className="link-btn" style={{ color: "#66788F", marginTop: 5 }} onClick={() => { setPwOpen(true); setNavOpen(false); }}>Change password</button>
       </div>
     </div>
 
@@ -222,6 +225,10 @@ export default function App({ session }) {
       </div>
     </div>
 
+    {pwOpen && <Modal title="Change Password" onClose={() => setPwOpen(false)}>
+      <p className="subtle" style={{ marginTop: 0 }}>Signed in as {session.user.email}. The new password works on every device from now on.</p>
+      <ChangePassword toast={toast} onDone={() => setPwOpen(false)} />
+    </Modal>}
     {doc && <DocumentView kind={doc.kind} doc={doc.doc}
       contact={db.contacts.find(c => c.id === (doc.doc.customerId || doc.doc.vendorId))} settings={db.settings}
       onPrinted={doc.kind === "invoice" ? () => { actions.markInvoicePrinted(doc.doc.id); doc.onPrinted?.(); } : doc.onPrinted}

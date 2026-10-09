@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { uid, money, todayISO, fmtDate, isoDate } from "../lib/helpers.js";
 import { Ico, ICONS, Field, PasswordInput } from "../components/ui.jsx";
+import ChangePassword from "../components/ChangePassword.jsx";
 import { AREAS, isAdminRole } from "../lib/permissions.js";
 import { supabase } from "../lib/supabaseClient.js";
 import FormsTab from "../components/FormsEditor.jsx";
@@ -139,33 +140,10 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
         <div className="kv"><dt>Signed in as</dt><dd>{session.user.email}</dd></div>
         <div className="kv"><dt>App revision</dt><dd className="mono">Rev {REV} <span className="subtle">— shown at the foot of the menu, with Update when a newer one is out</span></dd></div>
         <div className="divider"></div>
+        <div className="subtle" style={{ fontWeight: 600, marginBottom: 8 }}>Change Password</div>
         <ChangePassword toast={toast} />
       </div>
     </div>}
-  </div>;
-}
-
-// Self-service password change for the signed-in user.
-function ChangePassword({ toast }) {
-  const [pw, setPw] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [busy, setBusy] = useState(false);
-  const err = pw.length > 0 && pw.length < 8 ? "At least 8 characters" : (confirm && pw !== confirm ? "Passwords don't match" : "");
-  const save = async () => {
-    setBusy(true);
-    const { error } = await supabase.auth.updateUser({ password: pw });
-    setBusy(false);
-    if (error) { toast("⚠ " + error.message); return; }
-    setPw(""); setConfirm(""); toast("Password updated");
-  };
-  return <div>
-    <div className="subtle" style={{ fontWeight: 600, marginBottom: 8 }}>Change Password</div>
-    <div className="row">
-      <Field label="New Password" hint="At least 8 characters"><PasswordInput autoComplete="new-password" value={pw} onChange={e => setPw(e.target.value)} /></Field>
-      <Field label="Confirm New Password"><PasswordInput autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} /></Field>
-    </div>
-    {err && <p className="subtle" style={{ margin: "0 0 8px", color: "var(--neg)" }}>{err}</p>}
-    <button className="btn primary" disabled={busy || !pw || !!err || pw !== confirm} onClick={save}>{busy ? "Saving…" : "Update Password"}</button>
   </div>;
 }
 

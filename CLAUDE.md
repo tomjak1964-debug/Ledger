@@ -37,12 +37,25 @@ reach the database, by design.
   `cd ~/apps/ledger && docker compose restart functions`. Check with `docker compose logs --since 10m functions`.
   The Supabase dashboard paste is retired. Key checks are on (`FUNCTIONS_VERIFY_JWT=true`), and each function must
   still check the caller itself (a signed-in member), like `send-document` and `admin-create-user` do.
-- **Function secrets** (`RESEND_API_KEY`, `EMAIL_FROM`=`remittances@tmjengineering.com`, `CRON_SECRET`) live in
+- **Email senders are chosen by document type, in `send-document`** (`FROM_BY_TYPE`): the app sends only a
+  `docType` (`invoice` — invoices, credit memos, reminders; `remittance`; `proposal`), never an address, and the
+  function maps it to `EMAIL_FROM_INVOICE` (invoices@tmjengineering.com) / `EMAIL_FROM_REMITTANCE`
+  (remittances@) / `EMAIL_FROM`. An unknown type is refused; no type, or a per-type setting not set yet, uses
+  `EMAIL_FROM`. Every `<EmailModal>` passes its `docType`.
+- **Function secrets** (`RESEND_API_KEY`, `EMAIL_FROM`=`remittances@tmjengineering.com`, `EMAIL_FROM_INVOICE`,
+  `EMAIL_FROM_REMITTANCE`, `CRON_SECRET`) live in
   `~/apps/ledger/.env` on the NUC, never in git. A new secret also has to be listed under `functions:` in
   HomeServer's `apps/ledger/docker-compose.homeserver.yml`, then `docker compose up -d functions`.
 - **Storage** (`attachments`, `backups` buckets) is on the NUC's disk (`~/apps/ledger/volumes/storage`); its access
   policies are in HomeServer's `apps/ledger/post-restore.sql`. A new bucket policy goes in both places.
-- **Logins**: email + password, no public sign-up; admins create logins through `admin-create-user`.
+- **Logins**: email + password, no public sign-up; admins create logins through `admin-create-user` and hand
+  over the first password. Anyone can change their own from **Change password** at the foot of the menu
+  (`components/ChangePassword.jsx`). **Forgot password?** on the sign-in page emails a reset link
+  (`resetPasswordForEmail`, redirect to `/app`); following it raises `PASSWORD_RECOVERY` and `main.jsx` shows
+  *Set a new password* before the app. The auth container sends it through Resend's SMTP
+  (`SMTP_HOST=smtp.resend.com`, port 587, user `resend`, the Resend API key as password,
+  from `remittances@tmjengineering.com` as "TMJ Ledger") and allows redirects back to
+  `https://www.tmjledger.com/**` (`ADDITIONAL_REDIRECT_URLS`) — set in `~/apps/ledger/.env` on 2026-10-09.
 - Scheduled JSON backups (`scheduled-backup`) aren't scheduled on the NUC: the NUC's nightly database dump covers
   every table. Supabase.com's two cron jobs never worked.
 - **Backups:** every night at 03:10 the NUC dumps this database and its stored files into a bundle that is copied

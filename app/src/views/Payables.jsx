@@ -177,7 +177,7 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
         }
       }} />}
     {payRun && <PayBillsModal db={db} actions={actions} toast={toast} onClose={() => setPayRun(false)} />}
-    {emailRemit && <EmailModal
+    {emailRemit && <EmailModal docType="remittance"
       title={"Email Remittance · " + (nameOf(db, emailRemit.bill.vendorId))}
       defaultTo={remitEmail(db.contacts.find(c => c.id === emailRemit.bill.vendorId))}
       defaultSubject={`Payment remittance — ${db.settings.company}`}
@@ -330,7 +330,7 @@ function PayBillsModal({ db, actions, toast, onClose }) {
       Checks used: <span className="mono">{docs.checkRefs.map(r => "#" + r).join(", ")}</span>. If any of them misfeeds, void the run and re-run it — the bills reopen and those numbers become available again.
     </p>}
   </Modal>
-  {emailRun && <EmailModal
+  {emailRun && <EmailModal docType="remittance"
     title={"Email Remittance · " + (emailRun.vendor?.name || "")}
     defaultTo={remitEmail(emailRun.vendor)}
     defaultSubject={`Remittance advice — ${money(emailRun.payment.amount)} from ${db.settings.company}`}

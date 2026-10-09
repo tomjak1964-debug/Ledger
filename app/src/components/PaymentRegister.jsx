@@ -99,7 +99,7 @@ export default function PaymentRegister({ db, actions, toast, readOnly, kind }) 
   };
   const emailModal = emailGroup && (() => {
     const args = remitArgs(emailGroup);
-    return <EmailModal
+    return <EmailModal docType="remittance"
       title={"Email Remittance · " + (args.vendor?.name || "")}
       defaultTo={remitEmail(args.vendor)}
       defaultSubject={`Remittance advice — ${money(args.payment.amount)} from ${db.settings.company}`}

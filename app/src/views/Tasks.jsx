@@ -1,9 +1,10 @@
 import { useState, useRef } from "react";
-import { money, fmtDate, nameOf } from "../lib/helpers.js";
+import { money, fmtDate, nameOf, isoDate } from "../lib/helpers.js";
 import { lineTotals } from "../calc/ledger.js";
 import { Ico, ICONS, Empty, Modal, SortTh, useTableSort } from "../components/ui.jsx";
 import InvoiceFromSOModal from "../components/InvoiceFromSOModal.jsx";
 import { invoicePdf } from "../lib/invoicePdf.js";
+import { reviewTarget, isReviewTask } from "../lib/taskKinds.js";
 
 // Work waiting on the user. Today's only task type is "create invoice" — raised
 // when a job has items marked ready. Acting on it opens the invoice modal
@@ -12,7 +13,7 @@ import { invoicePdf } from "../lib/invoicePdf.js";
 // Several jobs can be billed in one go: tick them and either create every
 // invoice at once, or walk them one at a time with the usual dialog so each
 // can be adjusted before it is written.
-export default function TasksView({ db, actions, toast, openDoc, readOnly }) {
+export default function TasksView({ db, actions, toast, openDoc, readOnly, go }) {
   const [invoiceSO, setInvoiceSO] = useState(null);
   const [sel, setSel] = useState({});          // taskId -> ticked
   const [confirmBatch, setConfirmBatch] = useState(null);   // { withTime }
@@ -21,7 +22,20 @@ export default function TasksView({ db, actions, toast, openDoc, readOnly }) {
   const [handled, setHandled] = useState({});   // invoice id -> "printed" | "saved"
   const [showHandled, setShowHandled] = useState(false);
   const [busy, setBusy] = useState(false);
-  const openTasks = (db.tasks || []).filter(t => t.status === "open");
+  const allOpen = (db.tasks || []).filter(t => t.status === "open");
+  const openTasks = allOpen.filter(t => !isReviewTask(t));
+  // What the team has done — time logged, jobs updated, quotes and proposals
+  // created — for the owner to look over and mark done.
+  const reviews = allOpen.filter(isReviewTask);
+  const { sorted: reviewRows, sort: rSort, onSort: rOnSort } = useTableSort(reviews, {
+    when: t => t.createdAt || "", kind: t => reviewTarget(t).kind, title: t => t.title || "", detail: t => t.detail || "",
+  }, { key: "when", dir: "desc" });
+  const markDone = async (t) => { if (await actions.setTaskStatus(t.id, "done")) toast("Marked done"); };
+  const markAllDone = async () => {
+    if (!confirm(`Mark all ${reviews.length} as done?`)) return;
+    for (const t of reviews) if (!(await actions.setTaskStatus(t.id, "done"))) return;
+    toast(`${reviews.length} marked done`);
+  };
   const soOf = t => db.salesOrders.find(s => s.id === t.salesOrderId);
   const readyLines = so => (so?.lineItems || []).filter(li => li.ready && !li.invoiced && !li.closed);
   const unbilledTime = so => (db.timeEntries || []).filter(t => t.salesOrderId === so?.id && !t.invoiceId && t.approved);
@@ -109,8 +123,33 @@ export default function TasksView({ db, actions, toast, openDoc, readOnly }) {
       <button className="btn ghost" onClick={() => setSel({})}>Clear</button>
     </div>}
 
+    {reviews.length > 0 && <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-head"><h3>Team Activity</h3><span className="count" style={{ marginLeft: 8 }}>{reviews.length}</span>
+        <span className="subtle" style={{ marginLeft: 12 }}>What others have done — look it over and mark it done</span>
+        {!readOnly && <button className="btn sm" style={{ marginLeft: "auto" }} onClick={markAllDone}><Ico d={ICONS.check} size={14} />Mark All Done</button>}</div>
+      <table><thead><tr>
+        <SortTh label="When" col="when" sort={rSort} onSort={rOnSort} />
+        <SortTh label="Type" col="kind" sort={rSort} onSort={rOnSort} />
+        <SortTh label="What" col="title" sort={rSort} onSort={rOnSort} />
+        <SortTh label="Detail" col="detail" sort={rSort} onSort={rOnSort} />
+        <th></th></tr></thead>
+        <tbody>{reviewRows.map(t => {
+          const tg = reviewTarget(t);
+          return <tr key={t.id}>
+            <td className="subtle" style={{ whiteSpace: "nowrap" }}>{t.createdAt ? fmtDate(isoDate(new Date(t.createdAt))) : "—"}</td>
+            <td className="subtle">{tg.kind}</td>
+            <td style={{ fontWeight: 600 }}>{t.title}</td>
+            <td className="subtle">{t.detail || "—"}</td>
+            <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+              {go && <button className="btn sm" onClick={() => go(tg.page)}>Open<Ico d={ICONS.arrow} size={14} /></button>}
+              {!readOnly && <button className="btn sm primary" style={{ marginLeft: 6 }} onClick={() => markDone(t)}><Ico d={ICONS.check} size={14} />Done</button>}
+            </td>
+          </tr>;
+        })}</tbody></table>
+    </div>}
+
     <div className="card">
-      <div className="card-head"><h3>Open Tasks</h3></div>
+      <div className="card-head"><h3>Ready to Invoice</h3></div>
       {openTasks.length === 0
         ? <Empty icon={ICONS.task} title="All clear" msg="When someone marks a job's items ready to invoice, a task shows up here for whoever can create invoices." />
         : <table><thead><tr>

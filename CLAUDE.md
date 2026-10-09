@@ -791,6 +791,32 @@ costs entered by hand on the Jobs page ($ button), or imported from the sheet (`
 Eng / Profit is revenue less material, as the sheet worked it; Profit is revenue less every cost, where revenue
 is the PO plus extras invoiced, less lines closed unbilled.
 
+**Service reports** (Work → Time Tracking, `components/ServiceReports.jsx`, migration 029, `service_reports`): a
+visit written up — job, date, technician, problem reported, work performed, follow-up, parts used and hours.
+Numbered `SR-0001…` from `next_doc_number('service')`. The hours are ordinary **time entries** carrying
+`serviceReportId`, so they're approved and billed like any time; an edit rewrites the report's un-invoiced
+entries and keeps their approval unless the hours or category changed, and an invoiced entry is locked. A part
+ticked **Bill** with a price is added to the job's sales order as a **ready** line (`{desc} (SR-…)`), once —
+`parts[].soLineId` remembers it — which raises the job's invoice task. Picking **+ New job…** opens a sales
+order on save (customer, job #, description, optional PO; a job # already in use is refused) so the visit
+bills like any job. Anyone who can log time can write one (`timeTracking` / `field` / `jobs`); members see
+their own, admins see all. Deleting a report deletes its hours unless any are invoiced; billed parts stay on
+the job. Hours logged to a job and not yet invoiced keep it open in the Sales Order and Job Tracking reports
+(`soSummary()`), since a service job can be nothing but time. Internal only — no printed report.
+
+**Sales order numbers** run on from the Sage series: `nextSoNumber()` in `store.js` is the SO prefix plus the
+next number with no dash or padding (`TMJ915`), used by every place an SO is created (new SO, won proposal,
+service-report job). The `so` sequence was set to 915 on 2026-10-08 (`data-fixes/2026-10-08_so_counter_915.sql`).
+
+**Team activity becomes tasks.** `noteActivity()` in `store.js` raises a `type: "review"` task whenever someone
+other than the org owner logs time, writes or updates a service report, creates or edits a sales order, marks a
+job line ready / not ready, closes or reopens one, adds, changes or deletes a job cost, or creates a quote or a
+proposal. One open task per subject and person (the title, `"Job updated TMJ915 · 4810 — tech@…"`): a second
+change updates that task's detail rather than adding another. It never fails the action that raised it. Tasks
+shows them as **Team Activity** (Open → the page it's about, `reviewTarget()` in `lib/taskKinds.js`; Done; Mark
+All Done) above **Ready to Invoice**, and the dashboard leads with an **Open Tasks** card (team activity plus
+jobs ready to invoice) for anyone with the Tasks page.
+
 **Sortable lists:** every list view — Quotes, Sales Orders, Invoices, Receivables, Payables,
 Purchase Orders, Expenses, Customers, Vendors, Catalog, Jobs, Tasks, Proposals, Fixture Rates, Job Costing,
 Time Tracking, the Payments/Receipts register, and the report tables — sorts on any column heading,

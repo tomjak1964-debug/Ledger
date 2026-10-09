@@ -1,4 +1,5 @@
-import { money, fmtDate, todayISO, daysBetween, sum, nameOf } from "../lib/helpers.js";
+import { money, fmtDate, todayISO, daysBetween, sum, nameOf, isoDate } from "../lib/helpers.js";
+import { reviewTarget, isReviewTask } from "../lib/taskKinds.js";
 import { lineTotals, paid, balance, invoiceStatus, billBalance } from "../calc/ledger.js";
 import { canRead } from "../lib/permissions.js";
 import { Ico, ICONS, Badge, Stat, Empty } from "../components/ui.jsx";
@@ -25,6 +26,12 @@ export default function Dashboard({ db, go, member }) {
   const apOut = sum(db.bills, b => { const bal = billBalance(b); return bal > 0 ? bal : 0; });
   const exp30 = sum(db.expenses.filter(e => daysBetween(e.date, todayISO()) <= 30 && daysBetween(e.date, todayISO()) >= 0), e => Number(e.amount) || 0);
   const overdue = db.invoices.filter(i => invoiceStatus(i) === "overdue");
+  // Open tasks: jobs ready to invoice, and what the team has done since the
+  // owner last looked (Tasks is gated by the invoices area).
+  const canTasks = can("invoices");
+  const openTasks = (db.tasks || []).filter(t => t.status === "open");
+  const teamTasks = openTasks.filter(isReviewTask).sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  const invoiceTasks = openTasks.filter(t => !isReviewTask(t));
 
   // KPI cards — only the ones this user can see.
   const stats = [
@@ -48,6 +55,27 @@ export default function Dashboard({ db, go, member }) {
   ].sort((a, b) => b.t.localeCompare(a.t)).slice(0, 6);
 
   return <div>
+    {canTasks && openTasks.length > 0 && <div className="card" style={{ marginBottom: 16, borderLeft: "4px solid var(--accent)" }}>
+      <div className="card-head"><h3>Open Tasks</h3><span className="count" style={{ marginLeft: 8 }}>{openTasks.length}</span>
+        <span className="subtle" style={{ marginLeft: 12 }}>
+          {[teamTasks.length && `${teamTasks.length} from the team`, invoiceTasks.length && `${invoiceTasks.length} ready to invoice`].filter(Boolean).join(" · ")}</span>
+        <button className="btn sm" style={{ marginLeft: "auto" }} onClick={() => go("tasks")}>Open Tasks<Ico d={ICONS.arrow} size={14} /></button></div>
+      <table><tbody>
+        {teamTasks.slice(0, 5).map(t => <tr key={t.id} className="clickable" onClick={() => go("tasks")}>
+          <td className="subtle" style={{ width: 110, whiteSpace: "nowrap" }}>{t.createdAt ? fmtDate(isoDate(new Date(t.createdAt))) : ""}</td>
+          <td className="subtle" style={{ width: 120 }}>{reviewTarget(t).kind}</td>
+          <td style={{ fontWeight: 600 }}>{t.title}</td>
+          <td className="subtle">{t.detail}</td>
+        </tr>)}
+        {teamTasks.length > 5 && <tr className="clickable" onClick={() => go("tasks")}><td colSpan={4} className="subtle">and {teamTasks.length - 5} more…</td></tr>}
+        {invoiceTasks.length > 0 && <tr className="clickable" onClick={() => go("tasks")}>
+          <td className="subtle" style={{ whiteSpace: "nowrap" }}></td><td className="subtle">Invoice</td>
+          <td style={{ fontWeight: 600 }}>{invoiceTasks.length} job{invoiceTasks.length === 1 ? "" : "s"} ready to invoice</td>
+          <td className="subtle">{invoiceTasks.map(t => db.salesOrders.find(s => s.id === t.salesOrderId)?.number).filter(Boolean).slice(0, 6).join(", ")}</td>
+        </tr>}
+      </tbody></table>
+    </div>}
+
     {stats.length > 0 && <div className="grid" style={{ gridTemplateColumns: `repeat(${stats.length},1fr)`, marginBottom: 16 }}>{stats}</div>}
 
     {stages.length > 0 && <div className="card" style={{ marginBottom: 16 }}>

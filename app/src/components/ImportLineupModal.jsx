@@ -3,7 +3,7 @@ import { uid, money, todayISO, fmtDate } from "../lib/helpers.js";
 import { proposalConfig } from "../calc/proposals.js";
 import { newEstimate, priceEstimate, derivedIo, DEVICE_FIELDS, STRUCTURE_FIELDS, LINEUP_FIELDS, SAFETY_OPTIONS, contentSummary } from "../calc/estimates.js";
 import { readLineupFile, textLines, parseLineup, driversFromLineup, lineupAssumptions, guessCustomer } from "../lib/lineup.js";
-import { Ico, ICONS, Modal, Field } from "./ui.jsx";
+import { Ico, ICONS, Modal, Field, blankZero } from "./ui.jsx";
 
 // Turn Electrical Engineering Line-ups into controls estimates: drop the PDFs
 // (or paste one's text), check what was read off each, correct any count, and
@@ -182,20 +182,20 @@ export default function ImportLineupModal({ db, actions, toast, onClose, onDone 
           <div className="row">
             <Field label="Discrete I/O" hint={`lineup tally; blank = derived ${dio.total} (${dio.inputs} in / ${dio.outputs} out)`}>
               <input className="input mono" type="number" min="0" value={cur.drivers.ioDiscrete ?? ""} placeholder={String(dio.total)} onChange={e => setDriver(sel, "ioDiscrete", e.target.value)} /></Field>
-            <Field label="Analog / IO-Link points"><input className="input mono" type="number" min="0" value={cur.drivers.ioAnalog ?? 0} onChange={e => setDriver(sel, "ioAnalog", e.target.value)} /></Field>
+            <Field label="Analog / IO-Link points"><input className="input mono" type="number" min="0" value={blankZero(cur.drivers.ioAnalog)} placeholder="0" onChange={e => setDriver(sel, "ioAnalog", e.target.value)} /></Field>
             <Field label="Safety system"><select className="select" value={cur.drivers.safety} onChange={e => setDriver(sel, "safety", e.target.value)}>
               {SAFETY_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
-            <Field label="Reuse from reference job (%)"><input className="input mono" type="number" min="0" max="90" value={cur.drivers.reusePct ?? 0} onChange={e => setDriver(sel, "reusePct", e.target.value)} /></Field>
+            <Field label="Reuse from reference job (%)"><input className="input mono" type="number" min="0" max="90" value={blankZero(cur.drivers.reusePct)} placeholder="0" onChange={e => setDriver(sel, "reusePct", e.target.value)} /></Field>
           </div>
           <div className="subtle" style={{ fontWeight: 600, margin: "6px 0" }}>Devices</div>
           <div className="row" style={{ flexWrap: "wrap" }}>
             {DEVICE_FIELDS.map(f => <Field key={f.key} label={f.label} hint={f.hint || undefined}>
-              <input className="input mono" type="number" min="0" value={cur.drivers[f.key] ?? 0} onChange={e => setDriver(sel, f.key, e.target.value)} /></Field>)}
+              <input className="input mono" type="number" min="0" value={blankZero(cur.drivers[f.key])} placeholder="0" onChange={e => setDriver(sel, f.key, e.target.value)} /></Field>)}
           </div>
           <div className="subtle" style={{ fontWeight: 600, margin: "6px 0" }}>Program, documents and start-up</div>
           <div className="row" style={{ flexWrap: "wrap" }}>
             {STRUCTURE_FIELDS.map(([k, label]) => <Field key={k} label={label}>
-              <input className="input mono" type="number" min="0" value={cur.drivers[k] ?? 0} onChange={e => setDriver(sel, k, e.target.value)} /></Field>)}
+              <input className="input mono" type="number" min="0" value={blankZero(cur.drivers[k])} placeholder="0" onChange={e => setDriver(sel, k, e.target.value)} /></Field>)}
             <Field label="Start-up trips"><input className="input mono" type="number" min="0" value={cur.drivers.trips} onChange={e => setDriver(sel, "trips", e.target.value)} /></Field>
             <Field label="Days per trip"><input className="input mono" type="number" min="0" step="0.5" value={cur.drivers.daysPerTrip} onChange={e => setDriver(sel, "daysPerTrip", e.target.value)} /></Field>
             <Field label="People on site"><input className="input mono" type="number" min="1" value={cur.drivers.people} onChange={e => setDriver(sel, "people", e.target.value)} /></Field>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { uid, cls } from "../lib/helpers.js";
-import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort } from "../components/ui.jsx";
+import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort, blankZero } from "../components/ui.jsx";
 import { termsLabel } from "../lib/terms.js";
 import AccountSelect from "../components/AccountSelect.jsx";
 import { TEN99_TYPES, ten99Label, accountLabel } from "../calc/accounts.js";
@@ -89,10 +89,10 @@ export default function ContactsView({ db, actions, toast, readOnly, type = "cus
           <input className="input mono" type="number" min="0" placeholder={String(db.settings.terms)} value={edit.terms ?? ""}
             onChange={e => setEdit({ ...edit, terms: e.target.value })} /></Field>
         <Field label="Early-payment discount %" hint="0 for none">
-          <input className="input mono" type="number" step="any" min="0" value={edit.discountPct ?? 0}
+          <input className="input mono" type="number" step="any" min="0" value={blankZero(edit.discountPct)} placeholder="0"
             onChange={e => setEdit({ ...edit, discountPct: e.target.value })} /></Field>
         <Field label="…if paid within (days)" hint="Counted from the document date">
-          <input className="input mono" type="number" min="0" value={edit.discountDays ?? 0}
+          <input className="input mono" type="number" min="0" value={blankZero(edit.discountDays)} placeholder="0"
             onChange={e => setEdit({ ...edit, discountDays: e.target.value })} /></Field>
       </div>
       {edit.type === "customer" && <Field label="Site Location" hint="Used by the Field app to sort jobs by distance">

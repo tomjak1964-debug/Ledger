@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { uid, money, fmtDate, todayISO, nameOf, cls } from "../lib/helpers.js";
 import { proposalConfig, priceProposal, ioBlocks, phaseAmount, SPEC_FIELDS, DEFAULT_PHASES, defaultProposalCustomer } from "../calc/proposals.js";
-import { Ico, ICONS, Badge, Empty, Field, MenuItem, ActionMenu, Modal, SortTh, useTableSort } from "../components/ui.jsx";
+import { Ico, ICONS, Badge, Empty, Field, MenuItem, ActionMenu, Modal, SortTh, useTableSort, blankZero } from "../components/ui.jsx";
 import { downloadProposalDocx, proposalDocxBlob, proposalFileStem } from "../lib/proposalDocx.js";
 import EmailModal from "../components/EmailModal.jsx";
 import ImportProposalsModal from "../components/ImportProposalsModal.jsx";
@@ -265,7 +265,7 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
       <div className="card-body">
         <div className="row">
           {SPEC_FIELDS.map(([k, label]) => <Field key={k} label={label}>
-            <input className="input mono" type="number" min="0" value={x.specs[k] ?? 0} onChange={e => setSpec(k, e.target.value)} />
+            <input className="input mono" type="number" min="0" value={blankZero(x.specs[k])} placeholder="0" onChange={e => setSpec(k, e.target.value)} />
           </Field>)}
         </div>
         <div className="row" style={{ alignItems: "center" }}>

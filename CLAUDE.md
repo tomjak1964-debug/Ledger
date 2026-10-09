@@ -338,7 +338,7 @@ overridable, duplicate numbers refused, voiding a check reopens its bills and fr
 **guided payment flow** (record → print → confirm the check printed → email/save → every dialog
 closes; a misprinted check is reversed in one click) · **payments & receipts register**
 (`src/components/PaymentRegister.jsx`, shown as Vendors & Purchases → Payments and Receivables → Receipts:
-search, date range, edit, delete, void a whole check, print a check again from its row; both sides list one row per
+search, date range, edit, delete, void a whole check, print a check again from its row; on the payments side each bill line also shows the vendor's invoice number (`bill.ref`), and the search finds it; both sides list one row per
 check/transfer, expandable to the invoices or bills it covered — `receiptGroups()` in
 `src/calc/reports.js` does the grouping) · **whole receipts and payments are editable**
 (`src/components/PaymentGroupModal.jsx` + `updatePaymentGroup()` in `store.js`: open a

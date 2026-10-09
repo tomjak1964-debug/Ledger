@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { useUpdateNudge } from "./lib/version.js";
+import RevisionFoot from "./components/RevisionFoot.jsx";
 import { supabase } from "./lib/supabaseClient.js";
 import { useLedger } from "./lib/store.js";
 import { cls } from "./lib/helpers.js";
@@ -175,6 +176,7 @@ export default function App({ session }) {
         })}
       </nav>
       <div className="sidebar-foot">
+        <RevisionFoot />
         <div>{db.settings.company || "Your Company"}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5 }}>
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.user.email}</span>

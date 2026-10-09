@@ -1,8 +1,8 @@
 import { useState, useRef } from "react";
 import { uid, todayISO, isoDate, money, fmtDate, sum } from "../lib/helpers.js";
-import { round2 } from "../calc/ledger.js";
+import { round2, billBalance } from "../calc/ledger.js";
 import { accountSettings, accountLabel, TYPE_GROUP, accountByNumber } from "../calc/accounts.js";
-import { reconcileState, matchStatement } from "../calc/bankRecon.js";
+import { reconcileState, matchStatement, suggestVendorPayment } from "../calc/bankRecon.js";
 import { readStatementFile, parseStatement, parsePasted } from "../lib/bankStatement.js";
 import AccountSelect from "../components/AccountSelect.jsx";
 import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort, ActionMenu, MenuItem } from "../components/ui.jsx";
@@ -225,14 +225,23 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
     const stmt = st || (db.cardStatements || []).filter(s => s.cardAccount === String(card.account) && s.closingDate <= line.date).sort((a, b) => b.closingDate.localeCompare(a.closingDate))[0];
     return { card, stmt };
   };
+  // A payment to a vendor the books don't have: an open bill for exactly this
+  // amount, else a vendor whose name the statement line carries. Recording it
+  // as that vendor's bill payment — not a bare expense — keeps the vendor's
+  // account and their 1099 right.
+  const vendors = db.contacts.filter(c => c.type === "vendor");
+  const vendorPay = (line) => suggestVendorPayment(db, line);
+  const yymmdd = d => String(d || "").slice(2).replace(/-/g, "");
   const load = (p) => {
     const inRange = p.lines.filter(l => l.date <= recon.statementDate);
     const matched = matchStatement(inRange, state.items);
     setParsed({ ...p, skippedLater: p.lines.length - inRange.length });
     setRows(matched.map(m => {
       const cp = !m.item && cardPaid(m.line);
-      return { ...m, take: true, action: m.item ? "clear" : "post", account: cp ? String(cp.card.account) : m.line.amount < 0 ? "" : "4300",
-        payee: cp ? cp.card.name : guessPayee(m.line.desc), recordAs: cp ? "journal" : m.line.amount < 0 ? "expense" : "journal", cardPay: cp || null };
+      const vp = !m.item && !cp && vendorPay(m.line);
+      return { ...m, take: true, action: m.item ? "clear" : vp ? "vendor" : "post", account: cp ? String(cp.card.account) : m.line.amount < 0 ? "" : "4300",
+        payee: cp ? cp.card.name : guessPayee(m.line.desc), recordAs: cp ? "journal" : m.line.amount < 0 ? "expense" : "journal", cardPay: cp || null,
+        vendorId: vp ? vp.vendorId : "", billId: vp ? vp.billId : "", billRef: yymmdd(m.line.date), billAccount: "" };
     }));
   };
   const onFile = async (f) => {
@@ -247,7 +256,21 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
 
   const toClear = rows.filter(r => r.take && r.item);
   const toPost = rows.filter(r => r.take && !r.item && r.action === "post");
-  const canApply = rows.length > 0 && toPost.every(r => r.account);
+  const toVendor = rows.filter(r => r.take && !r.item && r.action === "vendor");
+  // What's wrong with a vendor row, if anything — Apply waits until none are.
+  const vendorProblem = (r) => {
+    if (!r.vendorId) return "Pick the vendor";
+    if (r.billId) {
+      const b = db.bills.find(x => x.id === r.billId);
+      if (b && Math.abs(r.line.amount) - billBalance(b) > 0.005) return `${b.number} only has ${money(billBalance(b))} left to pay`;
+      return "";
+    }
+    const ref = (r.billRef || "").trim();
+    if (!ref) return "Enter the vendor's invoice #";
+    if (db.bills.some(b => b.vendorId === r.vendorId && (b.ref || "").trim().toLowerCase() === ref.toLowerCase())) return `This vendor already has a bill with invoice # ${ref}`;
+    return "";
+  };
+  const canApply = rows.length > 0 && toPost.every(r => r.account) && toVendor.every(r => !vendorProblem(r));
   const apply = async () => {
     setBusy(true);
     try {
@@ -269,6 +292,23 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
         }
         posted++;
       }
+      // Vendor payments: onto the open bill it pays, or a new bill written
+      // for it, then cleared like any recorded payment.
+      for (const r of toVendor) {
+        const amt = Math.abs(r.line.amount);
+        let billId = r.billId;
+        if (!billId) {
+          const b = await actions.saveBill({ id: uid(), _new: true, vendorId: r.vendorId, date: r.line.date, dueDate: r.line.date, amount: amt,
+            ref: r.billRef.trim(), notes: "Recorded from the bank statement: " + r.line.desc, salesOrderId: "", expenseAccount: r.billAccount || "", payments: [] });
+          if (!b) { failed++; continue; }
+          billId = b.id;
+        }
+        const payment = { id: uid(), amount: amt, discount: 0, date: r.line.date, method: r.line.checkNo ? "Check" : "ACH / Wire", ref: r.line.checkNo || "", cashAccount: state.account };
+        const ok = await actions.recordPayments([{ parentType: "bill", parentId: billId, payment }]);
+        if (!ok) { failed++; continue; }
+        await actions.setCleared(recon, [{ key: "payment:" + payment.id, date: payment.date, amount: -amt }], true);
+        posted++;
+      }
       toast(`${cleared} matched and cleared · ${posted} posted${failed ? " · " + failed + " failed" : ""}`);
       if (!failed) onClose();
     } finally { setBusy(false); }
@@ -277,7 +317,7 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
   const postAccounts = (out) => out ? ["expense", "cos", "equity", "liability", "asset"] : ["income", "equity", "liability", "asset"];
   return <Modal title={"Import Statement — " + fmtDate(recon.statementDate)} onClose={onClose} wide
     foot={<>
-      <span className="subtle" style={{ marginRight: "auto" }}>{rows.length ? `${toClear.length} matched · ${toPost.length} to post · ${rows.filter(r => !r.item && r.action !== "post").length} left alone` : ""}</span>
+      <span className="subtle" style={{ marginRight: "auto" }}>{rows.length ? `${toClear.length} matched · ${toPost.length + toVendor.length} to post · ${rows.filter(r => !r.item && r.action === "skip").length} left alone` : ""}</span>
       <button className="btn" onClick={onClose}>Cancel</button>
       <button className="btn primary" disabled={busy || !canApply} onClick={apply}>{busy ? "Working…" : "Apply"}</button></>}>
     {!parsed ? <>
@@ -307,7 +347,29 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
             <td>{r.item ? <span className="subtle">will be marked cleared</span>
               : <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <select className="select" value={r.action} onChange={e => setRow(i, { action: e.target.value })}>
-                  <option value="post">{r.line.amount < 0 ? "Post as money out" : "Post as money in"}</option><option value="skip">Leave it — I'll enter it myself</option></select>
+                  <option value="post">{r.line.amount < 0 ? "Post as money out" : "Post as money in"}</option>
+                  {r.line.amount < 0 && <option value="vendor">Vendor bill payment (keeps the vendor's account and 1099)</option>}
+                  <option value="skip">Leave it — I'll enter it myself</option></select>
+                {r.action === "vendor" && (() => {
+                  const open = db.bills.filter(b => b.vendorId === r.vendorId && billBalance(b) > 0.005).sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+                  const problem = vendorProblem(r);
+                  return <>
+                    <select className="select" value={r.vendorId} onChange={e => setRow(i, { vendorId: e.target.value, billId: "" })}>
+                      <option value="">— which vendor? —</option>
+                      {[...vendors].sort((a, b) => a.name.localeCompare(b.name)).map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                    </select>
+                    {r.vendorId && <select className="select" value={r.billId} onChange={e => setRow(i, { billId: e.target.value })}>
+                      <option value="">New bill for {money(Math.abs(r.line.amount))} (it wasn't entered)</option>
+                      {open.map(b => <option key={b.id} value={b.id}>Pays {b.number}{b.ref ? " · inv " + b.ref : ""} — {money(billBalance(b))} owed</option>)}
+                    </select>}
+                    {r.vendorId && !r.billId && <>
+                      <input className="input mono" value={r.billRef} placeholder="Vendor's invoice #" onChange={e => setRow(i, { billRef: e.target.value })} />
+                      <AccountSelect db={db} value={r.billAccount} onChange={v => setRow(i, { billAccount: v })} groups={["expense", "cos"]} blank="— the vendor's usual expense account —" />
+                    </>}
+                    {problem ? <span style={{ color: "var(--warn)", fontSize: 12 }}>{problem}</span>
+                      : <span className="subtle" style={{ fontSize: 12 }}>{r.billId ? "Records the payment on that bill" : "Writes the bill dated " + fmtDate(r.line.date) + " and pays it"}{r.line.checkNo ? " by check " + r.line.checkNo : ""}, and ticks it cleared.</span>}
+                  </>;
+                })()}
                 {r.action === "post" && <>
                   <AccountSelect db={db} value={r.account} onChange={v => setRow(i, { account: v, recordAs: (r.line.amount < 0 && ["expense", "cos"].includes(TYPE_GROUP[accountByNumber(db, v)?.type])) ? "expense" : "journal" })}
                     groups={postAccounts(r.line.amount < 0)} blank={r.line.amount < 0 ? "— what was it? (Distributions, Office Supplies, a loan…) —" : "— what was it? (Other Income, Interest, a loan…) —"} />

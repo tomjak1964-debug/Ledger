@@ -736,7 +736,13 @@ used once. Matched lines are ticked; the rest are **Not in Ledger** with a *Post
 an expense-type account becomes an expense entry (payee guessed from the description), anything else — a
 distribution, a loan payment, interest, a transfer — a two-line journal entry, and the new item is ticked
 as cleared. A customer receipt the bank has but the books don't is left alone on purpose: it belongs in
-Receivables against its invoice. Reports → Account Reconciliation → **Reconciliation Summary** lists each
+Receivables against its invoice. A payment to a **vendor** the books don't have can be posted as a **Vendor bill payment**
+instead of a bare expense, so the vendor's account and 1099 stay right: it pays an open bill of theirs, or writes
+the bill it should have been (vendor's invoice # defaults to the line's YYMMDD, the vendor's usual expense
+account unless one is picked) and pays it — by check when the line has a check number, else ACH / Wire — then
+ticks the payment cleared. `suggestVendorPayment()` (`calc/bankRecon.js`) pre-selects it: an open bill for exactly
+the amount (narrowed to the vendor the line names), else a vendor whose name's first two words appear in the line.
+Apply waits while a vendor row is missing its vendor or invoice #, would overpay its bill, or repeats an invoice #. Reports → Account Reconciliation → **Reconciliation Summary** lists each
 statement with its cleared balance, outstanding items and book balance. Cleared keys are not carried by a
 JSON backup import, because the import gives payments new ids.
 

@@ -804,6 +804,19 @@ their own, admins see all. Deleting a report deletes its hours unless any are in
 the job. Hours logged to a job and not yet invoiced keep it open in the Sales Order and Job Tracking reports
 (`soSummary()`), since a service job can be nothing but time. Internal only — no printed report.
 
+**Sales order numbers** run on from the Sage series: `nextSoNumber()` in `store.js` is the SO prefix plus the
+next number with no dash or padding (`TMJ915`), used by every place an SO is created (new SO, won proposal,
+service-report job). The `so` sequence was set to 915 on 2026-10-08 (`data-fixes/2026-10-08_so_counter_915.sql`).
+
+**Team activity becomes tasks.** `noteActivity()` in `store.js` raises a `type: "review"` task whenever someone
+other than the org owner logs time, writes or updates a service report, creates or edits a sales order, marks a
+job line ready / not ready, closes or reopens one, adds, changes or deletes a job cost, or creates a quote or a
+proposal. One open task per subject and person (the title, `"Job updated TMJ915 · 4810 — tech@…"`): a second
+change updates that task's detail rather than adding another. It never fails the action that raised it. Tasks
+shows them as **Team Activity** (Open → the page it's about, `reviewTarget()` in `lib/taskKinds.js`; Done; Mark
+All Done) above **Ready to Invoice**, and the dashboard leads with an **Open Tasks** card (team activity plus
+jobs ready to invoice) for anyone with the Tasks page.
+
 **Sortable lists:** every list view — Quotes, Sales Orders, Invoices, Receivables, Payables,
 Purchase Orders, Expenses, Customers, Vendors, Catalog, Jobs, Tasks, Proposals, Fixture Rates, Job Costing,
 Time Tracking, the Payments/Receipts register, and the report tables — sorts on any column heading,

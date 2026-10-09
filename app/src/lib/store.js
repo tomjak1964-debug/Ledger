@@ -219,6 +219,35 @@ export function useLedger(session, onError) {
     return data;
   }
 
+  // Sales order numbers run on from the Sage series as prefix + number with no
+  // dash or padding (TMJ915), so new orders read like the ones before them.
+  async function nextSoNumber() {
+    return (dbRef.current.settings.soPrefix || "") + (await claimNumber("so"));
+  }
+
+  // Activity by anyone but the owner raises a review task, so the owner sees
+  // what the team has done. One open task per subject: a second change to the
+  // same thing updates that task's detail instead of adding another. Never
+  // fails the action that called it.
+  async function noteActivity({ title, detail = "", salesOrderId = "" }) {
+    try {
+      const d0 = dbRef.current;
+      if (!d0?.org || d0.org.ownerId === session.user.id) return;
+      const who = session.user.email;
+      const full = `${title} — ${who}`;
+      const open = (d0.tasks || []).find(t => t.type === "review" && t.status === "open" && t.title === full);
+      if (open) {
+        th(await supabase.from("tasks").update({ detail }).eq("id", open.id));
+        setDb(d => ({ ...d, tasks: d.tasks.map(t => t.id === open.id ? { ...t, detail } : t) }));
+        return;
+      }
+      const task = { id: uid(), type: "review", status: "open", salesOrderId, title: full, detail, createdBy: who };
+      const { data } = await supabase.from("tasks").insert(A.taskToRow(task)).select().maybeSingle();
+      setDb(d => ({ ...d, tasks: [data ? A.taskFromRow(data) : { ...task, createdAt: new Date().toISOString() }, ...(d.tasks || [])] }));
+    } catch (e) { console.warn("activity task not written", e); }
+  }
+  const soLabel = soId => { const so = dbRef.current.salesOrders.find(s => s.id === soId); return so ? [so.number, so.jobNumber].filter(Boolean).join(" · ") : "a job"; };
+
   // Invoice numbers: customer code + yymmdd + per-day 2-digit index
   // (VG260728-01), claimed atomically per customer+day. Falls back to the
   // Settings invoice prefix when the customer has no code.
@@ -283,6 +312,7 @@ export function useLedger(session, onError) {
         th(await supabase.from("quotes").upsert(A.quoteToRow(quote)));
         await replaceLineItems("quote_line_items", "quote_id", quote.id, quote.lineItems);
         setDb(d => ({ ...d, quotes: upsertList(d.quotes, quote) }));
+        if (isNew) await noteActivity({ title: `New quote ${quote.number}`, detail: `${dbRef.current.contacts.find(c => c.id === quote.customerId)?.name || ""} · ${money(lineTotals(quote.lineItems, quote.taxRate).total)}` });
         return quote;
       } catch (e) { return fail(e); }
     },
@@ -308,7 +338,7 @@ export function useLedger(session, onError) {
       try {
         const d0 = dbRef.current;
         const so = {
-          id: uid(), number: d0.settings.soPrefix + "-" + pad4(await claimNumber("so")),
+          id: uid(), number: await nextSoNumber(),
           quoteId: q.id, customerId: q.customerId, poNumber: po, date: todayISO(),
           status: "open", lineItems: q.lineItems.map(li => ({ ...li, id: uid() })), taxRate: q.taxRate,
         };
@@ -426,7 +456,7 @@ export function useLedger(session, onError) {
         const manual = (so.number || "").trim();
         const dupe = num => dbRef.current.salesOrders.some(x => x.id !== so.id && (x.number || "").toLowerCase() === num.toLowerCase());
         if (isNew && isAutoNumber(manual)) {
-          so.number = dbRef.current.settings.soPrefix + "-" + pad4(await claimNumber("so"));
+          so.number = await nextSoNumber();
         } else {
           // Manual number (override or edit): must not collide with another SO.
           if (dupe(manual)) throw new Error(`Sales order number "${manual}" is already used.`);
@@ -435,6 +465,8 @@ export function useLedger(session, onError) {
         th(await supabase.from("sales_orders").upsert(A.soToRow(so)));
         await replaceLineItems("sales_order_line_items", "sales_order_id", so.id, so.lineItems, A.soLineItemsToRows);
         setDb(d => ({ ...d, salesOrders: upsertList(d.salesOrders, so) }));
+        await noteActivity(isNew ? { title: `New sales order ${so.number}`, detail: so.jobNumber || "", salesOrderId: so.id }
+          : { title: `Job updated ${soLabel(so.id)}`, detail: "Sales order edited", salesOrderId: so.id });
         return so;
       } catch (e) { return fail(e); }
     },
@@ -457,6 +489,8 @@ export function useLedger(session, onError) {
         setDb(d => ({ ...d, salesOrders: d.salesOrders.map(s => s.id === soId
           ? { ...s, lineItems: (s.lineItems || []).map(li => li.id === lineId ? { ...li, ready } : li) } : s) }));
         await reconcileJobTask(soId);
+        await noteActivity({ title: `Job updated ${soLabel(soId)}`, salesOrderId: soId,
+          detail: `${ready ? "Marked ready" : "Unmarked"}: ${(dbRef.current.salesOrders.find(x => x.id === soId)?.lineItems || []).find(li => li.id === lineId)?.desc || "a line"}` });
         return true;
       } catch (e) { return fail(e); }
     },
@@ -476,6 +510,8 @@ export function useLedger(session, onError) {
           setDb(d => ({ ...d, salesOrders: d.salesOrders.map(s => s.id === soId ? { ...s, status: newStatus } : s) }));
         }
         await reconcileJobTask(soId);
+        await noteActivity({ title: `Job updated ${soLabel(soId)}`, salesOrderId: soId,
+          detail: `${closed ? "Closed" : "Reopened"}: ${(dbRef.current.salesOrders.find(x => x.id === soId)?.lineItems || []).find(li => li.id === lineId)?.desc || "a line"}` });
         return true;
       } catch (e) { return fail(e); }
     },
@@ -522,6 +558,11 @@ export function useLedger(session, onError) {
         if (!rows.length) throw new Error("Add at least one time line.");
         th(await supabase.from("time_entries").insert(rows.map(A.timeEntryToRow)));
         setDb(d => ({ ...d, timeEntries: [...rows, ...d.timeEntries] }));
+        for (const soId of [...new Set(rows.map(r => r.salesOrderId))]) {
+          const mine = rows.filter(r => r.salesOrderId === soId);
+          await noteActivity({ title: `Time logged on ${soLabel(soId)}`, salesOrderId: soId,
+            detail: `${sum(mine, r => Number(r.hours) || 0)} hr on ${[...new Set(mine.map(r => r.date))].join(", ")} — approve on Time Tracking` });
+        }
         return true;
       } catch (e) { return fail(e); }
     },
@@ -549,7 +590,7 @@ export function useLedger(session, onError) {
           if (d0.salesOrders.some(s => (s.jobNumber || "").trim().toLowerCase() === jobNumber.toLowerCase()))
             throw new Error(`Job ${jobNumber} already exists — pick it from the list instead.`);
           const so = {
-            id: uid(), number: d0.settings.soPrefix + "-" + pad4(await claimNumber("so")),
+            id: uid(), number: await nextSoNumber(),
             quoteId: "", customerId: newJob.customerId, poNumber: (newJob.poNumber || "").trim(), date: report.date || todayISO(),
             status: "open", taxRate: 0, jobNumber, description: (newJob.description || "").trim(), specs: {}, budget: [], lineItems: [],
           };
@@ -606,6 +647,8 @@ export function useLedger(session, onError) {
           timeEntries: [...entries, ...(d.timeEntries || []).filter(t => !drop.includes(t.id) && !entries.some(e => e.id === t.id))],
           salesOrders: addLines.length ? d.salesOrders.map(s => s.id === soId ? { ...s, status: "open", lineItems: [...(s.lineItems || []), ...addLines] } : s) : d.salesOrders,
         }));
+        await noteActivity({ title: `Service report ${sr.number}`, salesOrderId: soId,
+          detail: `${isNew ? "Written" : "Updated"} for ${soLabel(soId)}${newJob ? " (new job)" : ""} · ${sum(entries, e => e.hours)} hr${addLines.length ? ` · ${addLines.length} part${addLines.length > 1 ? "s" : ""} added to the job` : ""}` });
         if (addLines.length) {
           if (so?.status !== "open") th(await supabase.from("sales_orders").update({ status: "open" }).eq("id", soId));
           await reconcileJobTask(soId);
@@ -1257,13 +1300,17 @@ export function useLedger(session, onError) {
         const cost = { ...c }; delete cost._new;
         th(await supabase.from("job_costs").upsert(A.jobCostToRow(cost)));
         setDb(d => ({ ...d, jobCosts: upsertList(d.jobCosts || [], cost) }));
+        await noteActivity({ title: `Job updated ${soLabel(cost.salesOrderId)}`, salesOrderId: cost.salesOrderId,
+          detail: `Job cost ${c._new ? "added" : "changed"}: ${cost.description || cost.category} ${money(Number(cost.amount) || 0)}` });
         return cost;
       } catch (e) { return fail(e); }
     },
     async deleteJobCost(id) {
       try {
+        const was = (dbRef.current.jobCosts || []).find(c => c.id === id);
         th(await supabase.from("job_costs").delete().eq("id", id));
         setDb(d => ({ ...d, jobCosts: (d.jobCosts || []).filter(c => c.id !== id) }));
+        if (was) await noteActivity({ title: `Job updated ${soLabel(was.salesOrderId)}`, salesOrderId: was.salesOrderId, detail: `Job cost deleted: ${was.description || was.category} ${money(Number(was.amount) || 0)}` });
         return true;
       } catch (e) { return fail(e); }
     },
@@ -1367,6 +1414,7 @@ export function useLedger(session, onError) {
         }
         th(await supabase.from("proposals").upsert(A.proposalToRow(prop)));
         setDb(d => ({ ...d, proposals: upsertList(d.proposals, prop) }));
+        if (isNew) await noteActivity({ title: `New proposal ${prop.number}`, detail: [prop.jobNumber, prop.description, money(Number(prop.pricing?.total) || 0)].filter(Boolean).join(" · ") });
         return prop;
       } catch (e) { return fail(e); }
     },
@@ -1407,7 +1455,7 @@ export function useLedger(session, onError) {
           ["Field Services — Start-Up / Debug", pr.fieldTotal], ["Contingency", pr.contingency],
         ].filter(([, amt]) => Number(amt) > 0) : [];
         const so = {
-          id: uid(), number: d0.settings.soPrefix + "-" + pad4(await claimNumber("so")),
+          id: uid(), number: await nextSoNumber(),
           quoteId: "", customerId: p.customerId, poNumber: po, date: todayISO(), status: "open",
           // The job this SO is, as sold: Job Tracking and Job Costing read these.
           jobNumber: p.jobNumber || "", description: p.description || "",

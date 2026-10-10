@@ -120,7 +120,7 @@ function assemble(raw) {
     machineTypes: raw.machineTypes.map(A.machineTypeFromRow),
     proposals: raw.proposals.map(A.proposalFromRow),
     org: raw.orgs[0] ? { id: raw.orgs[0].id, name: raw.orgs[0].name, ownerId: raw.orgs[0].owner_id } : null,
-    members: raw.members.map(m => ({ orgId: m.org_id, userId: m.user_id, email: m.email, role: m.role, permissions: m.permissions || {} })),
+    members: raw.members.map(m => ({ orgId: m.org_id, userId: m.user_id, email: m.email, name: m.name || "", role: m.role, permissions: m.permissions || {} })),
     auditLog: (raw.audit || []).map(A.auditFromRow),
     tasks: (raw.tasks || []).map(A.taskFromRow),
     timeCategories: (raw.timeCats || []).map(A.timeCategoryFromRow),
@@ -1184,7 +1184,16 @@ export function useLedger(session, onError) {
     /* ---- team / users (admin only; enforced by RLS + the edge function) ---- */
     // Create a login for a teammate with an initial password (feature 6). The
     // service-role edge function makes the auth user and the membership row.
-    async createUser({ email, password, role, permissions }) {
+    // When each member last signed in, for Settings → Users (admins only —
+    // anyone else gets an empty list). { [userId]: ISO timestamp | null }
+    async memberSignIns() {
+      try {
+        const { data, error } = await supabase.rpc("member_sign_ins", { p_org: dbRef.current.org.id });
+        if (error) throw error;
+        return Object.fromEntries((data || []).map(r => [r.user_id, r.last_sign_in_at]));
+      } catch (e) { console.warn("sign-in times unavailable", e); return {}; }
+    },
+    async createUser({ email, password, role, permissions, name }) {
       try {
         const { data, error } = await supabase.functions.invoke("admin-create-user", {
           body: { orgId: dbRef.current.org.id, email, password, role, permissions },
@@ -1197,6 +1206,7 @@ export function useLedger(session, onError) {
           throw new Error(msg);
         }
         if (data && data.ok === false) throw new Error(data.error);
+        if ((name || "").trim()) th(await supabase.from("org_members").update({ name: name.trim() }).eq("org_id", dbRef.current.org.id).eq("email", email));
         await reload();
         return true;
       } catch (e) { return fail(e); }
@@ -1222,6 +1232,7 @@ export function useLedger(session, onError) {
         const upd = {};
         if (patch.role !== undefined) upd.role = patch.role;
         if (patch.permissions !== undefined) upd.permissions = patch.permissions;
+        if (patch.name !== undefined) upd.name = String(patch.name).trim();
         th(await supabase.from("org_members").update(upd).eq("org_id", dbRef.current.org.id).eq("email", email));
         setDb(d => ({ ...d, members: d.members.map(m => m.email === email ? { ...m, ...patch } : m) }));
         return true;

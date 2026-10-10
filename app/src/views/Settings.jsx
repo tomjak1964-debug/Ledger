@@ -263,21 +263,37 @@ function PermMatrix({ value, onChange }) {
 }
 
 // Admin-only: create logins, set roles, and set per-area access.
+// When someone last signed in, as a pill: green within a week, grey older,
+// amber never.
+function SignInPill({ at, hasLogin }) {
+  if (!hasLogin || at === null) return <span className="badge amber" title="This login hasn't been used yet"><span className="dot"></span>Never signed in</span>;
+  if (at === undefined) return null;
+  const d = new Date(at), days = (Date.now() - d.getTime()) / 86400000;
+  const when = days < 1 && d.toDateString() === new Date().toDateString()
+    ? "today " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+    : fmtDate(isoDate(d));
+  return <span className={"badge " + (days <= 7 ? "green" : "gray")} title={"Last signed in " + d.toLocaleString("en-US")}><span className="dot"></span>Last signed in {when}</span>;
+}
+
 function UsersCard({ db, actions, toast, session }) {
+  const [signIns, setSignIns] = useState(null);
+  useEffect(() => { let live = true; actions.memberSignIns().then(m => { if (live) setSignIns(m); }); return () => { live = false; }; }, [db.members]);
   return <div className="card" style={{ marginBottom: 16 }}>
     <div className="card-head"><h3>Users & Access</h3></div>
     <div className="card-body">
       <p className="subtle" style={{ marginTop: 0 }}>Create a login for each teammate and set what they can see. <b>Read</b> = view only; <b>Read &amp; write</b> = view and edit; <b>No access</b> hides that area entirely. Owners and admins have full access.</p>
-      {(db.members || []).map(m => <MemberRow key={m.email} m={m} self={m.email === session.user.email} actions={actions} toast={toast} />)}
+      {(db.members || []).map(m => <MemberRow key={m.email} m={m} self={m.email === session.user.email} actions={actions} toast={toast}
+        lastSignIn={signIns ? (m.userId ? (signIns[m.userId] ?? null) : null) : undefined} />)}
       <div className="divider"></div>
       <CreateUserForm actions={actions} toast={toast} />
     </div>
   </div>;
 }
 
-function MemberRow({ m, self, actions, toast }) {
+function MemberRow({ m, self, actions, toast, lastSignIn }) {
   const owner = m.role === "owner";
   const [role, setRole] = useState(m.role);
+  const [name, setName] = useState(m.name || "");
   const [perms, setPerms] = useState(m.permissions || {});
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -285,8 +301,8 @@ function MemberRow({ m, self, actions, toast }) {
   const [rBusy, setRBusy] = useState(false);
   const [shown, setShown] = useState("");
   const isAdmin = isAdminRole(role);
-  const dirty = role !== m.role || JSON.stringify(perms) !== JSON.stringify(m.permissions || {});
-  const save = async () => { setSaving(true); if (await actions.updateMember(m.email, { role, permissions: isAdmin ? {} : perms })) toast("Access updated for " + m.email); setSaving(false); };
+  const dirty = role !== m.role || name.trim() !== (m.name || "") || JSON.stringify(perms) !== JSON.stringify(m.permissions || {});
+  const save = async () => { setSaving(true); if (await actions.updateMember(m.email, { role, name, permissions: isAdmin ? {} : perms })) toast("Saved " + (name.trim() || m.email)); setSaving(false); };
   const remove = async () => { if (confirm("Remove " + m.email + "? Their access is revoked (the login itself stays in Supabase).") && await actions.removeMember(m.email)) toast("Removed " + m.email); };
   const openReset = () => { setNewPw(genPassword()); setShown(""); setResetting(true); };
   const doReset = async () => {
@@ -298,9 +314,9 @@ function MemberRow({ m, self, actions, toast }) {
 
   return <div style={{ padding: "10px 0", borderBottom: "1px solid var(--line, #e6e9ef)" }}>
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <span style={{ fontWeight: 600 }}>{m.email}</span>
-      {self && <span className="subtle">· you</span>}
-      {!m.userId && <span className="subtle">· not signed in yet</span>}
+      <input className="input" style={{ maxWidth: 200, fontWeight: 600 }} value={name} placeholder="Name" onChange={e => setName(e.target.value)} />
+      <span className="subtle">{m.email}{self ? " · you" : ""}</span>
+      <SignInPill at={lastSignIn} hasLogin={!!m.userId} />
       <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
         {m.userId && <button className="btn ghost sm" title="Set a new password for this user" onClick={openReset}>Reset password</button>}
         {owner ? <span className="badge green"><span className="dot"></span>Owner</span>
@@ -332,6 +348,7 @@ function MemberRow({ m, self, actions, toast }) {
 function CreateUserForm({ actions, toast }) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
   const [password, setPassword] = useState(genPassword());
   const [role, setRole] = useState("member");
   const [perms, setPerms] = useState({});
@@ -342,11 +359,11 @@ function CreateUserForm({ actions, toast }) {
     if (!email.includes("@")) { toast("⚠ Enter a valid email"); return; }
     if (password.length < 8) { toast("⚠ Password must be at least 8 characters"); return; }
     setBusy(true);
-    const ok = await actions.createUser({ email: email.trim().toLowerCase(), password, role, permissions: isAdminRole(role) ? {} : perms });
+    const ok = await actions.createUser({ email: email.trim().toLowerCase(), name, password, role, permissions: isAdminRole(role) ? {} : perms });
     setBusy(false);
     if (ok) {
       setCreated({ email: email.trim().toLowerCase(), password });
-      setEmail(""); setPassword(genPassword()); setRole("member"); setPerms({});
+      setEmail(""); setName(""); setPassword(genPassword()); setRole("member"); setPerms({});
       toast("User created");
     }
   };
@@ -361,6 +378,7 @@ function CreateUserForm({ actions, toast }) {
 
   return <div>
     <div className="row">
+      <Field label="Name"><input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="Barry Smith" /></Field>
       <Field label="Email"><input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="barry@example.com" /></Field>
       <Field label="Initial Password" hint="Give this to the user; they can change it later">
         <div style={{ display: "flex", gap: 6 }}>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { uid, money, fmtDate, todayISO, nameOf, cls } from "../lib/helpers.js";
+import { uid, money, fmtDate, todayISO, nameOf, cls, pickable } from "../lib/helpers.js";
 import { proposalConfig, priceProposal, ioBlocks, phaseAmount, SPEC_FIELDS, DEFAULT_PHASES, defaultProposalCustomer } from "../calc/proposals.js";
 import { Ico, ICONS, Badge, Empty, Field, MenuItem, ActionMenu, Modal, SortTh, useTableSort, blankZero } from "../components/ui.jsx";
 import { downloadProposalDocx, proposalDocxBlob, proposalFileStem } from "../lib/proposalDocx.js";
@@ -240,7 +240,7 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
           // contact, or none — never the one picked for the customer before.
           setX(prev => ({ ...prev, customerId: cid, contactPersonId: "", contactName: cc }));
         }}>
-          <option value="">Select customer…</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          <option value="">Select customer…</option>{pickable(customers, x.customerId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select></Field>
         <Field label="Contact / Attn" hint="Type any name, or pick a suggestion">
           <input className="input" list={"attn-" + x.customerId} value={x.contactName || ""} onChange={e => set("contactName", e.target.value)} placeholder="e.g. Mr. John Murphy" />

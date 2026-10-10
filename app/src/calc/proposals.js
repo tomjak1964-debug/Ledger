@@ -118,7 +118,7 @@ export const proposalTotal = p => n(p.pricing?.total);
 // same kind was for, so a system proposal for someone else doesn't move the
 // fixture default; before there are any of that kind, Venture Global.
 export function defaultProposalCustomer(db, kind = "machine") {
-  const customers = db.contacts.filter(c => c.type === "customer");
+  const customers = db.contacts.filter(c => c.type === "customer" && c.active !== false);
   const sameKind = p => (p.kind || "machine") === kind;
   const last = [...(db.proposals || [])].reverse().find(p => sameKind(p) && customers.some(c => c.id === p.customerId));
   return (last && customers.find(c => c.id === last.customerId))

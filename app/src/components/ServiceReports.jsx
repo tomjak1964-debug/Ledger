@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { uid, money, fmtDate, todayISO, nameOf, sum } from "../lib/helpers.js";
+import { uid, money, fmtDate, todayISO, nameOf, sum, pickable } from "../lib/helpers.js";
 import { jobNumberOf } from "../calc/jobs.js";
 import { jobOptionLabel } from "./JobCostPicker.jsx";
 import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort, AutoTextarea } from "./ui.jsx";
@@ -76,7 +76,7 @@ function ServiceReportModal({ db, actions, toast, session, readOnly, report, onC
   const [lines, setLines] = useState(() => existing.length
     ? existing.map(t => ({ id: t.id, categoryId: t.categoryId, hours: t.hours, description: t.description, invoiced: !!t.invoiceId }))
     : [{ id: uid(), categoryId: cats[0]?.id || "", hours: "", description: "" }]);
-  const [newJob, setNewJob] = useState({ customerId: customers[0]?.id || "", jobNumber: "", description: "", poNumber: "" });
+  const [newJob, setNewJob] = useState({ customerId: pickable(customers)[0]?.id || "", jobNumber: "", description: "", poNumber: "" });
   const [saving, setSaving] = useState(false);
   const isNewJob = r.salesOrderId === NEW_JOB;
   const set = (k, v) => setR(x => ({ ...x, [k]: v }));
@@ -112,7 +112,7 @@ function ServiceReportModal({ db, actions, toast, session, readOnly, report, onC
       <p className="subtle" style={{ marginTop: 0 }}>Opens a sales order for this job, so its hours and parts can be invoiced like any job.</p>
       <div className="row">
         <Field label="Customer"><select className="select" value={newJob.customerId} onChange={e => setNewJob({ ...newJob, customerId: e.target.value })}>
-          <option value="">Select customer…</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
+          <option value="">Select customer…</option>{pickable(customers, newJob.customerId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
         <Field label="Job #"><input className="input mono" value={newJob.jobNumber} placeholder="e.g. 4810" onChange={e => setNewJob({ ...newJob, jobNumber: e.target.value })} /></Field>
         <Field label="Customer PO #" hint="Optional"><input className="input mono" value={newJob.poNumber} onChange={e => setNewJob({ ...newJob, poNumber: e.target.value })} /></Field>
       </div>

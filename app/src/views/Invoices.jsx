@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { uid, money, fmtDate, todayISO, addDays, nameOf } from "../lib/helpers.js";
+import { uid, money, fmtDate, todayISO, addDays, nameOf, pickable } from "../lib/helpers.js";
 import { lineTotals, balance, invoiceStatus } from "../calc/ledger.js";
 import { AUTO_NUMBER } from "../lib/store.js";
 import { useFilters } from "../components/useFilters.jsx";
@@ -35,7 +35,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) 
     // Standalone invoice — no quote or SO behind it (time & materials, service
     // calls). The number defaults to auto (customer code + date + index) but can
     // be overridden per-invoice in the editor.
-    const customerId = customers[0]?.id || "";
+    const customerId = pickable(customers)[0]?.id || "";
     setEdit({
       id: uid(), number: AUTO_NUMBER, _new: true, salesOrderId: "", quoteId: "", customerId,
       poNumber: "", date: todayISO(), dueDate: dueDateFor(db, customerId, todayISO()),
@@ -202,7 +202,7 @@ function InvoiceEditor({ invoice, customers, catalog, onCancel, onSave, db, acti
       <div className="row">
         <Field label="Customer" hint={inv.customerId ? termsLabelFor(db, inv.customerId) : undefined}>
           <select className="select" value={inv.customerId} onChange={e => set("customerId", e.target.value)}>
-          <option value="">Select customer…</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          <option value="">Select customer…</option>{pickable(customers, inv.customerId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select></Field>
         <Field label="Invoice #" hint={inv._new ? "Leave as (auto) to use the generated number" : "Renaming affects this invoice only"}>
           <input className="input mono" value={inv.number} onChange={e => set("number", e.target.value)}

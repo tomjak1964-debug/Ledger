@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from "react";
-import { uid, money, todayISO } from "../lib/helpers.js";
+import { uid, money, todayISO, pickable } from "../lib/helpers.js";
 import { proposalConfig, priceProposal, ioBlocks, TMJ_DEFAULT_RATES, defaultProposalCustomer, dateJobNumber } from "../calc/proposals.js";
 import { readChartFile, parseDelimited, mapChart, matchMachineType, typeKey } from "../lib/quoteChart.js";
 import { Ico, ICONS, Modal, Field } from "./ui.jsx";
@@ -146,7 +146,7 @@ export default function ImportProposalsModal({ db, actions, toast, onClose, onDo
       <div className="row">
         <Field label="Customer"><select className="select" value={customerId} onChange={e => setCustomerId(e.target.value)}>
           <option value="">— pick a customer —</option>
-          {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {pickable(customers, customerId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select></Field>
         <Field label="Proposal date"><input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} /></Field>
       </div>

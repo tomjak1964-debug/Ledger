@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { uid, money, fmtDate, todayISO, addDays, nameOf } from "../lib/helpers.js";
+import { uid, money, fmtDate, todayISO, addDays, nameOf, pickable } from "../lib/helpers.js";
 import { lineTotals } from "../calc/ledger.js";
 import { useFilters } from "../components/useFilters.jsx";
 import { Ico, ICONS, Badge, Empty, Field, MenuItem, ActionMenu, SortTh, useTableSort } from "../components/ui.jsx";
@@ -24,7 +24,7 @@ export default function QuotesView({ db, actions, toast, openDoc, readOnly }) {
     // Provisional number for display; the real one is claimed atomically at save.
     const n = db.settings.quotePrefix + "-" + String(db.settings.counters.quote).padStart(4, "0");
     setEdit({
-      id: uid(), number: n, _new: true, customerId: customers[0]?.id || "", date: todayISO(),
+      id: uid(), number: n, _new: true, customerId: pickable(customers)[0]?.id || "", date: todayISO(),
       expiryDate: addDays(todayISO(), 30), status: "draft", poNumber: "",
       lineItems: [{ id: uid(), desc: "", qty: 1, unit: "", unitPrice: 0 }], taxRate: db.settings.taxRate, notes: ""
     });
@@ -114,7 +114,7 @@ function QuoteEditor({ quote, customers, catalog, onCancel, onSave }) {
     <div className="card"><div className="card-body">
       <div className="row">
         <Field label="Customer"><select className="select" value={q.customerId} onChange={e => set("customerId", e.target.value)}>
-          <option value="">Select customer…</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          <option value="">Select customer…</option>{pickable(customers, q.customerId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select></Field>
         <Field label="Quote Date"><input className="input" type="date" value={q.date} onChange={e => set("date", e.target.value)} /></Field>
         <Field label="Valid Until"><input className="input" type="date" value={q.expiryDate} onChange={e => set("expiryDate", e.target.value)} /></Field>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { uid, money, fmtDate, todayISO, addDays, nameOf, sum } from "../lib/helpers.js";
+import { uid, money, fmtDate, todayISO, addDays, nameOf, sum, pickable } from "../lib/helpers.js";
 import { paid, billStatus, agingBuckets, round2, billBalance } from "../calc/ledger.js";
 import { checksPdf } from "../lib/checkPrint.js";
 import { remittancesPdf } from "../lib/remittance.js";
@@ -60,7 +60,7 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
   };
   const startNew = () => {
     const n = db.settings.billPrefix + "-" + String(db.settings.counters.bill).padStart(4, "0");
-    const vendorId = vendors[0]?.id || "";
+    const vendorId = pickable(vendors)[0]?.id || "";
     setEdit({ id: uid(), number: n, _new: true, vendorId, date: todayISO(), dueDate: dueDateFor(db, vendorId, todayISO()), amount: 0, ref: "", notes: "", salesOrderId: "", payments: [] });
   };
 
@@ -131,7 +131,7 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
         <Field label="Vendor" hint={edit.vendorId ? termsLabelFor(db, edit.vendorId) : undefined}>
           <select className="select" value={edit.vendorId}
             onChange={e => setEdit({ ...edit, vendorId: e.target.value, dueDate: dueDateFor(db, e.target.value, edit.date) })}>
-          <option value="">Select vendor…</option>{vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></Field>
+          <option value="">Select vendor…</option>{pickable(vendors, edit.vendorId).map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></Field>
         <Field label="Vendor Ref / Inv #" hint="Required — the vendor's invoice number">
           <input className="input" value={edit.ref} onChange={e => setEdit({ ...edit, ref: e.target.value })}
             style={(!refTrim || dup) ? { borderColor: "var(--neg)" } : undefined} /></Field>

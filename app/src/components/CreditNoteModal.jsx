@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { uid, money, todayISO } from "../lib/helpers.js";
+import { uid, money, todayISO, pickable } from "../lib/helpers.js";
 import { lineTotals, paid, round2 } from "../calc/ledger.js";
 import { AUTO_NUMBER } from "../lib/store.js";
 import { Modal, Field } from "./ui.jsx";
@@ -18,7 +18,7 @@ export default function CreditNoteModal({ db, credit, onClose, onSave }) {
   const [cn, setCn] = useState(() => credit
     ? { ...credit, lineItems: (credit.lineItems || []).map(pos) }
     : {
-      id: uid(), _new: true, kind: "credit", number: AUTO_NUMBER, customerId: customers[0]?.id || "",
+      id: uid(), _new: true, kind: "credit", number: AUTO_NUMBER, customerId: pickable(customers)[0]?.id || "",
       date: todayISO(), dueDate: todayISO(), taxRate: db.settings.taxRate, notes: "", poNumber: "",
       lineItems: [{ id: uid(), desc: "", qty: 1, unit: "", unitPrice: 0 }], payments: [],
     });
@@ -57,7 +57,7 @@ export default function CreditNoteModal({ db, credit, onClose, onSave }) {
       <Field label="Customer">
         <select className="select" value={cn.customerId} onChange={e => set("customerId", e.target.value)}>
           <option value="">Select customer…</option>
-          {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {pickable(customers, cn.customerId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </Field>
       <Field label="Credit Note #" hint={cn._new ? "Assigned from the credit series on save" : "Renaming affects this credit only"}>

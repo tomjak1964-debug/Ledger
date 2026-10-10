@@ -12,26 +12,31 @@ export default function ContactsView({ db, actions, toast, readOnly, type = "cus
   const tab = type;
   const noun = tab === "customer" ? "Customer" : "Vendor";
   const [edit, setEdit] = useState(null);
-  const list = db.contacts.filter(c => c.type === tab);
+  const [showInactive, setShowInactive] = useState(false);
+  const all = db.contacts.filter(c => c.type === tab);
+  const inactiveCount = all.filter(c => c.active === false).length;
+  const list = all.filter(c => showInactive || c.active !== false);
   const save = async (c) => { if (await actions.saveContact(c)) { setEdit(null); toast("Saved"); } };
   const del = async (id) => {
     if (!confirm("Delete this contact?")) return;
     const rec = db.contacts.find(c => c.id === id);
     if (await actions.deleteContact(id)) toast("Deleted " + (rec?.name || "contact"), { actionLabel: "Undo", onAction: async () => { if (await actions.restoreRecord("contact", rec)) toast((rec.name || "Contact") + " restored"); } });
   };
-  const startNew = () => setEdit({ id: uid(), type: tab, name: "", contact: "", email: "", phone: "", address: "", code: "", lat: "", lng: "", terms: "", discountPct: 0, discountDays: 0, remitName: "", remitPhone: "", remitEmail: "", remitAddress: "", taxId: "", salesAccount: "", expenseAccount: "", ten99: "" });
+  const startNew = () => setEdit({ id: uid(), type: tab, name: "", contact: "", email: "", phone: "", address: "", code: "", lat: "", lng: "", terms: "", discountPct: 0, discountDays: 0, remitName: "", remitPhone: "", remitEmail: "", remitAddress: "", taxId: "", salesAccount: "", expenseAccount: "", ten99: "", active: true });
   const { sorted: contactRows, sort, onSort } = useTableSort(list, {
-    name: c => c.name, contact: c => c.contact || "", email: c => c.email || "", phone: c => c.phone || "", taxId: c => c.taxId || "",
+    name: c => c.name, status: c => (c.active === false ? 1 : 0), contact: c => c.contact || "", email: c => c.email || "", phone: c => c.phone || "", taxId: c => c.taxId || "",
     account: c => (tab === "customer" ? c.salesAccount : c.expenseAccount) || "", ten99: c => ten99Label(c.ten99),
   }, { key: "name", dir: "asc" });
   return <div>
     <div className="toolbar">
       <p className="subtle" style={{ margin: 0 }}>{tab === "customer" ? "The companies you quote and invoice." : "The vendors and subs you buy from. The Tax ID here feeds the 1099 vendor report."}</p>
-      {!readOnly && <button className="btn primary" style={{ marginLeft: "auto" }} onClick={startNew}><Ico d={ICONS.plus} size={15} />New {noun}</button>}
+      {inactiveCount > 0 && <label className="subtle" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+        <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} />Show inactive ({inactiveCount})</label>}
+      {!readOnly && <button className="btn primary" style={{ marginLeft: inactiveCount > 0 ? 12 : "auto" }} onClick={startNew}><Ico d={ICONS.plus} size={15} />New {noun}</button>}
     </div>
     <div className="card">
       {list.length === 0
-        ? <Empty icon={ICONS.contacts} title={"No " + tab + "s yet"} msg={"Add " + (tab === "customer" ? "the companies you quote and invoice." : "vendors and subs you buy from.")}
+        ? <Empty icon={ICONS.contacts} title={all.length ? "Every " + tab + " is inactive" : "No " + tab + "s yet"} msg={"Add " + (tab === "customer" ? "the companies you quote and invoice." : "vendors and subs you buy from.")}
           action={!readOnly && <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New {noun}</button>} />
         : <table><thead><tr>
           <SortTh label="Name" col="name" sort={sort} onSort={onSort} />
@@ -44,7 +49,7 @@ export default function ContactsView({ db, actions, toast, readOnly, type = "cus
           <th></th></tr></thead>
           <tbody>{contactRows.map(c => (
             <tr key={c.id}>
-              <td style={{ fontWeight: 600 }}>{c.name}</td><td className="subtle">{c.contact || "—"}</td>
+              <td style={{ fontWeight: 600, opacity: c.active === false ? 0.6 : 1 }}>{c.name}{c.active === false && <> <span className="badge gray"><span className="dot"></span>Inactive</span></>}</td><td className="subtle">{c.contact || "—"}</td>
               <td className="subtle">{c.email || "—"}</td><td className="mono subtle">{c.phone || "—"}</td>
               <td className="mono subtle">{accountLabel(db, tab === "customer" ? c.salesAccount : c.expenseAccount) || "—"}</td>
               {tab === "vendor" && <td className="subtle">{c.ten99 ? ten99Label(c.ten99) : "—"}</td>}
@@ -58,6 +63,9 @@ export default function ContactsView({ db, actions, toast, readOnly, type = "cus
     </div>
     {edit && <Modal title={(db.contacts.some(c => c.id === edit.id) ? "Edit " : "New ") + noun} onClose={() => setEdit(null)}
       foot={<><button className="btn" onClick={() => setEdit(null)}>Cancel</button><button className="btn primary" onClick={() => save(edit)}>Save</button></>}>
+      <label style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 10, cursor: readOnly ? "default" : "pointer" }}>
+        <input type="checkbox" disabled={readOnly} checked={edit.active === false} onChange={e => setEdit({ ...edit, active: !e.target.checked })} style={{ marginTop: 3 }} />
+        <span><b>Inactive</b> <span className="subtle">— kept with all its history and still in reports, but left out of every pick list for new work.</span></span></label>
       <div className="row">
         <Field label="Company / Name"><input className="input" value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} /></Field>
         <Field label="Contact Person"><input className="input" value={edit.contact} onChange={e => setEdit({ ...edit, contact: e.target.value })} /></Field>

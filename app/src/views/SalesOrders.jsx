@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { uid, money, fmtDate, todayISO, nameOf } from "../lib/helpers.js";
+import { uid, money, fmtDate, todayISO, nameOf, pickable } from "../lib/helpers.js";
 import { lineTotals } from "../calc/ledger.js";
 import { AUTO_NUMBER } from "../lib/store.js";
 import { useFilters } from "../components/useFilters.jsx";
@@ -41,7 +41,7 @@ export default function SalesOrdersView({ db, actions, toast, openDoc, readOnly 
   // but gets a fresh number (auto) and a blank PO (a copy is a new order).
   const blankSO = (from) => ({
     id: uid(), _new: true, number: AUTO_NUMBER, quoteId: "",
-    customerId: from?.customerId || customers[0]?.id || "", poNumber: "",
+    customerId: from?.customerId || pickable(customers)[0]?.id || "", poNumber: "",
     date: todayISO(), status: "open", taxRate: from ? from.taxRate : db.settings.taxRate,
     lineItems: from
       ? (from.lineItems || []).map(li => ({ id: uid(), desc: li.desc, qty: li.qty, unit: li.unit, unitPrice: li.unitPrice }))
@@ -122,7 +122,7 @@ function SalesOrderEditor({ so, customers, catalog, onCancel, onSave, db, action
     <div className="card"><div className="card-body">
       <div className="row">
         <Field label="Customer"><select className="select" value={o.customerId} onChange={e => set("customerId", e.target.value)}>
-          <option value="">Select customer…</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          <option value="">Select customer…</option>{pickable(customers, o.customerId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select></Field>
         {o._new
           ? <Field label="SO #" hint="Leave as (auto) for the next number"><input className="input mono" value={o.number} onChange={e => set("number", e.target.value)} /></Field>

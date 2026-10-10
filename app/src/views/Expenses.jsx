@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { uid, money, fmtDate, todayISO, sum, nameOf, EXPENSE_CATS } from "../lib/helpers.js";
+import { uid, money, fmtDate, todayISO, sum, nameOf, EXPENSE_CATS, pickable } from "../lib/helpers.js";
 import { useFilters } from "../components/useFilters.jsx";
 import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort } from "../components/ui.jsx";
 import Attachments from "../components/Attachments.jsx";
@@ -70,7 +70,7 @@ export default function ExpensesView({ db, actions, toast, readOnly }) {
       </div>
       <div className="row">
         <Field label="Vendor / Payee"><input className="input" list="vend-list" value={edit.vendor} onChange={e => setEdit({ ...edit, vendor: e.target.value })} />
-          <datalist id="vend-list">{vendors.map(v => <option key={v.id} value={v.name} />)}</datalist></Field>
+          <datalist id="vend-list">{pickable(vendors).map(v => <option key={v.id} value={v.name} />)}</datalist></Field>
         <Field label="Method"><select className="select" value={edit.method} onChange={e => setEdit({ ...edit, method: e.target.value })}>
           {["Credit Card", "Check", "ACH / Wire", "Cash", "Other"].map(m => <option key={m}>{m}</option>)}</select></Field>
       </div>

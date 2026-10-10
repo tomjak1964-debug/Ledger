@@ -1,4 +1,4 @@
-import { fmtDate, todayISO } from "../lib/helpers.js";
+import { fmtDate, todayISO, pickable } from "../lib/helpers.js";
 import { RANGE_PRESETS } from "../lib/dateRanges.js";
 
 // The one filter row used by every report and register: a date-range preset
@@ -23,7 +23,7 @@ export default function FilterBar({
     </>}
     {partyKind && <select className="select" style={{ maxWidth: 230 }} value={partyId} onChange={e => onParty(e.target.value)}>
       <option value="">All {label}s</option>
-      {parties.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+      {pickable(parties, partyId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
     </select>}
     {children}
     {right && <span style={{ marginLeft: "auto", display: "flex", gap: 10 }}>{right}</span>}

@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { uid, money, fmtDate, addDays, cls } from "../lib/helpers.js";
+import { uid, money, fmtDate, addDays, cls, pickable } from "../lib/helpers.js";
 import { termsLabelFor } from "../lib/terms.js";
 import { proposalConfig } from "../calc/proposals.js";
 import { COMPONENTS, IO_FIELDS, DEVICE_FIELDS, STRUCTURE_FIELDS, LINEUP_FIELDS, SAFETY_OPTIONS, STANDARD_ELEMENTS, ROLE_LABELS,
@@ -230,7 +230,7 @@ export default function ControlsEstimateEditor({ p, db, cfg, customers, onCancel
           // contact, or none — never the one picked for the customer before.
           setX(prev => ({ ...prev, customerId: cid, contactPersonId: "", contactName: cc }));
         }}>
-          <option value="">Select customer…</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          <option value="">Select customer…</option>{pickable(customers, x.customerId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select></Field>
         <Field label="Contact / Attn" hint="Type any name, or pick a suggestion">
           <input className="input" list={"attn-" + x.customerId} value={x.contactName || ""} onChange={e => set("contactName", e.target.value)} placeholder="e.g. Mr. John Murphy" />

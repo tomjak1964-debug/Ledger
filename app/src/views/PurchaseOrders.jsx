@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { uid, money, fmtDate, todayISO, nameOf } from "../lib/helpers.js";
+import { uid, money, fmtDate, todayISO, nameOf, pickable } from "../lib/helpers.js";
 import { lineTotals } from "../calc/ledger.js";
 import { useFilters } from "../components/useFilters.jsx";
 import { Ico, ICONS, Badge, Empty, Field, SortTh, useTableSort } from "../components/ui.jsx";
@@ -18,7 +18,7 @@ export default function PurchaseOrdersView({ db, actions, toast, openDoc, readOn
   };
   const createBill = async (po) => { const b = await actions.createBillFromPO(po); if (b) toast("Bill " + b.number + " created from " + po.number); };
   const blankPO = (from) => ({
-    id: uid(), _new: true, number: "(assigned at save)", vendorId: from?.vendorId || vendors[0]?.id || "",
+    id: uid(), _new: true, number: "(assigned at save)", vendorId: from?.vendorId || pickable(vendors)[0]?.id || "",
     date: todayISO(), expectedDate: "", status: "open", taxRate: from ? from.taxRate : 0, notes: from?.notes || "",
     salesOrderId: from?.salesOrderId || "",
     lineItems: from ? (from.lineItems || []).map(li => ({ id: uid(), desc: li.desc, qty: li.qty, unit: li.unit, unitPrice: li.unitPrice }))
@@ -89,7 +89,7 @@ function POEditor({ po, vendors, openSOs, db, catalog, onCancel, onSave }) {
     <div className="card"><div className="card-body">
       <div className="row">
         <Field label="Vendor"><select className="select" value={o.vendorId} onChange={e => set("vendorId", e.target.value)}>
-          <option value="">Select vendor…</option>{vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+          <option value="">Select vendor…</option>{pickable(vendors, o.vendorId).map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
         </select></Field>
         <Field label="PO Date"><input className="input" type="date" value={o.date} onChange={e => set("date", e.target.value)} /></Field>
         <Field label="Expected"><input className="input" type="date" value={o.expectedDate || ""} onChange={e => set("expectedDate", e.target.value)} /></Field>

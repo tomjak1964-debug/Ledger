@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { money, fmtDate, todayISO } from "../lib/helpers.js";
+import { money, fmtDate, todayISO, pickable } from "../lib/helpers.js";
 import { lineTotals, balance, paid, round2, billBalance } from "../calc/ledger.js";
 import { checkNumberTaken, normRef } from "../lib/checks.js";
 import { Modal, Field, Badge } from "./ui.jsx";
@@ -105,7 +105,7 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
     </>}>
     <div className="row">
       <Field label={L.party}><select className="select" value={partyId} disabled={editing} onChange={e => pickParty(e.target.value)}>
-        <option value="">Select {L.party.toLowerCase()}…</option>{parties.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        <option value="">Select {L.party.toLowerCase()}…</option>{pickable(parties, partyId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
       </select></Field>
       <Field label="Date"><input className="input" type="date" value={date} onChange={e => setDate(e.target.value)} /></Field>
       <Field label="Method"><select className="select" value={method} onChange={e => setMethod(e.target.value)}>

@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from "react";
-import { uid, money, todayISO, fmtDate } from "../lib/helpers.js";
+import { uid, money, todayISO, fmtDate, pickable } from "../lib/helpers.js";
 import { proposalConfig } from "../calc/proposals.js";
 import { newEstimate, priceEstimate, derivedIo, DEVICE_FIELDS, STRUCTURE_FIELDS, LINEUP_FIELDS, SAFETY_OPTIONS, contentSummary } from "../calc/estimates.js";
 import { readLineupFile, textLines, parseLineup, driversFromLineup, lineupAssumptions, guessCustomer } from "../lib/lineup.js";
@@ -53,7 +53,7 @@ export default function ImportLineupModal({ db, actions, toast, onClose, onDone 
       try {
         const lines = await readLineupFile(f);
         const r = parseLineup(lines, { fileName: f.name });
-        if (!customerId) { const g = guessCustomer(lines, customers); if (g) setCustomerId(g.id); }
+        if (!customerId) { const g = guessCustomer(lines, pickable(customers)); if (g) setCustomerId(g.id); }
         if (!r.header.customerJob && !r.header.fixture && !(r.io.inputs + r.io.outputs)) bad.push(f.name + " (no lineup fields found)");
         else out.push(r);
       } catch (e) { bad.push(f.name + " — " + (e.message || e)); }
@@ -66,7 +66,7 @@ export default function ImportLineupModal({ db, actions, toast, onClose, onDone 
   const onPaste = () => {
     const lines = textLines(paste);
     const r = parseLineup(lines, { fileName: "pasted lineup" });
-    if (!customerId) { const g = guessCustomer(lines, customers); if (g) setCustomerId(g.id); }
+    if (!customerId) { const g = guessCustomer(lines, pickable(customers)); if (g) setCustomerId(g.id); }
     addParsed([r]); setPaste("");
   };
 
@@ -136,7 +136,7 @@ export default function ImportLineupModal({ db, actions, toast, onClose, onDone 
       </Field>
       <Field label="Customer"><select className="select" value={customerId} onChange={e => setCustomerId(e.target.value)}>
         <option value="">— pick a customer —</option>
-        {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        {pickable(customers, customerId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
       </select></Field>
       <Field label="Estimate date"><input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} /></Field>
     </div>

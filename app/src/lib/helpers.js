@@ -15,3 +15,8 @@ export const pad4 = (n) => String(n).padStart(4, "0");
 export const nameOf = (db, id) => { const c = db.contacts.find(x => x.id === id); return c ? c.name : "—"; };
 
 export const EXPENSE_CATS = ["Materials", "Subcontractor", "Tools & Equipment", "Software", "Travel", "Vehicle/Fuel", "Office", "Utilities", "Insurance", "Professional Fees", "Other"];
+
+// A pick list of customers or vendors: the active ones, plus the one already
+// chosen if it has since been marked inactive, so an older document still
+// shows who it's for.
+export const pickable = (list, keepId) => (list || []).filter(c => c.active !== false || (keepId && c.id === keepId));

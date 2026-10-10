@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { uid, todayISO, isoDate, money, fmtDate, sum } from "../lib/helpers.js";
+import { uid, todayISO, isoDate, money, fmtDate, sum, pickable } from "../lib/helpers.js";
 import { round2, billBalance } from "../calc/ledger.js";
 import { accountSettings, accountLabel, TYPE_GROUP, accountByNumber } from "../calc/accounts.js";
 import { reconcileState, matchStatement, suggestVendorPayment } from "../calc/bankRecon.js";
@@ -356,7 +356,7 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
                   return <>
                     <select className="select" value={r.vendorId} onChange={e => setRow(i, { vendorId: e.target.value, billId: "" })}>
                       <option value="">— which vendor? —</option>
-                      {[...vendors].sort((a, b) => a.name.localeCompare(b.name)).map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                      {pickable(vendors, r.vendorId).sort((a, b) => a.name.localeCompare(b.name)).map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                     </select>
                     {r.vendorId && <select className="select" value={r.billId} onChange={e => setRow(i, { billId: e.target.value })}>
                       <option value="">New bill for {money(Math.abs(r.line.amount))} (it wasn't entered)</option>

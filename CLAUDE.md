@@ -626,7 +626,11 @@ Payments, Expenses) · **Work** (Jobs, Tasks, Field, Time Tracking, Item Catalog
 page is a one-line edit there. **Customers and Vendors** are the two halves of the old Contacts page
 (`views/Contacts.jsx` with a `type` prop; view keys `customers` / `vendors`, both gated by the
 `contacts` permission area, and `go("contacts")` still lands on Customers). A vendor carries a
-**Tax ID** (`contacts.tax_id`, migration 022) for the 1099 vendor report to come.
+**Tax ID** (`contacts.tax_id`, migration 022) for the 1099 vendor report to come. A customer or vendor can be marked
+**Inactive** (`contacts.active`, migration 033) instead of deleted: it keeps its history and still reports, the
+list hides it unless *Show inactive* is ticked, and every pick list leaves it out — `pickable(list, keepId)` in
+`lib/helpers.js` keeps the one a document already names, so an older document still shows who it's for. New
+documents and the proposal default never start on an inactive contact.
 
 **Fixture Rates** (`views/MachineRates.jsx`, the `machine_types` table — the code and the database keep the
 old name) is the costing table behind a fixture proposal, one row per fixture type. Per-unit adders —

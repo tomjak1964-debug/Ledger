@@ -48,6 +48,10 @@ reach the database, by design.
   HomeServer's `apps/ledger/docker-compose.homeserver.yml`, then `docker compose up -d functions`.
 - **Storage** (`attachments`, `backups` buckets) is on the NUC's disk (`~/apps/ledger/volumes/storage`); its access
   policies are in HomeServer's `apps/ledger/post-restore.sql`. A new bucket policy goes in both places.
+- **Users & Access** shows each member by **name** (`org_members.name`, migration 032, editable there and set
+  on Create User) with a **last signed in** pill — green within a week, grey older, amber never. The time comes
+  from `member_sign_ins(org)`, a security-definer function that returns the auth sign-in times for that
+  company's members to an admin of it, and nothing to anyone else.
 - **Logins**: email + password, no public sign-up; admins create logins through `admin-create-user` and hand
   over the first password. Anyone can change their own from **Change password** at the foot of the menu
   (`components/ChangePassword.jsx`). **Forgot password?** on the sign-in page emails a reset link

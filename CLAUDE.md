@@ -484,6 +484,16 @@ flags the SO lines invoiced, and invoicing the SO marks the proposal's phases bi
 billed twice. A controls estimate with no schedule still lands as one line per group it priced
 (Engineering / Hardware / Field Services / Contingency).
 
+**Rate sheet** (`lib/rateSheet.js`, `components/RateSheetDoc.jsx`): a one-page, customer-facing sheet of the
+standard hourly rates — the Labor Rate Card plus the support rate in Settings → Proposals, so it is always
+current — with overtime and double time worked out (1.5× and 2× by default), the premium-time rules (overtime
+after 10 hours a day, after 50 a week and on Saturdays; double time on Sundays and recognized holidays, listed),
+and travel terms (none inside the local area, Metro Detroit by default; outside it, travel and living at actual
+cost, vehicles at the current IRS mileage rate, meals at the GSA per diem for the location). **Rate Sheet** on the
+Proposals page opens it; Settings → Proposals → *Rate Sheet* holds the effective date, the thresholds and
+multipliers, the local area, the holiday list and a closing note (`settings.rateSheet`). Print / Save PDF; the
+file is named `<Company> Rate Sheet <year>`.
+
 **Estimating from a lineup** (`src/lib/lineup.js`, `src/components/ImportLineupModal.jsx`): an integrator's
 *Electrical Engineering Line-up* — one document per fixture with a header (job #, end user, fixture, PLC, HMI,
 runoff), the sequence of operations, the components on the machine with `(xN)` quantities, the valve manifold

@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { uid, money, todayISO, fmtDate, isoDate } from "../lib/helpers.js";
 import { Ico, ICONS, Field, PasswordInput } from "../components/ui.jsx";
 import ChangePassword from "../components/ChangePassword.jsx";
+import RateSheetDoc from "../components/RateSheetDoc.jsx";
+import { rateSheetConfig } from "../lib/rateSheet.js";
 import { AREAS, isAdminRole } from "../lib/permissions.js";
 import { supabase } from "../lib/supabaseClient.js";
 import FormsTab from "../components/FormsEditor.jsx";
@@ -518,6 +520,8 @@ function ProposalsTab({ s, set, readOnly, saveAll }) {
       </div></div>
     </div>
 
+    <RateSheetCard s={s} set={set} readOnly={readOnly} />
+
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-head"><h3>Hour Model</h3><span className="subtle" style={{ marginLeft: "auto" }}>hours a system proposal suggests per unit of content</span></div>
       <table><thead><tr><th>Per</th>{hmKeys.map(k => <th key={k} className="num">{hmLabels[k]}</th>)}</tr></thead>
@@ -556,4 +560,33 @@ function ProposalsTab({ s, set, readOnly, saveAll }) {
 
     {!readOnly && <button className="btn primary" onClick={saveAll}><Ico d={ICONS.check} size={15} />Save Proposal Settings</button>}
   </>;
+}
+
+// Settings → Proposals → Rate Sheet: what the printed rate sheet says beyond
+// the rates themselves (lib/rateSheet.js). The rates are the card above.
+function RateSheetCard({ s, set, readOnly }) {
+  const rs = rateSheetConfig(s);
+  const r = s.rateSheet || {};
+  const setR = (k, v) => set("rateSheet", { ...r, [k]: v });
+  const [open, setOpen] = useState(false);
+  return <div className="card" style={{ marginBottom: 16 }}>
+    <div className="card-head"><h3>Rate Sheet</h3><span className="subtle" style={{ marginLeft: 12 }}>the rate card above, with overtime and travel terms — for customers</span>
+      <button className="btn sm" style={{ marginLeft: "auto" }} onClick={() => setOpen(true)}><Ico d={ICONS.print} size={14} />View Rate Sheet</button></div>
+    <div className="card-body">
+      <div className="row">
+        <Field label="Effective date"><input className="input" type="date" value={r.effectiveDate || ""} disabled={readOnly} onChange={e => setR("effectiveDate", e.target.value)} /></Field>
+        <Field label="Overtime after (hours / day)"><input className="input mono" type="number" min="0" value={rs.dailyHours} disabled={readOnly} onChange={e => setR("dailyHours", Number(e.target.value) || "")} /></Field>
+        <Field label="Overtime after (hours / week)"><input className="input mono" type="number" min="0" value={rs.weeklyHours} disabled={readOnly} onChange={e => setR("weeklyHours", Number(e.target.value) || "")} /></Field>
+        <Field label="Overtime ×"><input className="input mono" type="number" min="1" step="0.25" value={rs.otMultiplier} disabled={readOnly} onChange={e => setR("otMultiplier", Number(e.target.value) || "")} /></Field>
+        <Field label="Double time ×"><input className="input mono" type="number" min="1" step="0.25" value={rs.dtMultiplier} disabled={readOnly} onChange={e => setR("dtMultiplier", Number(e.target.value) || "")} /></Field>
+      </div>
+      <div className="row">
+        <Field label="Local area" hint="No travel or living charges inside it"><input className="input" value={r.localArea ?? rs.localArea} disabled={readOnly} onChange={e => setR("localArea", e.target.value)} /></Field>
+        <Field label="Recognized holidays" hint="One per line — double time"><textarea className="input" rows={4} value={(r.holidays || rs.holidays).join("\n")} disabled={readOnly} onChange={e => setR("holidays", e.target.value.split("\n").map(x => x.trim()).filter(Boolean))} /></Field>
+        <Field label="Closing note"><textarea className="input" rows={4} value={r.notes ?? rs.notes} disabled={readOnly} onChange={e => setR("notes", e.target.value)} /></Field>
+      </div>
+      <p className="subtle" style={{ margin: 0 }}>Blank effective date prints today's. Save Settings to keep changes; the sheet is also under Proposals → Rate Sheet.</p>
+    </div>
+    {open && <RateSheetDoc settings={s} onClose={() => setOpen(false)} />}
+  </div>;
 }

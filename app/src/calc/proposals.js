@@ -23,8 +23,29 @@ export const DEFAULT_PHASES = [
   { key: "docs", label: "Final Documentation", pct: 10 },
 ];
 
-export function proposalConfig(settings) {
+// Rates have one home: Settings → Time Categories (bill rate per category).
+// Each engineering task a system proposal prices, and the support rate, is
+// priced at a category's rate — roleCategory names which, by category id,
+// and until one is picked a category of the usual name stands in.
+export const ROLE_DEFAULT_CATEGORY = {
+  hardwareDesign: "Engineering", plc: "Engineering", hmi: "Engineering", startup: "Engineering",
+  drafting: "Drafting", pm: "Project Management", docs: "Documentation", support: "Production / Stand-By Support",
+};
+export function roleCategory(settings, timeCategories, role) {
+  const cats = (timeCategories || []).filter(c => c.active !== false);
+  const id = settings?.proposal?.roleCategory?.[role];
+  return (id && cats.find(c => c.id === id))
+    || cats.find(c => (c.name || "").trim().toLowerCase() === (ROLE_DEFAULT_CATEGORY[role] || "").toLowerCase())
+    || null;
+}
+
+export function proposalConfig(settings, timeCategories) {
   const p = settings.proposal || {};
+  // A task priced from its category; a stored rate only where none matches
+  // (an org with no categories set up yet).
+  const fromCats = role => { const c = roleCategory(settings, timeCategories, role); return c ? Number(c.rate) || 0 : null; };
+  const stored = { ...DEFAULT_LABOR_RATES, ...(p.laborRates || {}) };
+  const laborRates = Object.fromEntries(Object.keys(stored).map(k => [k, fromCats(k) ?? stored[k]]));
   return {
     propPrefix: p.propPrefix ?? "PROP-VG",
     pointWeights: { ...DEFAULT_POINT_WEIGHTS, ...(p.pointWeights || {}) },
@@ -37,7 +58,7 @@ export function proposalConfig(settings) {
     plcType: p.plcType ?? "Allen Bradley CompactLogix",
     hmiType: p.hmiType ?? "Allen Bradley PanelView Plus",
     // the controls estimate (calc/estimates.js) — every default editable in Settings → Proposals
-    laborRates: { ...DEFAULT_LABOR_RATES, ...(p.laborRates || {}) },
+    laborRates,
     hourModel: mergeHourModel(DEFAULT_HOUR_MODEL, p.hourModel || {}),
     controlsPhases: {
       engineering: p.controlsPhases?.engineering || CONTROLS_PHASES.engineering,
@@ -47,7 +68,7 @@ export function proposalConfig(settings) {
     exclusions: p.exclusions || DEFAULT_EXCLUSIONS,
     schedule: p.schedule || DEFAULT_SCHEDULE,
     validityDays: p.validityDays ?? 30,
-    supportRate: p.supportRate ?? 70,
+    supportRate: fromCats("support") ?? p.supportRate ?? 70,
     travelPerDay: p.travelPerDay ?? 350,
     hardwareMarkupPct: p.hardwareMarkupPct ?? 20,
     contingencyPct: p.contingencyPct ?? 0,

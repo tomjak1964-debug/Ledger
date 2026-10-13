@@ -1,10 +1,8 @@
-// The customer-facing rate sheet: the shop's standard hourly rates (the labor
-// rate card and support rate in Settings → Proposals) with the overtime and
+// The customer-facing rate sheet: the shop's standard hourly rates (Settings →
+// Time Categories, the one place rates are set) with the overtime and
 // double-time rates worked out, and the terms for premium time, travel and
 // living. Everything the sheet says comes from here and settings.rateSheet
 // (Settings → Proposals → Rate Sheet), so it is always current.
-import { proposalConfig } from "../calc/proposals.js";
-import { ROLE_LABELS } from "../calc/estimates.js";
 import { round2 } from "../calc/ledger.js";
 import { todayISO } from "./helpers.js";
 
@@ -27,12 +25,12 @@ export function rateSheetConfig(settings) {
   };
 }
 
-// One row per service with a rate: the labor rate card, then on-site support.
-export function rateRows(settings) {
-  const cfg = proposalConfig(settings), rs = rateSheetConfig(settings);
-  const rows = Object.entries(ROLE_LABELS).map(([k, label]) => ({ key: k, label, rate: Number(cfg.laborRates[k]) || 0 }));
-  rows.push({ key: "support", label: "Production / Stand-By Support", rate: Number(cfg.supportRate) || 0 });
-  return rows.filter(r => r.rate > 0).map(r => ({ ...r, ot: round2(r.rate * rs.otMultiplier), dt: round2(r.rate * rs.dtMultiplier) }));
+// One row per active time category with a rate — the one place rates are set.
+export function rateRows(settings, timeCategories) {
+  const rs = rateSheetConfig(settings);
+  return (timeCategories || []).filter(c => c.active !== false && Number(c.rate) > 0)
+    .sort((a, b) => (Number(a.sort) || 0) - (Number(b.sort) || 0))
+    .map(c => ({ key: c.id, label: c.name, rate: Number(c.rate), ot: round2(Number(c.rate) * rs.otMultiplier), dt: round2(Number(c.rate) * rs.dtMultiplier) }));
 }
 
 const x = n => (Number.isInteger(n) ? n.toFixed(1) : String(n)) + "×";

@@ -13,7 +13,7 @@ import { newEstimate, priceEstimate } from "../calc/estimates.js";
 
 // Shared by the print view and the Word export — the proposal letter content.
 export function buildProposalContent(p, db) {
-  const cfg = proposalConfig(db.settings);
+  const cfg = proposalConfig(db.settings, db.timeCategories);
   const mt = db.machineTypes.find(m => m.id === p.machineTypeId);
   const customer = db.contacts.find(c => c.id === p.customerId);
   // Effective contact: the proposal's free-text name, else a linked contact
@@ -85,7 +85,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
   const [importing, setImporting] = useState(false);
   const [importingLineup, setImportingLineup] = useState(false);
   const customers = db.contacts.filter(c => c.type === "customer");
-  const cfg = proposalConfig(db.settings);
+  const cfg = proposalConfig(db.settings, db.timeCategories);
 
   const filtered = db.proposals.filter(p => {
     const s = search.toLowerCase(); if (!s) return true;
@@ -198,7 +198,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
     {importing && <ImportProposalsModal db={db} actions={actions} toast={toast} onClose={() => setImporting(false)} />}
     {importingLineup && <ImportLineupModal db={db} actions={actions} toast={toast} onClose={() => setImportingLineup(false)} />}
     {doc && <ProposalDoc p={doc} db={db} onClose={() => setDoc(null)} toast={toast} />}
-    {rateSheet && <RateSheetDoc settings={db.settings} onClose={() => setRateSheet(false)} />}
+    {rateSheet && <RateSheetDoc settings={db.settings} timeCategories={db.timeCategories} onClose={() => setRateSheet(false)} />}
     {phasesFor && <PhasesModal p={db.proposals.find(x => x.id === phasesFor.id) || phasesFor} db={db} actions={actions} toast={toast} onClose={() => setPhasesFor(null)} />}
   </div>;
 }

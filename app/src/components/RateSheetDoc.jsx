@@ -7,10 +7,10 @@ import { Ico, ICONS } from "./ui.jsx";
 // The printable rate sheet. Like the other documents it is portalled out of
 // .main and flags the body, so printing shows only the sheet; the tab title
 // becomes the file name Save PDF offers.
-export default function RateSheetDoc({ settings, onClose }) {
+export default function RateSheetDoc({ settings, timeCategories, onClose }) {
   const s = settings || {};
   const rs = rateSheetConfig(s);
-  const rows = rateRows(s);
+  const rows = rateRows(s, timeCategories);
   const year = rs.effectiveDate.slice(0, 4);
   useEffect(() => {
     const title = document.title;
@@ -53,7 +53,6 @@ export default function RateSheetDoc({ settings, onClose }) {
           <li><b>Standard rates</b> apply to the first {rs.dailyHours} hours worked in a day, Monday through Friday.</li>
           <li><b>Overtime at {multLabel(rs.otMultiplier)}</b> the standard rate applies to hours worked beyond {rs.dailyHours} in a day, hours worked beyond {rs.weeklyHours} in a week, and all hours worked on Saturdays.</li>
           <li><b>Double time at {multLabel(rs.dtMultiplier)}</b> the standard rate applies to all hours worked on Sundays and recognized holidays.</li>
-          <li><b>Recognized holidays:</b> {rs.holidays.join(", ")}.</li>
         </ul>
       </div>
 

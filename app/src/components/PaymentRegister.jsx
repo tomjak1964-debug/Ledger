@@ -9,6 +9,7 @@ import FilterBar from "./FilterBar.jsx";
 import PaymentGroupModal from "./PaymentGroupModal.jsx";
 import EmailModal from "./EmailModal.jsx";
 import { remittancePdf } from "../lib/remittance.js";
+import RemittanceView from "./RemittanceView.jsx";
 import { openCheckPdf } from "../lib/checkPrint.js";
 import AccountSelect from "./AccountSelect.jsx";
 
@@ -34,6 +35,7 @@ export default function PaymentRegister({ db, actions, toast, readOnly, kind }) 
   const [edit, setEdit] = useState(null);        // { payment, doc } — one line of a receipt
   const [editGroup, setEditGroup] = useState(null);  // a whole receipt, re-allocated across invoices
   const [emailGroup, setEmailGroup] = useState(null);  // a vendor payment being sent as a remittance
+  const [viewGroup, setViewGroup] = useState(null);    // a vendor payment's remittance on screen
   const [from, to] = rangeFor(preset, custom);
   const parents = isBill ? db.bills : db.invoices;
   const docLabel = isBill ? "Bill" : "Invoice";
@@ -112,10 +114,12 @@ export default function PaymentRegister({ db, actions, toast, readOnly, kind }) 
     {bar}
     <Register db={db} actions={actions} toast={toast} readOnly={readOnly} kind={kind}
       from={from} to={to} partyId={partyId} needle={needle} onEdit={editEntry}
-      onEditGroup={setEditGroup} onEmailGroup={isBill ? setEmailGroup : null} onPrintCheck={isBill ? printCheck : null} />
+      onEditGroup={setEditGroup} onEmailGroup={isBill ? setEmailGroup : null} onPrintCheck={isBill ? printCheck : null} onViewRemit={isBill ? setViewGroup : null} />
     {editModal}
     {groupModal}
     {emailModal}
+    {viewGroup && <RemittanceView args={remitArgs(viewGroup)} toast={toast} onClose={() => setViewGroup(null)}
+      onEdit={readOnly ? undefined : () => { const g = viewGroup; setViewGroup(null); setEditGroup(g); }} />}
   </div>;
 }
 
@@ -123,7 +127,7 @@ export default function PaymentRegister({ db, actions, toast, readOnly, kind }) 
    A receipt (or a payment) is what actually moved: one check or transfer, from
    or to one party, on one date. Several documents can sit under it, so the row
    expands to show what it was applied to. */
-function Register({ db, actions, toast, readOnly, kind, from, to, partyId, needle, onEdit, onEditGroup, onEmailGroup, onPrintCheck }) {
+function Register({ db, actions, toast, readOnly, kind, from, to, partyId, needle, onEdit, onEditGroup, onEmailGroup, onPrintCheck, onViewRemit }) {
   const [open, setOpen] = useState({});
   const isBill = kind === "bill";
   const L = isBill
@@ -193,6 +197,8 @@ function Register({ db, actions, toast, readOnly, kind, from, to, partyId, needl
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                 {onPrintCheck && g.method === "Check" && <button className="btn ghost icon" title="Print this check again"
                   onClick={e => { e.stopPropagation(); onPrintCheck(g); }}><Ico d={ICONS.print} size={15} /></button>}
+                {onViewRemit && g.method !== "Check" && <button className="btn ghost icon" title="Remittance advice — email, print, save or edit"
+                  onClick={e => { e.stopPropagation(); onViewRemit(g); }}><Ico d={ICONS.print} size={15} /></button>}
                 {onEmailGroup && g.method !== "Check" && <button className="btn ghost icon" title="Email remittance advice to the vendor"
                   onClick={e => { e.stopPropagation(); onEmailGroup(g); }}><Ico d={ICONS.mail} size={15} /></button>}
                 {!readOnly && onEditGroup && <button className="btn ghost icon" title={`Open this ${L.one} — add or remove ${L.docs.toLowerCase()}`}

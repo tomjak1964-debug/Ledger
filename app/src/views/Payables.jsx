@@ -10,7 +10,8 @@ import { Ico, ICONS, Badge, Empty, Modal, Field, SortTh, useTableSort } from "..
 import PaymentModal from "../components/PaymentModal.jsx";
 import Attachments from "../components/Attachments.jsx";
 import { openCheckPdf } from "../lib/checkPrint.js";
-import { remittancePdf, openRemittancePdf } from "../lib/remittance.js";
+import { remittancePdf } from "../lib/remittance.js";
+import RemittanceView from "../components/RemittanceView.jsx";
 import EmailModal from "../components/EmailModal.jsx";
 import AccountSelect from "../components/AccountSelect.jsx";
 import JobCostPicker from "../components/JobCostPicker.jsx";
@@ -19,8 +20,9 @@ import { expenseAccountOfBill, accountLabel, accountSettings } from "../calc/acc
 // The date a bill was settled — the last payment on it.
 const paidDate = (b) => (b.payments || []).map(p => p.date).filter(Boolean).sort().pop() || "";
 
-export default function PayablesView({ db, actions, toast, readOnly }) {
+export default function PayablesView({ db, actions, toast, readOnly, go }) {
   const [emailRemit, setEmailRemit] = useState(null); // {bill, payment}
+  const [viewRemit, setViewRemit] = useState(null);   // remittance args on screen
   const [payRun, setPayRun] = useState(false);
   const [showPaid, setShowPaid] = useState(false);
   const remitArgs = (bill, p) => ({
@@ -29,7 +31,7 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
     settings: db.settings,
   });
   // Check payments print a check; electronic payments get a remittance advice
-  const printDocFor = (bill, p) => p.method === "Check" ? printCheckFor(bill, p) : openRemittancePdf(remitArgs(bill, p));
+  const printDocFor = (bill, p) => p.method === "Check" ? printCheckFor(bill, p) : setViewRemit(remitArgs(bill, p));
   const printCheckFor = (bill, p) => openCheckPdf({
     payment: p,
     vendor: db.contacts.find(c => c.id === bill.vendorId),
@@ -177,6 +179,8 @@ export default function PayablesView({ db, actions, toast, readOnly }) {
         }
       }} />}
     {payRun && <PayBillsModal db={db} actions={actions} toast={toast} onClose={() => setPayRun(false)} />}
+    {viewRemit && <RemittanceView args={viewRemit} toast={toast} onClose={() => setViewRemit(null)}
+      onEdit={go ? () => { setViewRemit(null); setPay(null); go("payments"); } : undefined} />}
     {emailRemit && <EmailModal docType="remittance"
       title={"Email Remittance · " + (nameOf(db, emailRemit.bill.vendorId))}
       defaultTo={remitEmail(db.contacts.find(c => c.id === emailRemit.bill.vendorId))}

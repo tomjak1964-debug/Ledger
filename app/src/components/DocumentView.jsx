@@ -1,12 +1,16 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { money, fmtDate } from "../lib/helpers.js";
 import { lineTotals, paid, balance } from "../calc/ledger.js";
 import { invoicePages } from "../lib/invoiceLayout.js";
 import { termsLabel } from "../lib/terms.js";
 import { isCreditMemo } from "../lib/credits.js";
 import { Ico, ICONS } from "./ui.jsx";
+import DocActions from "./DocActions.jsx";
+import EmailModal from "./EmailModal.jsx";
+import { invoicePdf } from "../lib/invoicePdf.js";
+import { saveBlob } from "../lib/saveFile.js";
 
-export default function DocumentView({ kind, doc, contact, settings, onClose, onPrinted, autoPrint }) {
+export default function DocumentView({ kind, doc, contact, settings, onClose, onPrinted, autoPrint, db, toast, onEdit }) {
   // While a document overlay is open, flag the body so print hides the app
   // content behind it (otherwise the list page prints along with the document),
   // and make the tab title the document number: Print / Save PDF offers the
@@ -26,7 +30,7 @@ export default function DocumentView({ kind, doc, contact, settings, onClose, on
     const t = setTimeout(() => { print(); onClose?.(); }, 250);
     return () => clearTimeout(t);
   }, []);   // eslint-disable-line react-hooks/exhaustive-deps
-  if (kind === "invoice") return <InvoiceDoc inv={doc} contact={contact} settings={settings} onClose={onClose} print={print} />;
+  if (kind === "invoice") return <InvoiceDoc inv={doc} contact={contact} settings={settings} onClose={onClose} print={print} db={db} toast={toast} onEdit={onEdit} />;
   const t = lineTotals(doc.lineItems, doc.taxRate);
   const isQuote = kind === "quote";
   const isPO = kind === "po";
@@ -87,7 +91,16 @@ export default function DocumentView({ kind, doc, contact, settings, onClose, on
 // Always prints full pages: the items box is ruled to the bottom however few
 // lines there are, and lines that don't fit carry onto an identically framed
 // page. qty-0 lines are unbilled-phase reference lines: unit price, no amount.
-function InvoiceDoc({ inv, contact, settings, onClose, print }) {
+function InvoiceDoc({ inv, contact, settings, onClose, print, db, toast, onEdit }) {
+  const [email, setEmail] = useState(false);
+  const [busy, setBusy] = useState(false);
+  // Save writes the same PDF the email attaches, named for the invoice.
+  const savePdf = async () => {
+    setBusy(true);
+    try { const { blob, filename } = await invoicePdf(inv, db); saveBlob(blob, filename); }
+    catch (e) { toast?.("⚠ Couldn't make the PDF: " + (e.message || e)); }
+    setBusy(false);
+  };
   // A credit note is stored negative so the ledger maths work; it prints the
   // way a credit memo reads — positive amounts under a CREDIT MEMO heading.
   const isCredit = isCreditMemo(inv);
@@ -105,10 +118,15 @@ function InvoiceDoc({ inv, contact, settings, onClose, print }) {
   const pages = invoicePages(doc.lineItems);
   const notes = inv.notes || settings.invoiceNotes;
   return <div className="doc-screen">
-    <div className="doc-bar">
-      <button className="btn" onClick={onClose}><Ico d={ICONS.back} size={16} />Close</button>
-      <button className="btn primary" onClick={print}><Ico d={ICONS.print} size={16} />Print / Save PDF</button>
-    </div>
+    <DocActions onClose={onClose} onEdit={onEdit} onEmail={db ? () => setEmail(true) : undefined} onPrint={print} busy={busy}
+      saves={db ? [{ label: "Save PDF", hint: inv.number + ".pdf", run: savePdf }] : []} />
+    {email && <EmailModal docType="invoice"
+      title={"Email · " + inv.number}
+      defaultTo={db.contactPeople.find(p => p.id === inv.contactPersonId)?.email || contact?.email || ""}
+      defaultSubject={`${isCredit ? "Credit Memo" : "Invoice"} ${inv.number} — ${settings.company}`}
+      defaultBody={`Please find attached ${isCredit ? "credit memo" : "invoice"} ${inv.number}.\n\nThank you for your business.\n\n${settings.company}\n${settings.companyPhone || ""}`}
+      buildAttachment={() => invoicePdf(inv, db)}
+      onClose={() => setEmail(false)} toast={toast} />}
     {pages.map((rows, pi) => {
       const last = pi === pages.length - 1;
       return <div className="printable inv-doc inv-page" key={pi}>

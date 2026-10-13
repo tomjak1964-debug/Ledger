@@ -1,6 +1,8 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import RateSheetDoc from "../components/RateSheetDoc.jsx";
+import DocActions from "../components/DocActions.jsx";
+import { pagesToPdf, saveBlob } from "../lib/saveFile.js";
 import { uid, money, fmtDate, todayISO, nameOf, cls, pickable } from "../lib/helpers.js";
 import { proposalConfig, priceProposal, ioBlocks, phaseAmount, SPEC_FIELDS, DEFAULT_PHASES, defaultProposalCustomer } from "../calc/proposals.js";
 import { Ico, ICONS, Badge, Empty, Field, MenuItem, ActionMenu, Modal, SortTh, useTableSort, blankZero } from "../components/ui.jsx";
@@ -67,7 +69,8 @@ export function buildProposalContent(p, db) {
   const salesNotes = [
     "This is a proposal for Engineering Services and material listed in the deliverables section of this proposal.",
     "All Field Components (Sensors, Cables, Duct, Cylinders, Valves, Remote E-Stop, Cycle Start, etc.) and Step-Down Transformers are not provided as part of this proposal.",
-    "Stand-by and production support is not included as part of this proposal and can be purchased for a rate of $70/hour U.S. and actual expenses.",
+    // The support rate is the Time Category's (the one place rates are set), not a number typed here.
+    `Stand-by and production support is not included as part of this proposal and can be purchased for a rate of $${Number(cfg.supportRate) || 0}/hour U.S. and actual expenses.`,
   ];
 
   const phases = (p.phases?.length ? p.phases : cfg.phases).map(ph => ({ ...ph, amount: phaseAmount(pricing.total, ph.pct) }));
@@ -197,8 +200,9 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
     </div>
     {importing && <ImportProposalsModal db={db} actions={actions} toast={toast} onClose={() => setImporting(false)} />}
     {importingLineup && <ImportLineupModal db={db} actions={actions} toast={toast} onClose={() => setImportingLineup(false)} />}
-    {doc && <ProposalDoc p={doc} db={db} onClose={() => setDoc(null)} toast={toast} />}
-    {rateSheet && <RateSheetDoc settings={db.settings} timeCategories={db.timeCategories} onClose={() => setRateSheet(false)} />}
+    {doc && <ProposalDoc p={doc} db={db} onClose={() => setDoc(null)} toast={toast}
+      onEdit={readOnly ? undefined : () => { const x = doc; setDoc(null); setEdit({ ...x }); }} />}
+    {rateSheet && <RateSheetDoc settings={db.settings} timeCategories={db.timeCategories} toast={toast} onClose={() => setRateSheet(false)} />}
     {phasesFor && <PhasesModal p={db.proposals.find(x => x.id === phasesFor.id) || phasesFor} db={db} actions={actions} toast={toast} onClose={() => setPhasesFor(null)} />}
   </div>;
 }
@@ -337,7 +341,7 @@ function PhasesModal({ p, db, actions, toast, onClose }) {
   </Modal>;
 }
 
-function ProposalDoc({ p, db, onClose, toast }) {
+function ProposalDoc({ p, db, onClose, toast, onEdit }) {
   const c = p.kind === "controls" ? buildControlsContent(p, db) : buildProposalContent(p, db);
   const s = db.settings;
   const [busy, setBusy] = useState(false);
@@ -360,13 +364,22 @@ function ProposalDoc({ p, db, onClose, toast }) {
     catch (e) { toast("⚠ Word export failed: " + (e.message || e)); }
     setBusy(false);
   };
+  // The PDF is the document as it prints: a fixture proposal's two pages each
+  // shrunk to fit a page; a system proposal runs on.
+  const docRef = useRef();
+  const savePdf = async () => {
+    setBusy(true);
+    try {
+      const pages = [...docRef.current.querySelectorAll(".prop-page")];
+      const { blob, filename } = await pagesToPdf(pages.length ? pages : [docRef.current],
+        { filename: proposalFileStem(p) + ".pdf", title: proposalFileStem(p), fit: pages.length > 0 });
+      saveBlob(blob, filename);
+    } catch (e) { toast("⚠ Couldn't make the PDF: " + (e.message || e)); }
+    setBusy(false);
+  };
   return createPortal(<div className="doc-screen">
-    <div className="doc-bar">
-      <button className="btn" onClick={onClose}><Ico d={ICONS.back} size={16} />Close</button>
-      <button className="btn" onClick={() => setEmail(true)}><Ico d={ICONS.mail} size={15} />Email…</button>
-      <button className="btn" disabled={busy} onClick={word}>{busy ? "Building…" : "Download Word"}</button>
-      <button className="btn primary" onClick={() => window.print()}><Ico d={ICONS.print} size={16} />Print / Save PDF</button>
-    </div>
+    <DocActions onClose={onClose} onEdit={onEdit} onEmail={() => setEmail(true)} onPrint={() => window.print()} busy={busy}
+      saves={[{ label: "Save PDF", hint: proposalFileStem(p) + ".pdf", run: savePdf }, { label: "Save Word", hint: proposalFileStem(p) + ".docx", run: word }]} />
     {email && <EmailModal docType="proposal"
       title={"Email · " + p.number}
       defaultTo={c.person?.email || c.customer?.email || ""}
@@ -374,7 +387,8 @@ function ProposalDoc({ p, db, onClose, toast }) {
       defaultBody={`${c.salutation.replace(/:$/, ",")}\n\nPlease find attached proposal ${p.number} for ${p.description || "the machine"}.\n\nRegards,\n${c.cfg.signer || s.company}`}
       buildAttachment={() => proposalDocxBlob(p, db)}
       onClose={() => setEmail(false)} toast={toast} />}
-    {p.kind === "controls" ? <ControlsDocBody p={p} db={db} /> : <div className="printable prop-doc">
+    <div ref={docRef}>
+    {p.kind === "controls" ? <ControlsDocBody p={p} db={db} /> : <><div className="printable prop-doc prop-page">
       <div style={{ textAlign: "center", marginBottom: 26 }}><img src="/tmj-logo.png" alt="TMJ Engineering" style={{ width: 170 }} /></div>
       <p>{fmtDate(p.date)}</p>
       <p style={{ whiteSpace: "pre-line" }}>{[c.person?.name, c.customer?.name, c.customer?.address].filter(Boolean).join("\n")}</p>
@@ -386,7 +400,10 @@ function ProposalDoc({ p, db, onClose, toast }) {
       <ul className="prop-bullets">
         {c.bullets.map((b, i) => <li key={i} className={cls(b.sub && "sub")}>{b.t}</li>)}
       </ul>
-      <h4 style={{ margin: "16px 0 4px" }}>Sales Notes and Clarifications</h4>
+    </div>
+    {/* Page two starts with Sales Notes and Clarifications, on screen and on paper. */}
+    <div className="printable prop-doc prop-page">
+      <h4 style={{ margin: "0 0 4px" }}>Sales Notes and Clarifications</h4>
       <ol className="prop-bullets">{c.salesNotes.map((t, i) => <li key={i}>{t}</li>)}</ol>
       <div className="prop-price">
         <h4>Base Pricing</h4>
@@ -415,6 +432,7 @@ function ProposalDoc({ p, db, onClose, toast }) {
       <p style={{ marginBottom: 34 }}>Regards,</p>
       <p>{c.cfg.signer || s.company}</p>
       <div className="doc-foot">{[s.companyAddress?.replace(/\n/g, ", "), s.companyPhone].filter(Boolean).join(" - ")}</div>
-    </div>}
+    </div></>}
+    </div>
   </div>, document.body);
 }

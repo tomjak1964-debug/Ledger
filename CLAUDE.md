@@ -440,6 +440,18 @@ kind)`: the newest fixture or system proposal's customer, so a system proposal f
 fixture default alone; else Venture Global Engineering), with that customer's contact; the quote-chart import
 uses the same default. Changing the customer replaces the contact with the new customer's own, or blank.
 
+**Every document has the same toolbar** (`components/DocActions.jsx`): Close · Edit · Email · Save · **Print**
+(the printer dialog). Save lists the formats, each under a name of its own (`saveBlob()` in `lib/saveFile.js`):
+an **invoice** saves the PDF its email attaches (`INV-….pdf`, from `invoicePdf()`), and Edit opens the invoice
+editor (`App`'s `editRequest`, picked up by `InvoicesView`); a **proposal** saves **PDF** or **Word**
+(`proposalFileStem()` names both) and Edit opens its editor; the **rate sheet** saves a one-page PDF; a
+**remittance** (`components/RemittanceView.jsx` — the PDF on screen, from Payables' Pay dialog and the printer
+icon on electronic rows in Vendors & Purchases → Payments) saves `<Vendor> Remittance - <Ref>.pdf`, prints the
+PDF itself and Edit opens the payment. Proposal and rate-sheet PDFs are drawn from the on-screen pages
+(`pagesToPdf()` — html2canvas, which ships with jsPDF, one Letter page per `.prop-page` shrunk to fit; a system
+proposal runs on). **A fixture proposal is two pages**: page two starts at *Sales Notes and Clarifications*
+(`.prop-page + .prop-page{break-before:page}` in print). Printing is Letter (`@page{size:letter}`).
+
 **A printable document overlay belongs outside `.main`.** Printing hides the app behind the document
 with `body.doc-open .main{display:none}` (`styles.css`), which needs both halves: the overlay adds
 `doc-open` to the body, and it sits *outside* `.main` so that rule doesn't hide it too. `DocumentView`

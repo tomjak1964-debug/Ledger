@@ -10,7 +10,7 @@ const blobToBase64 = blob => new Promise(res => {
 
 // Generic "email this document" dialog. buildAttachment is async and returns
 // { blob, filename } (or null for no attachment). docType ("invoice" |
-// "remittance" | "proposal") is all the app says about the sender: the
+// "remittance" | "proposal" | "ratesheet") is all the app says about the sender: the
 // send-document function picks the From address for that type from its own
 // fixed list.
 export default function EmailModal({ title, defaultTo, defaultSubject, defaultBody, buildAttachment, onClose, onSent, toast, docType }) {

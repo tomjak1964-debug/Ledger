@@ -106,7 +106,9 @@ export default function App({ session }) {
   const [doc, setDoc] = useState(null); // {kind,doc}
   const [toastMsg, setToastMsg] = useState(null);
   const [navOpen, setNavOpen] = useState(false);
-  const [pwOpen, setPwOpen] = useState(false);   // anyone can change their own password, Settings or not
+  const [pwOpen, setPwOpen] = useState(false);
+  // A document's Edit button asks a list page to open its editor on one record.
+  const [editRequest, setEditRequest] = useState(null);   // anyone can change their own password, Settings or not
   useEffect(() => {
     if (!navOpen) return;
     const onKey = e => { if (e.key === "Escape") setNavOpen(false); };
@@ -153,7 +155,7 @@ export default function App({ session }) {
   const readOnly = !canWrite(member, NAV_AREA[activeView]);
 
   const [t, sub] = TITLES[activeView];
-  const props = { db, actions, toast, openDoc, go, session, readOnly, isAdmin: admin, member };
+  const props = { db, actions, toast, openDoc, go, session, readOnly, isAdmin: admin, member, editRequest, clearEditRequest: () => setEditRequest(null) };
 
   return <div className="app">
     {/* On a phone the open menu covers part of the page; a tap on the page
@@ -232,7 +234,8 @@ export default function App({ session }) {
     {doc && <DocumentView kind={doc.kind} doc={doc.doc}
       contact={db.contacts.find(c => c.id === (doc.doc.customerId || doc.doc.vendorId))} settings={db.settings}
       onPrinted={doc.kind === "invoice" ? () => { actions.markInvoicePrinted(doc.doc.id); doc.onPrinted?.(); } : doc.onPrinted}
-      autoPrint={doc.autoPrint} onClose={() => setDoc(null)} />}
+      autoPrint={doc.autoPrint} onClose={() => setDoc(null)} db={db} toast={toast}
+      onEdit={doc.kind === "invoice" && canWrite(member, "invoices") ? () => { setEditRequest({ kind: "invoice", id: doc.doc.id }); setDoc(null); go("invoices"); } : undefined} />}
     {toastMsg && <div className="toast"><Ico d={ICONS.check} size={16} />{toastMsg.text}
       {toastMsg.onAction && <button className="link-btn" style={{ color: "#7FB0FF", marginLeft: 10, fontWeight: 600 }}
         onClick={() => { toastMsg.onAction(); setToastMsg(null); }}>{toastMsg.actionLabel || "Undo"}</button>}

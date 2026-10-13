@@ -112,7 +112,7 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
     </div>}
 
     {tab === "forms" && <FormsTab s={s} set={set} readOnly={readOnly} saveAll={saveAll} />}
-    {tab === "proposals" && <ProposalsTab db={db} s={s} set={set} readOnly={readOnly} saveAll={saveAll} />}
+    {tab === "proposals" && <ProposalsTab db={db} s={s} set={set} readOnly={readOnly} saveAll={saveAll} toast={toast} />}
     {tab === "accounts" && <AccountsTab db={db} s={s} set={set} readOnly={readOnly} saveAll={saveAll} />}
 
     {tab === "users" && isAdmin && <UsersCard db={db} actions={actions} toast={toast} session={session} />}
@@ -464,7 +464,7 @@ function AccountsTab({ db, s, set, readOnly, saveAll }) {
 // read from settings.proposal (calc/proposals.js proposalConfig). The rate
 // card and the hour model price a controls estimate; the letter fields go on
 // both documents.
-function ProposalsTab({ db, s, set, readOnly, saveAll }) {
+function ProposalsTab({ db, s, set, readOnly, saveAll, toast }) {
   const cfg = proposalConfig(s, db.timeCategories);
   const p = s.proposal || {};
   const setP = (k, v) => set("proposal", { ...p, [k]: v });
@@ -523,7 +523,7 @@ function ProposalsTab({ db, s, set, readOnly, saveAll }) {
       </div></div>
     </div>
 
-    <RateSheetCard db={db} s={s} set={set} readOnly={readOnly} />
+    <RateSheetCard db={db} s={s} set={set} readOnly={readOnly} toast={toast} />
 
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-head"><h3>Hour Model</h3><span className="subtle" style={{ marginLeft: "auto" }}>hours a system proposal suggests per unit of content</span></div>
@@ -567,7 +567,7 @@ function ProposalsTab({ db, s, set, readOnly, saveAll }) {
 
 // Settings → Proposals → Rate Sheet: what the printed rate sheet says beyond
 // the rates themselves (lib/rateSheet.js). The rates are the card above.
-function RateSheetCard({ db, s, set, readOnly }) {
+function RateSheetCard({ db, s, set, readOnly, toast }) {
   const rs = rateSheetConfig(s);
   const r = s.rateSheet || {};
   const setR = (k, v) => set("rateSheet", { ...r, [k]: v });
@@ -590,6 +590,6 @@ function RateSheetCard({ db, s, set, readOnly }) {
       </div>
       <p className="subtle" style={{ margin: 0 }}>Blank effective date prints today's. Save Settings to keep changes; the sheet is also under Proposals → Rate Sheet.</p>
     </div>
-    {open && <RateSheetDoc settings={s} timeCategories={db.timeCategories} onClose={() => setOpen(false)} />}
+    {open && <RateSheetDoc settings={s} timeCategories={db.timeCategories} toast={toast} onClose={() => setOpen(false)} />}
   </div>;
 }

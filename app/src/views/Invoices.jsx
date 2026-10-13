@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { uid, money, fmtDate, todayISO, addDays, nameOf, pickable } from "../lib/helpers.js";
 import { lineTotals, balance, invoiceStatus } from "../calc/ledger.js";
 import { AUTO_NUMBER } from "../lib/store.js";
@@ -14,9 +14,16 @@ import { invoicePdf } from "../lib/invoicePdf.js";
 import AccountSelect from "../components/AccountSelect.jsx";
 import { incomeAccountOf, accountLabel } from "../calc/accounts.js";
 
-export default function InvoicesView({ db, actions, toast, openDoc, readOnly }) {
+export default function InvoicesView({ db, actions, toast, openDoc, readOnly, editRequest, clearEditRequest }) {
   const [pay, setPay] = useState(null);
   const [edit, setEdit] = useState(null);
+  // Edit from an open invoice document lands here.
+  useEffect(() => {
+    if (editRequest?.kind !== "invoice") return;
+    const inv = db.invoices.find(i => i.id === editRequest.id);
+    if (inv) setEdit({ ...inv });
+    clearEditRequest?.();
+  }, [editRequest]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [email, setEmail] = useState(null);
   const [pickSO, setPickSO] = useState(false);   // choose an SO to invoice from
   const [invoiceSO, setInvoiceSO] = useState(null);

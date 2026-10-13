@@ -1,30 +1,46 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { money, fmtDate } from "../lib/helpers.js";
 import { rateSheetConfig, rateRows, multLabel } from "../lib/rateSheet.js";
-import { Ico, ICONS } from "./ui.jsx";
+import DocActions from "./DocActions.jsx";
+import EmailModal from "./EmailModal.jsx";
+import { pagesToPdf, saveBlob } from "../lib/saveFile.js";
 
 // The printable rate sheet. Like the other documents it is portalled out of
 // .main and flags the body, so printing shows only the sheet; the tab title
 // becomes the file name Save PDF offers.
-export default function RateSheetDoc({ settings, timeCategories, onClose }) {
+export default function RateSheetDoc({ settings, timeCategories, onClose, toast }) {
   const s = settings || {};
   const rs = rateSheetConfig(s);
   const rows = rateRows(s, timeCategories);
   const year = rs.effectiveDate.slice(0, 4);
+  const stem = `${s.company || "Rate Sheet"} Rate Sheet ${year}`;
+  const page = useRef();
+  const [busy, setBusy] = useState(false);
+  const [email, setEmail] = useState(false);
   useEffect(() => {
     const title = document.title;
     document.body.classList.add("doc-open");
-    document.title = `${s.company || "Rate Sheet"} Rate Sheet ${year}`;
+    document.title = stem;
     return () => { document.body.classList.remove("doc-open"); document.title = title; };
-  }, [s.company, year]);
+  }, [stem]);
+  // One Letter page, whatever the screen: the PDF shrinks the sheet to fit.
+  const pdf = () => pagesToPdf([page.current], { filename: stem + ".pdf", title: stem, fit: true });
+  const savePdf = async () => {
+    setBusy(true);
+    try { const { blob, filename } = await pdf(); saveBlob(blob, filename); }
+    catch (e) { toast?.("⚠ Couldn't make the PDF: " + (e.message || e)); }
+    setBusy(false);
+  };
 
   return createPortal(<div className="doc-screen">
-    <div className="doc-bar">
-      <button className="btn" onClick={onClose}><Ico d={ICONS.back} size={16} />Close</button>
-      <button className="btn primary" onClick={() => window.print()}><Ico d={ICONS.print} size={16} />Print / Save PDF</button>
-    </div>
-    <div className="printable rate-sheet">
+    <DocActions onClose={onClose} onEmail={() => setEmail(true)} onPrint={() => window.print()} busy={busy}
+      saves={[{ label: "Save PDF", hint: stem + ".pdf", run: savePdf }]} />
+    {email && <EmailModal docType="proposal" title="Email · Rate Sheet" defaultTo=""
+      defaultSubject={`${s.company || ""} rate sheet — effective ${fmtDate(rs.effectiveDate)}`}
+      defaultBody={`Please find attached our current rate sheet, effective ${fmtDate(rs.effectiveDate)}.\n\nRegards,\n${s.company || ""}\n${s.companyPhone || ""}`}
+      buildAttachment={pdf} onClose={() => setEmail(false)} toast={toast || (() => {})} />}
+    <div className="printable rate-sheet" ref={page}>
       <div className="doc-top">
         <div className="doc-co">
           <img src="/tmj-logo.png" alt={s.company || ""} style={{ width: 150, display: "block", marginBottom: 10 }} />

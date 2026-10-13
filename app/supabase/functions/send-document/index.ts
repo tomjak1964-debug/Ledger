@@ -36,6 +36,20 @@ function senderFor(docType: unknown): string {
   return Deno.env.get(setting) || general;
 }
 
+// Recipients: one address or a list, as a string ("a@x.com, b@y.com"; commas,
+// semicolons or spaces between) or an array. Each must look like an address;
+// duplicates are dropped. A copy of the app from before lists sends one string.
+const MAX_RECIPIENTS = 20;
+function addressList(v: unknown, field: string): string[] {
+  const raw = Array.isArray(v) ? v.map(String) : String(v ?? "").split(/[\s,;]+/);
+  const out: string[] = [];
+  for (const a of raw.map(s => s.trim()).filter(Boolean)) {
+    if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(a)) throw new Error(`"${a}" in ${field} isn't an email address`);
+    if (!out.some(x => x.toLowerCase() === a.toLowerCase())) out.push(a);
+  }
+  return out;
+}
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -60,8 +74,12 @@ Deno.serve(async (req) => {
       .select("org_id").eq("user_id", user.id).limit(1).maybeSingle();
     if (!member) throw new Error("Not a member of any company");
 
-    const { to, subject, html, attachments, docType } = await req.json();
-    if (!to || !subject) throw new Error("Missing to/subject");
+    const body = await req.json();
+    const { subject, html, attachments, docType } = body;
+    const to = addressList(body.to, "To");
+    const cc = addressList(body.cc, "CC").filter(a => !to.some(t => t.toLowerCase() === a.toLowerCase()));
+    if (!to.length || !subject) throw new Error("Missing to/subject");
+    if (to.length + cc.length > MAX_RECIPIENTS) throw new Error(`At most ${MAX_RECIPIENTS} recipients per email`);
     const key = Deno.env.get("RESEND_API_KEY");
     if (!key) throw new Error("RESEND_API_KEY secret is not set");
     const from = senderFor(docType);
@@ -70,14 +88,14 @@ Deno.serve(async (req) => {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from, to: [to], subject, html,
+        from, to, ...(cc.length ? { cc } : {}), subject, html,
         attachments: (attachments ?? []).map((a: { filename: string; content: string }) =>
           ({ filename: a.filename, content: a.content })),
       }),
     });
     const data = await r.json();
     if (!r.ok) throw new Error(data?.message ?? "Resend rejected the email");
-    return new Response(JSON.stringify({ ok: true, id: data.id }), {
+    return new Response(JSON.stringify({ ok: true, id: data.id, to, cc }), {
       headers: { ...cors, "Content-Type": "application/json" },
     });
   } catch (e) {

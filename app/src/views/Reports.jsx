@@ -12,7 +12,7 @@ import { ten99Label, accountLabel, chartLoaded, isCashBasis, basisLabel } from "
 import { reconcileState } from "../calc/bankRecon.js";
 import FilterBar, { rangeLabel } from "../components/FilterBar.jsx";
 import { downloadCSV, ReportCard } from "../components/reportKit.jsx";
-import { SalesOrderReport, JobTrackingReport, JobCostingReport } from "./JobReports.jsx";
+import { SalesOrderReport, JobTrackingReport, ProposalsReport, JobCostingReport } from "./JobReports.jsx";
 
 
 /* ---------- the report catalog ----------
@@ -39,7 +39,8 @@ const REPORTS = {
   bs: { label: "Balance Sheet", blurb: "Assets, liabilities and capital as of the end of the range — with the year's income rolled into Retained Earnings once the year has closed.", party: null, asOf: true, Render: BalanceSheetReport },
   is: { label: "Income Statement", blurb: "The standard statement: revenues, cost of sales, gross profit, expenses and net income by account, for the range and year to date, on the basis set in Settings → Accounts.", party: null, Render: IncomeStatementReport },
   reconSummary: { label: "Reconciliation Summary", blurb: "Every statement reconciled: its balance, what cleared, what was still outstanding, and the book balance.", party: null, Render: ReconciliationSummary },
-  jobTracking: { label: "Job Tracking", blurb: "Every job and proposal in flight: job #, PO, sales order, proposal, description, where it stands, and each billing milestone — not invoiced, ready to invoice, or invoiced.", party: "customer", Render: JobTrackingReport },
+  jobTracking: { label: "Job Tracking", blurb: "Every job: job #, PO, sales order, proposal, description, where it stands, and each billing milestone — not invoiced, ready to invoice, or invoiced.", party: "customer", Render: JobTrackingReport },
+  proposals: { label: "Proposals", blurb: "Proposals still out — draft or submitted — with the job #, customer, description, type, date, status and total from the Proposals page.", party: "customer", Render: ProposalsReport },
   jobCosting: { label: "Job Costing", blurb: "Profit per job: the specs and proposal budget it was sold on, against the costs booked to it from bills, expenses, time, journal lines and costs entered by hand.", party: "customer", Render: JobCostingReport },
   v1099: { label: "1099 Vendor Report", blurb: "Every 1099 vendor paid in the year, each payment made, the total, and whether the $600 limit was met.", party: "vendor", Render: Vendor1099Report },
 };
@@ -51,7 +52,7 @@ const CATEGORIES = [
   { key: "gl", label: "General Ledger", icon: ICONS.catalog, blurb: "Account activity and the trial balance, posted from the documents and the journal entries booked by hand.", reports: ["gl", "tb"] },
   { key: "financial", label: "Financial Statements", icon: ICONS.reports, blurb: "The balance sheet, the income statement, cash-basis profit and loss, and cash in versus cash out.", reports: ["bs", "is", "pl", "ie"] },
   { key: "inventory", label: "Inventory", icon: ICONS.catalog, blurb: "Stock on hand and item movement.", reports: [] },
-  { key: "jobs", label: "Job Reports", icon: ICONS.job, blurb: "Where each job stands, and what it cost against what it was sold for.", reports: ["jobTracking", "jobCosting"] },
+  { key: "jobs", label: "Job Reports", icon: ICONS.job, blurb: "Where each job stands, and what it cost against what it was sold for.", reports: ["jobTracking", "proposals", "jobCosting"] },
   { key: "recon", label: "Account Reconciliation", icon: ICONS.check, blurb: "Bank statements against the register.", reports: ["reconSummary"] },
   { key: "time", label: "Time/Expense Reports", icon: ICONS.clock, blurb: "Hours logged and business spending.", reports: ["expenses"] },
   { key: "company", label: "Company Reports", icon: ICONS.settings, blurb: "Company-wide lists and settings.", reports: [] },
@@ -73,7 +74,9 @@ export default function ReportsView({ db }) {
   const asOf = rpt?.asOf ? (to || todayISO()) : undefined;
   const label = rpt?.asOf ? "As of " + fmtDate(asOf) : rangeLabel(from, to);
 
-  return <div className="rpt-layout">
+  // The category rail folds away while a report is open, so the report has
+  // the page; its Back brings the rail out again.
+  return <div className={"rpt-layout" + (rpt ? " rail-in" : "")}>
     <nav className="rpt-rail no-print">
       {CATEGORIES.map(c => <button key={c.key} className={"rpt-rail-item" + (c.key === cat.key ? " on" : "")}
         onClick={() => pickCat(c.key)}>

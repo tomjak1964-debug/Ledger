@@ -36,7 +36,7 @@ export function SortTh({ label, col, sort, onSort, num, style }) {
 // button, because a card scrolls sideways when its table is wider than the
 // page, and a panel absolutely positioned inside the card would be clipped by
 // that scrolling box. `children` is a function of close().
-export function ActionMenu({ children, title = "More", minWidth = 180 }) {
+export function ActionMenu({ children, title = "More", minWidth = 180, icon }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const btn = useRef();
@@ -65,7 +65,7 @@ export function ActionMenu({ children, title = "More", minWidth = 180 }) {
     };
   }, [open]);
   return <>
-    <button ref={btn} className="btn ghost icon" onClick={toggle} title={title}>⋯</button>
+    <button ref={btn} className="btn ghost icon" onClick={toggle} title={title}>{icon ? <Ico d={icon} size={16} /> : "⋯"}</button>
     {open && pos && createPortal(<div ref={panel} className="action-menu" style={{ top: pos.top, right: pos.right, minWidth }}>
       {typeof children === "function" ? children(close) : children}
     </div>, document.body)}
@@ -119,6 +119,7 @@ export const ICONS = {
   plus: "M12 5v14M5 12h14", search: "M11 19a8 8 0 100-16 8 8 0 000 16zM21 21l-4.35-4.35",
   print: "M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z",
   download: "M12 3v12M7 10l5 5 5-5M5 21h14",
+  view: "M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12zM12 15a3 3 0 100-6 3 3 0 000 6z",
   arrow: "M9 6l6 6-6 6", back: "M15 18l-6-6 6-6", trash: "M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6",
   x: "M18 6L6 18M6 6l12 12", menu: "M3 12h18M3 6h18M3 18h18", edit: "M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z",
   check: "M20 6L9 17l-5-5", money: "M12 1v22M17 5H9.5a3.5 3.5 0 000 7H12M7 19h7.5a3.5 3.5 0 000-7",

@@ -44,7 +44,15 @@ a{color:var(--accent);text-decoration:none}
 /* ---------- shell ----------
    The shell is one viewport tall and never scrolls itself: the sidebar stays
    put and the page area (.main) scrolls on its own. */
-.app{display:grid;grid-template-columns:236px 1fr;height:100vh;height:100dvh;overflow:hidden}
+.app{display:grid;grid-template-columns:236px 1fr;height:100vh;height:100dvh;overflow:hidden;transition:grid-template-columns .18s}
+/* Wide screens: the menu folds away once a page is picked (App's menuOut);
+   the tab at the left edge brings it back. Phones keep their slide-over. */
+.app.menu-in{grid-template-columns:0 1fr}
+.app.menu-in > .sidebar{overflow:hidden;visibility:hidden}
+.menu-tab{position:fixed;left:0;top:14px;z-index:40;border:0;border-radius:0 8px 8px 0;background:var(--ink);color:#C9D4E3;
+  padding:9px 8px 9px 7px;cursor:pointer;box-shadow:var(--shadow-sm)}
+.menu-tab:hover{background:var(--ink-soft);color:#fff}
+.app.menu-in .topbar{padding-left:52px}
 .sidebar{
   background:var(--ink);
   color:#C6D2E2;
@@ -309,7 +317,7 @@ table.doc-items td.mono{font-family:"IBM Plex Mono"}
   .grid[style*="repeat(4"]{grid-template-columns:repeat(2,1fr)!important}
 }
 .menu-btn{display:none}
-@media(max-width:900px){.menu-btn{display:inline-flex}}
+@media(max-width:900px){.app.menu-in{grid-template-columns:1fr}.menu-btn{display:inline-flex}.menu-tab{display:none}.app.menu-in .topbar{padding-left:18px}.app.menu-in > .sidebar{visibility:visible}}
 
 /* ---------- phones: stack forms, full-width modals, bigger touch targets ---------- */
 @media (max-width:640px){
@@ -411,6 +419,8 @@ table.doc-items td.mono{font-family:"IBM Plex Mono"}
   border-radius:20px;padding:1px 7px}
 .rpt-rail-item.on .rpt-rail-n{background:var(--surface);color:var(--accent)}
 .rpt-pane{min-width:0}
+.rpt-layout.rail-in{grid-template-columns:1fr}
+.rpt-layout.rail-in > .rpt-rail{display:none}
 tr.sub-row td{background:var(--canvas);font-size:12.5px}
 @media (max-width:900px){
   .rpt-layout{grid-template-columns:1fr}

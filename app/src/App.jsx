@@ -33,6 +33,7 @@ import AccountsView from "./views/Accounts.jsx";
 import JournalEntriesView from "./views/JournalEntries.jsx";
 import BankReconciliationView from "./views/BankReconciliation.jsx";
 import CreditCardsView from "./views/CreditCards.jsx";
+import RateSheetDoc from "./components/RateSheetDoc.jsx";
 
 const NAV = [
   {
@@ -45,6 +46,7 @@ const NAV = [
     group: "Customers & Sales", items: [
       { k: "customers", label: "Customers", icon: ICONS.contacts },
       { k: "proposals", label: "Proposals", icon: ICONS.so },
+      { k: "rateSheet", label: "Rate Sheet", icon: ICONS.print },
       { k: "quotes", label: "Quotes", icon: ICONS.quote },
       { k: "salesOrders", label: "Sales Orders", icon: ICONS.so },
       { k: "invoices", label: "Invoices", icon: ICONS.inv },
@@ -98,6 +100,7 @@ const TITLES = {
   cards: ["Credit Cards", "Import each card's statement, split business from personal, and post it"],
   reports: ["Reports", "P&L, sales tax, customers, and statements"],
   proposals: ["Proposals", "Fixture and system proposals — priced, tracked, and documented"],
+  rateSheet: ["Rate Sheet", "The standard hourly rates, overtime and travel terms — email, print or save"],
   machineRates: ["Fixture Rates", "The costing table behind fixture proposal pricing"],
 };
 
@@ -106,6 +109,11 @@ export default function App({ session }) {
   const [doc, setDoc] = useState(null); // {kind,doc}
   const [toastMsg, setToastMsg] = useState(null);
   const [navOpen, setNavOpen] = useState(false);
+  // On a wide screen the menu folds away once a page is picked, so the page
+  // has the full width; the tab at the left edge brings it back, and so does
+  // Back (one level up, menu out). history is the pages visited, for Back.
+  const [menuOut, setMenuOut] = useState(true);
+  const [history, setHistory] = useState([]);
   const [pwOpen, setPwOpen] = useState(false);
   // A document's Edit button asks a list page to open its editor on one record.
   const [editRequest, setEditRequest] = useState(null);   // anyone can change their own password, Settings or not
@@ -130,7 +138,22 @@ export default function App({ session }) {
   // "contacts" was the combined page before Customers and Vendors split; a stale link lands on Customers.
   // The page area scrolls on its own (the sidebar stays put), so a new page
   // starts at its top by scrolling .main, not the window.
-  const go = (v) => { setView(v === "contacts" ? "customers" : v); setNavOpen(false); document.querySelector(".main")?.scrollTo(0, 0); window.scrollTo(0, 0); };
+  const go = (v, { fromMenu = false } = {}) => {
+    const next = v === "contacts" ? "customers" : v;
+    if (next !== view) setHistory(h => [...h.slice(-19), view]);
+    setView(next); setNavOpen(false);
+    if (fromMenu) setMenuOut(false);
+    document.querySelector(".main")?.scrollTo(0, 0); window.scrollTo(0, 0);
+  };
+  // Back: the page before this one, with the menu out again.
+  const back = () => {
+    setMenuOut(true);
+    // The rate sheet is a full-screen document, so closing it always leaves it.
+    if (!history.length) { if (view === "rateSheet") setView("dashboard"); return; }
+    setView(history[history.length - 1]);
+    setHistory(history.slice(0, -1));
+    document.querySelector(".main")?.scrollTo(0, 0);
+  };
 
   if (loading) return <div className="boot">Loading your books…</div>;
   if (loadError || !db) return <div className="boot"><div>
@@ -157,7 +180,7 @@ export default function App({ session }) {
   const [t, sub] = TITLES[activeView];
   const props = { db, actions, toast, openDoc, go, session, readOnly, isAdmin: admin, member, editRequest, clearEditRequest: () => setEditRequest(null) };
 
-  return <div className="app">
+  return <div className={cls("app", !menuOut && "menu-in")}>
     {/* On a phone the open menu covers part of the page; a tap on the page
         behind it (or Escape) closes it without picking anything. */}
     {navOpen && <div className="nav-scrim" onClick={() => setNavOpen(false)} />}
@@ -172,7 +195,7 @@ export default function App({ session }) {
           if (!items.length) return null;
           return <div key={g.group}>
             <div className="nav-group">{g.group}</div>
-            {items.map(it => <button key={it.k} className={cls("nav-item", activeView === it.k && "active")} onClick={() => go(it.k)}>
+            {items.map(it => <button key={it.k} className={cls("nav-item", activeView === it.k && "active")} onClick={() => go(it.k, { fromMenu: true })}>
               <Ico d={it.icon} size={17} />{it.label}
               {counts[it.k] > 0 && <span className="count">{counts[it.k]}</span>}
             </button>)}
@@ -190,9 +213,11 @@ export default function App({ session }) {
       </div>
     </div>
 
+    {!menuOut && <button className="menu-tab" title="Show the menu" onClick={() => setMenuOut(true)}><Ico d={ICONS.menu} size={18} /></button>}
     <div className="main">
       <div className="topbar">
         <button className="btn ghost icon menu-btn" onClick={() => setNavOpen(o => !o)}><Ico d={ICONS.menu} size={20} /></button>
+        {(history.length > 0 || !menuOut) && <button className="btn sm" title="Back a level, with the menu out" onClick={back}><Ico d={ICONS.back} size={14} />Back</button>}
         <div><h1>{t}</h1><div className="sub">{sub}</div></div>
         <div className="topbar-actions">
           <GlobalSearch db={db} member={member} go={go} />
@@ -203,6 +228,7 @@ export default function App({ session }) {
         {activeView === "dashboard" && <Dashboard {...props} />}
         {activeView === "reports" && <ReportsView {...props} />}
         {activeView === "proposals" && <ProposalsView {...props} />}
+        {activeView === "rateSheet" && <RateSheetDoc settings={db.settings} timeCategories={db.timeCategories} toast={toast} onClose={back} />}
         {activeView === "machineRates" && <MachineRatesView {...props} />}
         {activeView === "quotes" && <QuotesView {...props} />}
         {activeView === "salesOrders" && <SalesOrdersView {...props} />}

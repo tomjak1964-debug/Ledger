@@ -217,7 +217,6 @@ export default function App({ session }) {
     <div className="main">
       <div className="topbar">
         <button className="btn ghost icon menu-btn" onClick={() => setNavOpen(o => !o)}><Ico d={ICONS.menu} size={20} /></button>
-        {(history.length > 0 || !menuOut) && <button className="btn sm" title="Back a level, with the menu out" onClick={back}><Ico d={ICONS.back} size={14} />Back</button>}
         <div><h1>{t}</h1><div className="sub">{sub}</div></div>
         <div className="topbar-actions">
           <GlobalSearch db={db} member={member} go={go} />

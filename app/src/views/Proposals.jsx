@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
-import RateSheetDoc from "../components/RateSheetDoc.jsx";
 import DocActions from "../components/DocActions.jsx";
 import { pagesToPdf, saveBlob } from "../lib/saveFile.js";
 import { uid, money, fmtDate, todayISO, nameOf, cls, pickable } from "../lib/helpers.js";
@@ -82,7 +81,6 @@ const emptySpecs = () => Object.fromEntries(SPEC_FIELDS.map(([k]) => [k, 0]));
 export default function ProposalsView({ db, actions, toast, readOnly }) {
   const [edit, setEdit] = useState(null);
   const [doc, setDoc] = useState(null);
-  const [rateSheet, setRateSheet] = useState(false);
   const [phasesFor, setPhasesFor] = useState(null);
   const [search, setSearch] = useState("");
   const [importing, setImporting] = useState(false);
@@ -153,9 +151,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
   return <div>
     <div className="toolbar">
       <div className="search"><Ico d={ICONS.search} size={15} /><input className="input" placeholder="Search proposals…" value={search} onChange={e => setSearch(e.target.value)} /></div>
-      <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setRateSheet(true)} title="The standard hourly rates, overtime and travel terms — print or save as PDF">
-        <Ico d={ICONS.print} size={15} />Rate Sheet</button>
-      {!readOnly && <button className="btn" onClick={() => setImportingLineup(true)}>
+      {!readOnly && <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setImportingLineup(true)}>
         <Ico d={ICONS.quote} size={15} />Import Lineup</button>}
       {!readOnly && <button className="btn" onClick={() => setImporting(true)}>
         <Ico d={ICONS.quote} size={15} />Import Quote Chart</button>}
@@ -191,7 +187,13 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
               <td><Badge status={p.status} />{p.status === "won" && billed > 0 && <span className="subtle" style={{ marginLeft: 6 }}>{billed}/{p.phases.length} billed</span>}</td>
               <td className="num" style={{ fontWeight: 600 }}>{money(Number(p.pricing?.total) || 0)}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                <button className="btn ghost icon" title="View / Print" onClick={() => setDoc(p)}><Ico d={ICONS.print} size={16} /></button>
+                <button className="btn ghost icon" title="View" onClick={() => setDoc({ p })}><Ico d={ICONS.view} size={16} /></button>
+                <button className="btn ghost icon" title="Email proposal" onClick={() => setDoc({ p, auto: "email" })}><Ico d={ICONS.mail} size={16} /></button>
+                <button className="btn ghost icon" title="Print" onClick={() => setDoc({ p, auto: "print" })}><Ico d={ICONS.print} size={16} /></button>
+                <ActionMenu title="Save" icon={ICONS.download} minWidth={210}>{close => <>
+                  <MenuItem onClick={() => { close(); setDoc({ p, auto: "pdf" }); }}>Save PDF</MenuItem>
+                  <MenuItem onClick={async () => { close(); try { await downloadProposalDocx(p, db); } catch (e) { toast("⚠ Word export failed: " + (e.message || e)); } }}>Save Word</MenuItem>
+                </>}</ActionMenu>
                 {!readOnly && <button className="btn ghost icon" title="Edit" onClick={() => setEdit({ ...p, specs: { ...p.specs } })}><Ico d={ICONS.edit} size={16} /></button>}
                 {!readOnly && <PropMenu p={p} setStatus={setStatus} win={win} del={del} revise={revise} onPhases={() => setPhasesFor(p)} />}
               </td>
@@ -200,9 +202,8 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
     </div>
     {importing && <ImportProposalsModal db={db} actions={actions} toast={toast} onClose={() => setImporting(false)} />}
     {importingLineup && <ImportLineupModal db={db} actions={actions} toast={toast} onClose={() => setImportingLineup(false)} />}
-    {doc && <ProposalDoc p={doc} db={db} onClose={() => setDoc(null)} toast={toast}
-      onEdit={readOnly ? undefined : () => { const x = doc; setDoc(null); setEdit({ ...x }); }} />}
-    {rateSheet && <RateSheetDoc settings={db.settings} timeCategories={db.timeCategories} toast={toast} onClose={() => setRateSheet(false)} />}
+    {doc && <ProposalDoc p={doc.p} auto={doc.auto} db={db} onClose={() => setDoc(null)} toast={toast}
+      onEdit={readOnly ? undefined : () => { const x = doc.p; setDoc(null); setEdit({ ...x }); }} />}
     {phasesFor && <PhasesModal p={db.proposals.find(x => x.id === phasesFor.id) || phasesFor} db={db} actions={actions} toast={toast} onClose={() => setPhasesFor(null)} />}
   </div>;
 }
@@ -341,11 +342,11 @@ function PhasesModal({ p, db, actions, toast, onClose }) {
   </Modal>;
 }
 
-function ProposalDoc({ p, db, onClose, toast, onEdit }) {
+function ProposalDoc({ p, db, onClose, toast, onEdit, auto }) {
   const c = p.kind === "controls" ? buildControlsContent(p, db) : buildProposalContent(p, db);
   const s = db.settings;
   const [busy, setBusy] = useState(false);
-  const [email, setEmail] = useState(false);
+  const [email, setEmail] = useState(auto === "email");
   // Same two moves DocumentView makes, and for the same reason: the overlay is
   // portalled out of the page so it isn't inside .main, and the body is flagged
   // so printing hides .main. Rendered in place it printed the proposals list on
@@ -377,6 +378,16 @@ function ProposalDoc({ p, db, onClose, toast, onEdit }) {
     } catch (e) { toast("⚠ Couldn't make the PDF: " + (e.message || e)); }
     setBusy(false);
   };
+  // Opened from a list's Print or Save PDF: once the pages have laid out, do
+  // that one thing and close again.
+  useEffect(() => {
+    if (auto !== "print" && auto !== "pdf") return;
+    const t = setTimeout(async () => {
+      if (auto === "print") window.print(); else await savePdf();
+      onClose();
+    }, 400);
+    return () => clearTimeout(t);
+  }, []);   // eslint-disable-line react-hooks/exhaustive-deps
   return createPortal(<div className="doc-screen">
     <DocActions onClose={onClose} onEdit={onEdit} onEmail={() => setEmail(true)} onPrint={() => window.print()} busy={busy}
       saves={[{ label: "Save PDF", hint: proposalFileStem(p) + ".pdf", run: savePdf }, { label: "Save Word", hint: proposalFileStem(p) + ".docx", run: word }]} />

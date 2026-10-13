@@ -11,7 +11,7 @@ import EmailModal from "./EmailModal.jsx";
 // Email (to the vendor's remittance contact), Print (the printer dialog for
 // the PDF itself), Save (the PDF, named "<Vendor> Remittance - <Ref>") and
 // Edit (the payment). args: { payment, vendor, lines, settings }.
-export default function RemittanceView({ args, onClose, onEdit, toast }) {
+export default function RemittanceView({ args, onClose, onEdit, toast, autoPrint }) {
   const { blob, filename } = useMemo(() => remittancePdf(args), [args]);
   const url = useMemo(() => URL.createObjectURL(blob), [blob]);
   useEffect(() => () => URL.revokeObjectURL(url), [url]);
@@ -38,6 +38,7 @@ export default function RemittanceView({ args, onClose, onEdit, toast }) {
       defaultBody={`Please find attached remittance advice for our payment of ${money(payment.amount)} dated ${fmtDate(payment.date)}${payment.ref ? ` (reference ${payment.ref})` : ""}.\n\n${s.company}`}
       buildAttachment={() => Promise.resolve({ blob, filename })}
       onClose={() => setEmail(false)} toast={toast} />}
-    <iframe ref={frame} title={filename} src={url} className="remit-frame" />
+    <iframe ref={frame} title={filename} src={url} className="remit-frame"
+      onLoad={autoPrint ? () => setTimeout(print, 300) : undefined} />
   </div>, document.body);
 }

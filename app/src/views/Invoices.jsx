@@ -11,11 +11,17 @@ import EmailModal from "../components/EmailModal.jsx";
 import InvoiceFromSOModal from "../components/InvoiceFromSOModal.jsx";
 import Attachments from "../components/Attachments.jsx";
 import { invoicePdf } from "../lib/invoicePdf.js";
+import { saveBlob } from "../lib/saveFile.js";
 import AccountSelect from "../components/AccountSelect.jsx";
 import { incomeAccountOf, accountLabel } from "../calc/accounts.js";
 
 export default function InvoicesView({ db, actions, toast, openDoc, readOnly, editRequest, clearEditRequest }) {
   const [pay, setPay] = useState(null);
+  // Save from the list: the invoice's PDF under its number, no viewer needed.
+  const saveInvoice = async (inv) => {
+    try { const { blob, filename } = await invoicePdf(inv, db); saveBlob(blob, filename); }
+    catch (e) { toast("⚠ Couldn't make the PDF: " + (e.message || e)); }
+  };
   const [edit, setEdit] = useState(null);
   // Edit from an open invoice document lands here.
   useEffect(() => {
@@ -119,8 +125,10 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
               <td className="num" style={{ fontWeight: 600 }}>{money(balance(inv))}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                 {!readOnly && st !== "paid" && <button className="btn sm" onClick={() => setPay(inv)}><Ico d={ICONS.money} size={14} />Payment</button>}
+                <button className="btn ghost icon" title="View" onClick={() => openDoc("invoice", inv)}><Ico d={ICONS.view} size={16} /></button>
                 <button className="btn ghost icon" title="Email invoice" onClick={() => setEmail(inv)}><Ico d={ICONS.mail} size={16} /></button>
-                <button className="btn ghost icon" title="Print" onClick={() => openDoc("invoice", inv)}><Ico d={ICONS.print} size={16} /></button>
+                <button className="btn ghost icon" title="Print" onClick={() => openDoc("invoice", inv, { autoPrint: true })}><Ico d={ICONS.print} size={16} /></button>
+                <button className="btn ghost icon" title={"Save " + inv.number + ".pdf"} onClick={() => saveInvoice(inv)}><Ico d={ICONS.download} size={16} /></button>
                 {!readOnly && <button className="btn ghost icon" title="Edit" onClick={() => setEdit({ ...inv })}><Ico d={ICONS.edit} size={16} /></button>}
                 {!readOnly && <button className="btn ghost icon" onClick={() => del(inv.id)} title="Delete"><Ico d={ICONS.trash} size={15} /></button>}
               </td>

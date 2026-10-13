@@ -165,9 +165,9 @@ export function salesOrderReport(db, { from, to, partyId, statusFilter = "all" }
 
 /* ---------- report 2: job tracking ---------- */
 
-// Every job in flight: each sales order, and each proposal not yet won (a
-// proposal that became an SO shows as that SO). statusFilter: "all" | "open"
-// (proposals out, SOs not paid in full) | "closed" (paid, lost, superseded).
+// Every job: each sales order (a won proposal shows as its SO; proposals still
+// out are the Proposals report). statusFilter: "all" | "open" (not paid in
+// full) | "closed" (paid).
 export function jobTrackingReport(db, { from, to, partyId, statusFilter = "all" } = {}) {
   const soRows = db.salesOrders.map(so => {
     const prop = proposalOf(db, so);
@@ -180,14 +180,7 @@ export function jobTrackingReport(db, { from, to, partyId, statusFilter = "all" 
       open: s.stage !== "paid", so,
     };
   });
-  const propRows = (db.proposals || []).filter(p => !p.salesOrderId && p.status !== "won").map(p => ({
-    key: "p:" + p.id, type: "proposal", date: p.date, customerId: p.customerId,
-    job: p.jobNumber || "", po: p.poNumber || "", amount: n(p.pricing?.total), soNumber: "", proposalNumber: p.number,
-    description: p.description || "", stage: p.status, leftToInvoice: n(p.pricing?.total), outstanding: 0, paid: 0,
-    milestones: (p.phases || []).map(ph => ({ id: ph.key, label: ph.label, desc: ph.label, amount: round2(n(p.pricing?.total) * n(ph.pct) / 100), state: ph.invoiceId ? "invoiced" : "open" })),
-    open: p.status === "draft" || p.status === "submitted", proposal: p,
-  }));
-  const rows = [...soRows, ...propRows]
+  const rows = soRows
     .filter(r => inRange(r.date, from, to) && (!partyId || r.customerId === partyId))
     .filter(r => statusFilter === "all" || (statusFilter === "open" ? r.open : !r.open));
   return { rows };
@@ -197,6 +190,22 @@ export function jobTrackingReport(db, { from, to, partyId, statusFilter = "all" 
 export function milestoneLabel(desc) {
   const first = String(desc || "").split("\n")[0];
   return first.replace(/^\s*[A-Z]{0,3}\d[\w-]*\s+(?=[A-Za-z])/, "").trim() || first;
+}
+
+/* ---------- report 2b: proposals outstanding ---------- */
+
+// Proposals still out — draft or submitted — with the columns the Proposals
+// page shows. statusFilter "all" adds the ones decided (won, lost, superseded).
+export function proposalsReport(db, { from, to, partyId, statusFilter = "open" } = {}) {
+  const rows = (db.proposals || [])
+    .filter(p => inRange(p.date, from, to) && (!partyId || p.customerId === partyId))
+    .filter(p => statusFilter === "all" || (p.status === "draft" || p.status === "submitted") === (statusFilter === "open"))
+    .map(p => ({
+      p, number: p.number, rev: Number(p.rev) || 0, job: p.jobNumber || "", customer: nameOf(db, p.customerId), description: p.description || "",
+      type: p.kind === "controls" ? "System Proposal" : ((db.machineTypes || []).find(m => m.id === p.machineTypeId)?.name || ""),
+      date: p.date || "", status: p.status || "", total: n(p.pricing?.total),
+    }));
+  return { rows, total: round2(sum(rows, r => r.total)) };
 }
 
 /* ---------- report 3: job costing ---------- */

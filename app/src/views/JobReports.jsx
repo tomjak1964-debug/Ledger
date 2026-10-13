@@ -2,7 +2,7 @@ import { Fragment, useState } from "react";
 import { money, fmtDate } from "../lib/helpers.js";
 import { invoiceStatus, lineTotals } from "../calc/ledger.js";
 import {
-  salesOrderReport, jobTrackingReport, jobCostingReport, STAGE_LABEL,
+  salesOrderReport, jobTrackingReport, proposalsReport, jobCostingReport, STAGE_LABEL,
   BUDGET_LINES, COST_CATEGORIES, JOB_SPEC_FIELDS, costLabel,
 } from "../calc/jobs.js";
 import { Badge, Empty, ICONS, Ico, SortTh, useTableSort } from "../components/ui.jsx";
@@ -126,25 +126,23 @@ const Milestones = ({ list }) => <span>{list.map(m => <span key={m.id} className
   {m.label}<span className="mono">{money(m.amount)}</span></span>)}</span>;
 
 function trackingStatus(x) {
-  if (x.type === "proposal") return <Badge status={x.stage} />;
   if (x.stage === "partial" || x.stage === "notStarted") return <span><Badge status="open" /> <span className="subtle">{STAGE_LABEL[x.stage]} · <span className="mono">{money(x.leftToInvoice)}</span> left</span></span>;
   if (x.stage === "invoiced") return <span><Badge status="unpaid" /> <span className="subtle">Invoiced · <span className="mono">{money(x.outstanding)}</span> due</span></span>;
   return <Badge status="paid" />;
 }
-const statusText = x => x.type === "proposal" ? "Proposal " + x.stage
-  : x.stage === "paid" ? "Paid" : x.stage === "invoiced" ? `Invoiced (${x.outstanding.toFixed(2)} due)` : `${STAGE_LABEL[x.stage]} (${x.leftToInvoice.toFixed(2)} left to invoice)`;
+const statusText = x => x.stage === "paid" ? "Paid" : x.stage === "invoiced" ? `Invoiced (${x.outstanding.toFixed(2)} due)` : `${STAGE_LABEL[x.stage]} (${x.leftToInvoice.toFixed(2)} left to invoice)`;
 
 export function JobTrackingReport({ db, from, to, partyId, rangeLabel }) {
   const [statusFilter, setStatusFilter] = useState("open");
   const r = jobTrackingReport(db, { from, to, partyId, statusFilter });
   const { sorted, sort, onSort } = useTableSort(r.rows, {
     job: x => x.job, po: x => x.po, amount: x => x.amount, so: x => x.soNumber, proposal: x => x.proposalNumber,
-    desc: x => x.description, type: x => x.type, status: x => statusText(x), left: x => x.leftToInvoice,
+    desc: x => x.description, status: x => statusText(x), left: x => x.leftToInvoice,
   }, { key: "job", dir: "asc" });
 
   const exportCSV = () => downloadCSV("job-tracking",
-    ["Job Number", "PO Number", "PO Amount", "Sales Order", "Proposal", "Description", "Type", "Status", "Left to Invoice", "Milestones"],
-    sorted.map(x => [x.job, x.po, x.amount.toFixed(2), x.soNumber, x.proposalNumber, x.description, x.type === "so" ? "Sales Order" : "Proposal",
+    ["Job Number", "PO Number", "PO Amount", "Sales Order", "Proposal", "Description", "Status", "Left to Invoice", "Milestones"],
+    sorted.map(x => [x.job, x.po, x.amount.toFixed(2), x.soNumber, x.proposalNumber, x.description,
       statusText(x), x.leftToInvoice.toFixed(2), x.milestones.map(m => `${m.label} ${m.amount.toFixed(2)} [${m.state === "open" ? "not invoiced" : m.state}]`).join("; ")]));
 
   return <ReportCard title="Job Tracking" rangeLabel={rangeLabel} right={<>
@@ -160,7 +158,6 @@ export function JobTrackingReport({ db, from, to, partyId, rangeLabel }) {
         <SortTh label="SO #" col="so" sort={sort} onSort={onSort} />
         <SortTh label="Proposal" col="proposal" sort={sort} onSort={onSort} />
         <SortTh label="Description" col="desc" sort={sort} onSort={onSort} />
-        <SortTh label="Type" col="type" sort={sort} onSort={onSort} />
         <SortTh label="Status" col="status" sort={sort} onSort={onSort} />
         <th>Billing Milestones</th>
       </tr></thead>
@@ -171,18 +168,66 @@ export function JobTrackingReport({ db, from, to, partyId, rangeLabel }) {
           <td className="doc-id">{x.soNumber || dash}</td>
           <td className="doc-id">{x.proposalNumber || dash}</td>
           <td>{x.description || dash}</td>
-          <td className="subtle">{x.type === "so" ? "Sales Order" : "Proposal"}</td>
           <td style={{ whiteSpace: "nowrap" }}>{trackingStatus(x)}</td>
           <td style={{ minWidth: 300 }}><Milestones list={x.milestones} /></td>
         </tr>)}
           <tr><td style={{ fontWeight: 700 }}>Total</td><td className="subtle">{r.rows.length} job{r.rows.length === 1 ? "" : "s"}</td>
-            <td className="num mono" style={{ fontWeight: 700 }}>{money(r.rows.reduce((t, x) => t + x.amount, 0))}</td><td colSpan={6}></td></tr>
+            <td className="num mono" style={{ fontWeight: 700 }}>{money(r.rows.reduce((t, x) => t + x.amount, 0))}</td><td colSpan={5}></td></tr>
         </tbody></table>}
     <p className="subtle" style={{ margin: "10px 16px 14px" }}>
       Milestones: <span className="ms">not invoiced</span><span className="ms ready">ready to invoice</span><span className="ms invoiced">invoiced</span><span className="ms closed">closed</span>
-      — a sales order's lines; a proposal shows its invoicing schedule. Mark a line ready on the Jobs page.
-      Open is everything not yet paid in full, plus proposals still out.
+      — a sales order's lines. Mark a line ready on the Jobs page.
+      Open is every job not yet paid in full; proposals still out are in the Proposals report.
     </p>
+  </ReportCard>;
+}
+
+/* ================= Proposals (Jobs) ================= */
+
+// Proposals still out, with the Proposals page's columns.
+export function ProposalsReport({ db, from, to, partyId, rangeLabel }) {
+  const [statusFilter, setStatusFilter] = useState("open");
+  const r = proposalsReport(db, { from, to, partyId, statusFilter });
+  const { sorted, sort, onSort } = useTableSort(r.rows, {
+    number: x => x.number, job: x => x.job, customer: x => x.customer, desc: x => x.description,
+    type: x => x.type, date: x => x.date, status: x => x.status, total: x => x.total,
+  }, { key: "date", dir: "desc" });
+  const revText = x => (x.rev > 0 ? " Rev " + String.fromCharCode(64 + x.rev) : "");
+
+  const exportCSV = () => downloadCSV("proposals",
+    ["Proposal", "Job #", "Customer", "Description", "Type", "Date", "Status", "Total"],
+    sorted.map(x => [x.number + revText(x), x.job, x.customer, x.description, x.type, x.date, x.status, x.total.toFixed(2)]));
+
+  return <ReportCard title="Proposals" rangeLabel={rangeLabel} right={<>
+    <span style={{ marginLeft: 12 }}><StatusToggle value={statusFilter} onChange={setStatusFilter}
+      options={[["open", "Outstanding"], ["closed", "Decided"], ["all", "All"]]} /></span>
+    <CsvButton onClick={exportCSV} />
+  </>}>
+    {r.rows.length === 0
+      ? <Empty icon={ICONS.job} title="No proposals" msg="Nothing outstanding matches those filters. Widen the date range or switch to All." />
+      : <table><thead><tr>
+        <SortTh label="Proposal" col="number" sort={sort} onSort={onSort} />
+        <SortTh label="Job #" col="job" sort={sort} onSort={onSort} />
+        <SortTh label="Customer" col="customer" sort={sort} onSort={onSort} />
+        <SortTh label="Description" col="desc" sort={sort} onSort={onSort} />
+        <SortTh label="Type" col="type" sort={sort} onSort={onSort} />
+        <SortTh label="Date" col="date" sort={sort} onSort={onSort} />
+        <SortTh label="Status" col="status" sort={sort} onSort={onSort} />
+        <SortTh label="Total" col="total" sort={sort} onSort={onSort} num />
+      </tr></thead>
+        <tbody>{sorted.map(x => <tr key={x.p.id}>
+          <td className="doc-id">{x.number}{x.rev > 0 && <span className="subtle" style={{ marginLeft: 6, fontSize: 12 }}>{revText(x).trim()}</span>}</td>
+          <td className="mono subtle">{x.job || "—"}</td>
+          <td>{x.customer}</td>
+          <td>{x.description || dash}</td>
+          <td className="subtle">{x.type || "—"}</td>
+          <td className="subtle">{fmtDate(x.date)}</td>
+          <td><Badge status={x.status} /></td>
+          <td className="num mono" style={{ fontWeight: 600 }}>{money(x.total)}</td>
+        </tr>)}
+          <tr><td style={{ fontWeight: 700 }}>Total</td><td className="subtle" colSpan={6}>{r.rows.length} proposal{r.rows.length === 1 ? "" : "s"}</td>
+            <td className="num mono" style={{ fontWeight: 700 }}>{money(r.total)}</td></tr>
+        </tbody></table>}
   </ReportCard>;
 }
 

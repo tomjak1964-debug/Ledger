@@ -446,7 +446,7 @@ uses the same default. Changing the customer replaces the contact with the new c
 an **invoice** saves the PDF its email attaches (`INV-….pdf`, from `invoicePdf()`), and Edit opens the invoice
 editor (`App`'s `editRequest`, picked up by `InvoicesView`); a **proposal** saves **PDF** or **Word**
 (`proposalFileStem()` names both) and Edit opens its editor; the **rate sheet** saves a one-page PDF; a
-**remittance** (`components/RemittanceView.jsx` — the PDF on screen, from Payables' Pay dialog and the printer
+**remittance** (`components/RemittanceView.jsx` — the PDF on screen, from Payables' Pay dialog and the eye
 icon on electronic rows in Vendors & Purchases → Payments) saves `<Vendor> Remittance - <Ref>.pdf`, prints the
 PDF itself and Edit opens the payment. Proposal and rate-sheet PDFs are drawn from the on-screen pages
 (`pagesToPdf()` — html2canvas, which ships with jsPDF, one Letter page per `.prop-page` shrunk to fit; a system
@@ -510,7 +510,7 @@ every active Time Category with its standard, overtime and double-time rate (1.5
 premium-time rules (overtime after 10 hours a day, after 50 a week and on Saturdays; double time on Sundays and
 recognized holidays — the holiday list is kept in settings but not printed), and travel terms (none inside the
 local area, Metro Detroit by default; outside it, travel and living at actual cost, vehicles at the current IRS
-mileage rate, meals at the GSA per diem for the location). **Rate Sheet** on the Proposals page opens it;
+mileage rate, meals at the GSA per diem for the location). **Rate Sheet** in the side menu (Customers & Sales) opens it, and Close goes back;
 Settings → Proposals → *Rate Sheet* holds the effective date, thresholds, multipliers, local area, holidays and a
 closing note (`settings.rateSheet`). Print / Save PDF; the file is named `<Company> Rate Sheet <year>`.
 
@@ -649,8 +649,20 @@ Reference # field, listed with its vendor, method and subtotal before you record
 prints on the remittance advice and identifies the payment in the register — without one,
 two electronic runs to the same vendor on the same day collapse into a single register row.
 
-**Navigation groups:** the sidebar reads Overview · **Customers & Sales** (Customers, Proposals, Quotes,
-Sales Orders, Invoices, Receivables) · **Vendors & Purchases** (Vendors, Purchase Orders, Payables,
+**The actions are on the list row too.** Invoices, Proposals and the electronic rows of Vendors & Purchases →
+Payments each carry View · Email · Print · Save · Edit right on the row, so nothing needs opening first: Print
+opens the document and goes straight to the printer dialog (`openDoc(…, { autoPrint })`, `ProposalDoc`'s
+`auto`, `RemittanceView`'s `autoPrint`), Save writes the PDF under its usual name (a proposal's Save is a
+menu, PDF or Word), Email opens the email dialog.
+
+**The menu folds away.** Picking a page from the sidebar folds the sidebar (`menuOut` in `App.jsx`, the
+`.app.menu-in` grid) so the page runs full width; the tab at the top left brings it back. `go()` keeps a
+history of the pages visited, and the topbar's **Back** returns to the previous one and brings the menu
+back out. Reports does the same with its category rail: the rail folds while a report is open and the
+report's own Back restores it. On a phone the sidebar is already a slide-in, so the fold changes nothing there.
+
+**Navigation groups:** the sidebar reads Overview · **Customers & Sales** (Customers, Proposals, Rate Sheet,
+Quotes, Sales Orders, Invoices, Receivables) · **Vendors & Purchases** (Vendors, Purchase Orders, Payables,
 Payments, Expenses) · **Work** (Jobs, Tasks, Field, Time Tracking, Item Catalog, Fixture Rates) ·
 **System** (Chart of Accounts, Journal Entries, Bank Reconciliation, Settings). The group names are labels in `NAV` (`App.jsx`) only, so moving or renaming a
 page is a one-line edit there. **Customers and Vendors** are the two halves of the old Contacts page
@@ -876,9 +888,10 @@ order's lines — Open/Closed, left to invoice, outstanding invoices and paid; p
 = Left + Outstanding + Paid, less any line closed unbilled — and a closed line counts as unbilled only as far as
 the invoices fall short of the order, since Sage carried some invoiced lines over as closed; detail lists each invoice with the SO lines it billed, then what's left;
 left to invoice never exceeds the order less what's been invoiced, which covers a one-line Sage SO invoiced
-without its line flagged), Job Reports → **Job Tracking** (every SO plus every proposal not yet won, with each
+without its line flagged), Job Reports → **Job Tracking** (every SO — jobs only, with each
 billing milestone coloured like the sheet: plain not invoiced, blue ready, orange invoiced — `--billed` in
-`styles.css`) and **Job Costing** (budget against actual, summary or all columns, a row opens to specs,
+`styles.css`), **Proposals** (the proposals still out — draft or submitted — with the Proposals page's
+columns; `proposalsReport()`) and **Job Costing** (budget against actual, summary or all columns, a row opens to specs,
 budget, actual by category and every cost line). **Actual cost** is read wherever it was booked
 (`jobCostItems()`): vendor bills and expenses tagged to the job, by their `costCategory`
 (`COST_CATEGORIES` — panel, HMI/bingo, base cables, I/O blocks, Data National material are *material*, the

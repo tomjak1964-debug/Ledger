@@ -32,6 +32,7 @@ export const NAV_AREA = {
   reports: "reports",
   proposals: "proposals",
   machineRates: "proposals",
+  rateSheet: "proposals",
   quotes: "quotes",
   salesOrders: "salesOrders",
   jobs: "jobs",

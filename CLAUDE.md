@@ -43,6 +43,10 @@ reach the database, by design.
   `EMAIL_FROM_REMITTANCE` (remittances@) / `EMAIL_FROM_SALES` (sales@ — proposals and the rate sheet). All three are
   aliases in the TMJ Engineering mailbox at Turbify, so replies arrive. An unknown type is refused; no type, or a per-type setting not set yet, uses
   `EMAIL_FROM`. Every `<EmailModal>` passes its `docType`.
+  **Several recipients and CC:** the dialog's To and CC each take any number of addresses separated by commas
+  (semicolons or spaces work too); `parseAddresses()` names any that aren't addresses and Send waits until they're
+  fixed. The function takes `to` / `cc` as a list or a string (an older copy sends one string), re-checks every
+  address, drops duplicates (and a CC that's already a To) and caps an email at 20 recipients.
 - **Function secrets** (`RESEND_API_KEY`, `EMAIL_FROM`=`remittances@tmjengineering.com`, `EMAIL_FROM_INVOICE`,
   `EMAIL_FROM_REMITTANCE`, `EMAIL_FROM_SALES`, `CRON_SECRET`) live in
   `~/apps/ledger/.env` on the NUC, never in git. A new secret also has to be listed under `functions:` in

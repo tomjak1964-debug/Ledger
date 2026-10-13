@@ -34,6 +34,11 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
   const [pickSO, setPickSO] = useState(false);   // choose an SO to invoice from
   const [invoiceSO, setInvoiceSO] = useState(null);
   const [unprintedOnly, setUnprintedOnly] = useState(false);
+  // Select mode: tick invoices, then email, save, mark or delete them together.
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState({});
+  const [bulkEmail, setBulkEmail] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const customers = db.contacts.filter(c => c.type === "customer");
   const f = useFilters({ partyKind: "customer", contacts: db.contacts });
   const openSOs = db.salesOrders.filter(s => s.status === "open");
@@ -78,6 +83,47 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
     if (await actions.markInvoicePrinted(ids, true)) toast(`${ids.length} invoice${ids.length === 1 ? "" : "s"} marked printed`);
   };
 
+  const chosen = rows.filter(i => picked[i.id]);
+  const allPicked = rows.length > 0 && rows.every(i => picked[i.id]);
+  const endSelect = () => { setSelecting(false); setPicked({}); };
+  const plural = (n, w = "invoice") => `${n} ${w}${n === 1 ? "" : "s"}`;
+  const bulkPrinted = async (printed) => {
+    const ids = chosen.filter(i => !!i.printed !== printed).map(i => i.id);
+    if (!ids.length) { toast(`All selected are already ${printed ? "printed" : "unprinted"}`); return; }
+    setBulkBusy(true);
+    if (await actions.markInvoicePrinted(ids, printed)) toast(`${plural(ids.length)} marked ${printed ? "printed" : "unprinted"}`);
+    setBulkBusy(false);
+    endSelect();
+  };
+  const bulkSave = async () => {
+    setBulkBusy(true);
+    try {
+      // One PDF per invoice, spaced so the browser takes them all.
+      for (const inv of chosen) { const { blob, filename } = await invoicePdf(inv, db); saveBlob(blob, filename); await new Promise(r => setTimeout(r, 350)); }
+      toast(`Saved ${plural(chosen.length, "PDF")}`);
+    } catch (e) { toast("⚠ Couldn't make the PDF: " + (e.message || e)); }
+    setBulkBusy(false);
+  };
+  // An invoice with money on it is never deleted in a batch: its receipts would
+  // go with it. Those are skipped and counted; the row's own Delete still works.
+  const bulkDelete = async () => {
+    const ok = chosen.filter(i => !(i.payments || []).length);
+    const skipped = chosen.length - ok.length;
+    if (!ok.length) { toast("Every selected invoice has payments on it — none deleted"); return; }
+    if (!confirm(`Delete ${plural(ok.length)}?` + (skipped ? `\n\n${skipped} with payments on ${skipped === 1 ? "it is" : "them are"} left alone.` : "") + "\n\nTheir sales order lines go back to open. This can't be undone.")) return;
+    setBulkBusy(true);
+    let done = 0;
+    for (const inv of ok) if (await actions.deleteInvoice(inv.id)) done++;
+    setBulkBusy(false);
+    toast(`Deleted ${plural(done)}` + (skipped ? ` · ${skipped} with payments skipped` : ""));
+    endSelect();
+  };
+  const emailTo = () => {
+    const ids = [...new Set(chosen.map(i => i.customerId))];
+    if (ids.length !== 1) return "";
+    return db.contactPeople.find(p => p.id === chosen[0].contactPersonId)?.email || db.contacts.find(c => c.id === ids[0])?.email || "";
+  };
+
   if (edit) return <InvoiceEditor invoice={edit} customers={customers} catalog={db.catalog} onCancel={() => setEdit(null)} onSave={save} db={db} actions={actions} toast={toast} readOnly={readOnly} />;
 
   return <div>
@@ -87,19 +133,38 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
         <Ico d={ICONS.print} size={14} />{unprintedOnly ? "Showing unprinted" : `Unprinted${unprintedCount ? " · " + unprintedCount : ""}`}</button>
       {!readOnly && unprintedOnly && rows.length > 0 && <button className="btn" onClick={markAllShown} title="Mark every invoice shown as printed, without printing">
         <Ico d={ICONS.check} size={14} />Mark all {rows.length} as printed</button>}
+      {db.invoices.length > 0 && <button className={"btn" + (selecting ? " primary" : "")} style={{ marginLeft: "auto" }}
+        onClick={() => selecting ? endSelect() : setSelecting(true)} title="Pick several invoices to email, save, mark or delete together">
+        <Ico d={ICONS.check} size={15} />{selecting ? "Done Selecting" : "Select"}</button>}
       {!readOnly && <>
-        <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setPickSO(true)} disabled={openSOs.length === 0}
+        <button className="btn" style={db.invoices.length > 0 ? undefined : { marginLeft: "auto" }} onClick={() => setPickSO(true)} disabled={openSOs.length === 0}
           title={openSOs.length === 0 ? "No open sales orders" : "Bill selected lines from a sales order"}>
           <Ico d={ICONS.so} size={15} />Invoice from Sales Order</button>
         <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Invoice</button>
       </>}
     </div>
     {f.bar()}
+    {selecting && <div className="toolbar">
+      <span style={{ fontWeight: 600 }}>{chosen.length ? plural(chosen.length) + " selected" : "Tick the invoices to work on"}</span>
+      {chosen.length > 0 && <span className="subtle mono">{money(chosen.reduce((t, i) => t + lineTotals(i.lineItems, i.taxRate).total, 0))}</span>}
+      <span style={{ marginLeft: "auto", display: "inline-flex", gap: 8, flexWrap: "wrap" }}>
+        <button className="btn" disabled={!chosen.length || bulkBusy} onClick={() => setBulkEmail(true)}><Ico d={ICONS.mail} size={15} />Email</button>
+        <button className="btn" disabled={!chosen.length || bulkBusy} onClick={bulkSave}><Ico d={ICONS.download} size={15} />Save {chosen.length > 1 ? plural(chosen.length, "PDF") : "PDF"}</button>
+        {!readOnly && <>
+          <button className="btn" disabled={!chosen.length || bulkBusy} onClick={() => bulkPrinted(true)}>Mark Printed</button>
+          <button className="btn" disabled={!chosen.length || bulkBusy} onClick={() => bulkPrinted(false)}>Mark Unprinted</button>
+          <button className="btn danger" disabled={!chosen.length || bulkBusy} onClick={bulkDelete}><Ico d={ICONS.trash} size={15} />Delete</button>
+        </>}
+        <button className="btn ghost" onClick={endSelect}>Cancel</button>
+      </span>
+    </div>}
     <div className="card">
       {db.invoices.length === 0
         ? <Empty icon={ICONS.inv} title="No invoices" msg="Generate an invoice from a sales order, or create a standalone one for service and T&M work. Record payments to update its status."
           action={<button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Invoice</button>} />
         : <table><thead><tr>
+          {selecting && <th style={{ width: 34 }}><input type="checkbox" title="Select all" checked={allPicked}
+            onChange={e => setPicked(e.target.checked ? Object.fromEntries(rows.map(i => [i.id, true])) : {})} /></th>}
           <SortTh label="Invoice" col="number" sort={sort} onSort={onSort} />
           <SortTh label="Customer" col="customer" sort={sort} onSort={onSort} />
           <SortTh label="Date" col="date" sort={sort} onSort={onSort} />
@@ -110,20 +175,23 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
           <SortTh label="Balance" col="balance" sort={sort} onSort={onSort} num /><th></th></tr></thead>
           <tbody>{rows.map(inv => {
             const st = invoiceStatus(inv);
-            return <tr key={inv.id}>
+            return <tr key={inv.id} onClick={selecting ? () => setPicked(s => ({ ...s, [inv.id]: !s[inv.id] })) : undefined}
+              style={selecting ? { cursor: "pointer", background: picked[inv.id] ? "var(--accent-wash)" : undefined } : undefined}>
+              {selecting && <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={!!picked[inv.id]}
+                onChange={e => setPicked(s => ({ ...s, [inv.id]: e.target.checked }))} /></td>}
               <td className="doc-id">{inv.number}</td>
               <td>{nameOf(db, inv.customerId)}</td>
               <td className="subtle">{fmtDate(inv.date)}</td>
               <td className="subtle">{fmtDate(inv.dueDate)}</td>
               <td><Badge status={st} /></td>
-              <td><label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: readOnly ? "default" : "pointer" }}
+              <td onClick={e => e.stopPropagation()}><label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: readOnly ? "default" : "pointer" }}
                 title={inv.printed ? "Printed — untick to mark it unprinted" : "Not printed yet — tick to mark it printed without printing"}>
                 <input type="checkbox" checked={!!inv.printed} disabled={readOnly} onChange={e => setPrinted(inv, e.target.checked)} />
                 {inv.printed ? <span className="subtle">Printed</span> : <span className="badge amber"><span className="dot"></span>Unprinted</span>}
               </label></td>
               <td className="num">{money(lineTotals(inv.lineItems, inv.taxRate).total)}</td>
               <td className="num" style={{ fontWeight: 600 }}>{money(balance(inv))}</td>
-              <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+              <td style={{ textAlign: "right", whiteSpace: "nowrap" }} onClick={e => e.stopPropagation()}>
                 {!readOnly && st !== "paid" && <button className="btn sm" onClick={() => setPay(inv)}><Ico d={ICONS.money} size={14} />Payment</button>}
                 <button className="btn ghost icon" title="View" onClick={() => openDoc("invoice", inv)}><Ico d={ICONS.view} size={16} /></button>
                 <button className="btn ghost icon" title="Email invoice" onClick={() => setEmail(inv)}><Ico d={ICONS.mail} size={16} /></button>
@@ -161,6 +229,14 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
       defaultBody={`Please find attached invoice ${email.number}.\n\nThank you for your business.\n\n${db.settings.company}\n${db.settings.companyPhone || ""}`}
       buildAttachment={() => invoicePdf(email, db)}
       onClose={() => setEmail(null)} toast={toast} />}
+    {bulkEmail && <EmailModal docType="invoice"
+      title={`Email · ${plural(chosen.length)}`}
+      defaultTo={emailTo()}
+      defaultSubject={chosen.length === 1 ? `Invoice ${chosen[0].number} — ${db.settings.company}` : `Invoices ${chosen.map(i => i.number).join(", ")} — ${db.settings.company}`}
+      defaultBody={`Please find attached ${chosen.length === 1 ? "invoice " + chosen[0].number : `our ${chosen.length} invoices`}:\n${chosen.map(i => `  • ${i.number} — ${money(lineTotals(i.lineItems, i.taxRate).total)}${i.poNumber ? " · PO " + i.poNumber : ""}`).join("\n")}\n\nThank you for your business.\n\n${db.settings.company}\n${db.settings.companyPhone || ""}`}
+      buildAttachment={() => Promise.all(chosen.map(i => invoicePdf(i, db)))}
+      onSent={endSelect}
+      onClose={() => setBulkEmail(false)} toast={toast} />}
     {pay && <PaymentModal db={db} doc={pay} onClose={() => setPay(null)}
       offerFor={d => discountOffer(db, pay, pay.customerId, d)}
       onSave={async (p) => {

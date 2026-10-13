@@ -85,6 +85,12 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
   const [search, setSearch] = useState("");
   const [importing, setImporting] = useState(false);
   const [importingLineup, setImportingLineup] = useState(false);
+  // Select mode: tick proposals, then email, save, mark or delete them together.
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState({});
+  const [bulkEmail, setBulkEmail] = useState(false);
+  const [pdfQueue, setPdfQueue] = useState(null);     // { list, i } — Save PDF one proposal at a time
+  const [bulkBusy, setBulkBusy] = useState(false);
   const customers = db.contacts.filter(c => c.type === "customer");
   const cfg = proposalConfig(db.settings, db.timeCategories);
 
@@ -136,6 +142,54 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
     if (next) { toast(`${next.number} ${revLabel(next)} started — ${p.number}${revLabel(p) ? " " + revLabel(p) : ""} is superseded`); setEdit({ ...next, specs: { ...next.specs } }); }
   };
 
+  // What's ticked, in the order the list shows it.
+  const chosen = propRows.filter(p => picked[p.id]);
+  const allPicked = propRows.length > 0 && propRows.every(p => picked[p.id]);
+  const endSelect = () => { setSelecting(false); setPicked({}); };
+  const plural = (n, w = "proposal") => `${n} ${w}${n === 1 ? "" : "s"}`;
+  // Each mark applies only where the row menu would offer it; the rest are
+  // left alone and counted, so nothing won or superseded changes status.
+  const canSubmit = p => p.status === "draft";
+  const canLose = p => p.status !== "lost" && p.status !== "won" && p.status !== "superseded";
+  const bulkStatus = async (status) => {
+    const ok = chosen.filter(status === "submitted" ? canSubmit : canLose);
+    const skipped = chosen.length - ok.length;
+    if (!ok.length) { toast(`None of the selected can be marked ${status}`); return; }
+    setBulkBusy(true);
+    let done = 0;
+    for (const p of ok) if (await actions.setProposalStatus(p.id, status)) done++;
+    setBulkBusy(false);
+    toast(`Marked ${plural(done)} ${status}` + (skipped ? ` · ${skipped} skipped` : ""));
+    endSelect();
+  };
+  const bulkDelete = async () => {
+    const won = chosen.filter(p => p.status === "won").length;
+    if (!confirm(`Delete ${plural(chosen.length)}?` + (won ? `\n\n${won} of them ${won === 1 ? "is" : "are"} won — the sales order${won === 1 ? "" : "s"} stay.` : "") + "\n\nThis can't be undone.")) return;
+    setBulkBusy(true);
+    let done = 0;
+    for (const p of chosen) if (await actions.deleteProposal(p.id)) done++;
+    setBulkBusy(false);
+    toast(`Deleted ${plural(done)}`);
+    endSelect();
+  };
+  const bulkWord = async () => {
+    setBulkBusy(true);
+    try {
+      // One download per proposal, spaced so the browser takes them all.
+      for (const p of chosen) { await downloadProposalDocx(p, db); await new Promise(r => setTimeout(r, 350)); }
+      toast(`Saved ${plural(chosen.length, "Word file")}`);
+    } catch (e) { toast("⚠ Word export failed: " + (e.message || e)); }
+    setBulkBusy(false);
+  };
+  // One email, every selected proposal attached. Addressed to the customer's
+  // contact when they're all for the same customer.
+  const emailTo = () => {
+    const ids = [...new Set(chosen.map(p => p.customerId))];
+    if (ids.length !== 1) return "";
+    const c = chosen[0].kind === "controls" ? buildControlsContent(chosen[0], db) : buildProposalContent(chosen[0], db);
+    return c.person?.email || c.customer?.email || "";
+  };
+
   if (edit?.kind === "controls") return <ControlsEstimateEditor p={edit} db={db} cfg={cfg} customers={customers} onCancel={() => setEdit(null)} onSave={save} />;
 
   if (db.machineTypes.length === 0 && db.proposals.every(p => p.kind !== "controls")) return <div className="card">
@@ -151,13 +205,33 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
   return <div>
     <div className="toolbar">
       <div className="search"><Ico d={ICONS.search} size={15} /><input className="input" placeholder="Search proposals…" value={search} onChange={e => setSearch(e.target.value)} /></div>
-      {!readOnly && <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setImportingLineup(true)}>
+      {db.proposals.length > 0 && <button className={"btn" + (selecting ? " primary" : "")} style={{ marginLeft: "auto" }}
+        onClick={() => selecting ? endSelect() : setSelecting(true)} title="Pick several proposals to email, save, mark or delete together">
+        <Ico d={ICONS.check} size={15} />{selecting ? "Done Selecting" : "Select"}</button>}
+      {!readOnly && <button className="btn" onClick={() => setImportingLineup(true)}>
         <Ico d={ICONS.quote} size={15} />Import Lineup</button>}
       {!readOnly && <button className="btn" onClick={() => setImporting(true)}>
         <Ico d={ICONS.quote} size={15} />Import Quote Chart</button>}
       {!readOnly && <button className="btn" onClick={startNewControls}><Ico d={ICONS.plus} size={15} />New System Proposal</button>}
       {!readOnly && <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Fixture Proposal</button>}
     </div>
+    {selecting && <div className="toolbar">
+      <span style={{ fontWeight: 600 }}>{chosen.length ? plural(chosen.length) + " selected" : "Tick the proposals to work on"}</span>
+      {chosen.length > 0 && <span className="subtle mono">{money(chosen.reduce((t, p) => t + (Number(p.pricing?.total) || 0), 0))}</span>}
+      <span style={{ marginLeft: "auto", display: "inline-flex", gap: 8, flexWrap: "wrap" }}>
+        <button className="btn" disabled={!chosen.length || bulkBusy} onClick={() => setBulkEmail(true)}><Ico d={ICONS.mail} size={15} />Email</button>
+        <ActionMenu title="Save the selected proposals" label="Save" disabled={!chosen.length || bulkBusy} minWidth={230} icon={ICONS.download}>{close => <>
+          <MenuItem onClick={() => { close(); if (chosen.length) setPdfQueue({ list: chosen, i: 0 }); }}>Save {plural(chosen.length, "PDF")}</MenuItem>
+          <MenuItem onClick={() => { close(); if (chosen.length) bulkWord(); }}>Save {plural(chosen.length, "Word file")}</MenuItem>
+        </>}</ActionMenu>
+        {!readOnly && <>
+          <button className="btn" disabled={!chosen.length || bulkBusy} onClick={() => bulkStatus("submitted")}>Mark Submitted</button>
+          <button className="btn" disabled={!chosen.length || bulkBusy} onClick={() => bulkStatus("lost")}>Mark Lost</button>
+          <button className="btn danger" disabled={!chosen.length || bulkBusy} onClick={bulkDelete}><Ico d={ICONS.trash} size={15} />Delete</button>
+        </>}
+        <button className="btn ghost" onClick={endSelect}>Cancel</button>
+      </span>
+    </div>}
     <div className="card">
       {db.proposals.length === 0
         ? <Empty icon={ICONS.quote} title="No proposals yet" msg="Enter the fixture details — type, welds, clamps, cameras — and the app prices it, generates the proposal document, and tracks it to PO."
@@ -165,6 +239,8 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
             <button className="btn" onClick={startNewControls}><Ico d={ICONS.plus} size={15} />New System Proposal</button>
             <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New Fixture Proposal</button></span>} />
         : <table><thead><tr>
+          {selecting && <th style={{ width: 34 }}><input type="checkbox" title="Select all" checked={allPicked}
+            onChange={e => setPicked(e.target.checked ? Object.fromEntries(propRows.map(p => [p.id, true])) : {})} /></th>}
           <SortTh label="Proposal" col="number" sort={sort} onSort={onSort} />
           <SortTh label="Job #" col="job" sort={sort} onSort={onSort} />
           <SortTh label="Customer" col="customer" sort={sort} onSort={onSort} />
@@ -177,7 +253,10 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
           <tbody>{propRows.map(p => {
             const mt = db.machineTypes.find(m => m.id === p.machineTypeId);
             const billed = (p.phases || []).filter(ph => ph.invoiceId).length;
-            return <tr key={p.id}>
+            return <tr key={p.id} onClick={selecting ? () => setPicked(s => ({ ...s, [p.id]: !s[p.id] })) : undefined}
+              style={selecting ? { cursor: "pointer", background: picked[p.id] ? "var(--accent-wash)" : undefined } : undefined}>
+              {selecting && <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={!!picked[p.id]}
+                onChange={e => setPicked(s => ({ ...s, [p.id]: e.target.checked }))} /></td>}
               <td className="doc-id">{p.number}{revLabel(p) && <span className="subtle" style={{ marginLeft: 6, fontSize: 12 }}>{revLabel(p)}</span>}</td>
               <td className="mono subtle">{p.jobNumber || "—"}</td>
               <td>{nameOf(db, p.customerId)}</td>
@@ -186,7 +265,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
               <td className="subtle">{fmtDate(p.date)}</td>
               <td><Badge status={p.status} />{p.status === "won" && billed > 0 && <span className="subtle" style={{ marginLeft: 6 }}>{billed}/{p.phases.length} billed</span>}</td>
               <td className="num" style={{ fontWeight: 600 }}>{money(Number(p.pricing?.total) || 0)}</td>
-              <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+              <td style={{ textAlign: "right", whiteSpace: "nowrap" }} onClick={e => e.stopPropagation()}>
                 <button className="btn ghost icon" title="View" onClick={() => setDoc({ p })}><Ico d={ICONS.view} size={16} /></button>
                 <button className="btn ghost icon" title="Email proposal" onClick={() => setDoc({ p, auto: "email" })}><Ico d={ICONS.mail} size={16} /></button>
                 <button className="btn ghost icon" title="Print" onClick={() => setDoc({ p, auto: "print" })}><Ico d={ICONS.print} size={16} /></button>
@@ -204,6 +283,22 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
     {importingLineup && <ImportLineupModal db={db} actions={actions} toast={toast} onClose={() => setImportingLineup(false)} />}
     {doc && <ProposalDoc p={doc.p} auto={doc.auto} db={db} onClose={() => setDoc(null)} toast={toast}
       onEdit={readOnly ? undefined : () => { const x = doc.p; setDoc(null); setEdit({ ...x }); }} />}
+    {/* Save PDF for several: each proposal opens, saves itself and closes, then the next. */}
+    {pdfQueue && <ProposalDoc key={pdfQueue.list[pdfQueue.i].id} p={pdfQueue.list[pdfQueue.i]} auto="pdf" db={db} toast={toast}
+      onClose={() => setPdfQueue(q => {
+        if (q.i + 1 < q.list.length) return { ...q, i: q.i + 1 };
+        toast(`Saved ${plural(q.list.length, "PDF")}`); return null;
+      })} />}
+    {bulkEmail && <EmailModal docType="proposal"
+      title={`Email · ${plural(chosen.length)}`}
+      defaultTo={emailTo()}
+      defaultSubject={chosen.length === 1
+        ? `Proposal ${chosen[0].number}${revLabel(chosen[0]) ? " " + revLabel(chosen[0]) : ""} — ${[chosen[0].jobNumber, chosen[0].description].filter(Boolean).join(" – ")}`
+        : `Proposals ${chosen.map(p => p.number).join(", ")}`}
+      defaultBody={`Hello,\n\nPlease find attached ${chosen.length === 1 ? "our proposal" : `our ${chosen.length} proposals`}:\n${chosen.map(p => `  • ${p.number}${revLabel(p) ? " " + revLabel(p) : ""} — ${[p.jobNumber, p.description].filter(Boolean).join(" – ")}`).join("\n")}\n\nRegards,\n${cfg.signer || db.settings.company}`}
+      buildAttachment={() => Promise.all(chosen.map(p => proposalDocxBlob(p, db)))}
+      onSent={endSelect}
+      onClose={() => setBulkEmail(false)} toast={toast} />}
     {phasesFor && <PhasesModal p={db.proposals.find(x => x.id === phasesFor.id) || phasesFor} db={db} actions={actions} toast={toast} onClose={() => setPhasesFor(null)} />}
   </div>;
 }

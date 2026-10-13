@@ -656,9 +656,9 @@ opens the document and goes straight to the printer dialog (`openDoc(…, { auto
 menu, PDF or Word), Email opens the email dialog.
 
 **The menu folds away.** Picking a page from the sidebar folds the sidebar (`menuOut` in `App.jsx`, the
-`.app.menu-in` grid) so the page runs full width; the tab at the top left brings it back. `go()` keeps a
-history of the pages visited, and the topbar's **Back** returns to the previous one and brings the menu
-back out. Reports does the same with its category rail: the rail folds while a report is open and the
+`.app.menu-in` grid) so the page runs full width; the tab at the top left brings it back. There is no Back in the top bar (the tab is the
+way back to the menu); `go()` keeps a history of the pages visited so closing the Rate Sheet returns to
+the page it was opened from. Reports does the same with its category rail: the rail folds while a report is open and the
 report's own Back restores it. On a phone the sidebar is already a slide-in, so the fold changes nothing there.
 
 **Navigation groups:** the sidebar reads Overview · **Customers & Sales** (Customers, Proposals, Rate Sheet,

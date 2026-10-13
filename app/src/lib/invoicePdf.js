@@ -26,6 +26,23 @@ const TOTALS_Y = 620;           // top of the totals box on the last page
 const ROW_H = 17;
 
 export async function invoicePdf(inv, db) {
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  drawInvoice(doc, inv, db);
+  return { blob: doc.output("blob"), filename: `${inv.number}.pdf` };
+}
+
+// Several invoices in one PDF, each starting on a page of its own — what
+// printing a selection sends to the printer as one job.
+export async function invoicesPdf(invs, db) {
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  invs.forEach((inv, i) => { if (i) doc.addPage(); drawInvoice(doc, inv, db); });
+  const filename = invs.length === 1 ? `${invs[0].number}.pdf` : `Invoices ${invs[0].number} to ${invs[invs.length - 1].number}.pdf`;
+  doc.setProperties({ title: filename.replace(/\.pdf$/, "") });
+  return { blob: doc.output("blob"), filename };
+}
+
+// Draws one invoice's pages onto doc, starting on its current page.
+function drawInvoice(doc, inv, db) {
   const s = db.settings;
   const customer = db.contacts.find(c => c.id === inv.customerId);
   const person = db.contactPeople.find(p => p.id === inv.contactPersonId);
@@ -36,7 +53,6 @@ export async function invoicePdf(inv, db) {
     ? { ...inv, lineItems: (inv.lineItems || []).map(li => ({ ...li, unitPrice: -(Number(li.unitPrice) || 0) })) }
     : inv;
   const t = lineTotals(doc0.lineItems, doc0.taxRate);
-  const doc = new jsPDF({ unit: "pt", format: "letter" });
   const W = doc.internal.pageSize.getWidth();
   const pages = invoicePages(doc0.lineItems);
 
@@ -77,8 +93,6 @@ export async function invoicePdf(inv, db) {
       drawTotals(doc, { inv, s, t, W, isCredit });
     }
   });
-
-  return { blob: doc.output("blob"), filename: `${inv.number}.pdf` };
 }
 
 // Everything above the items table. Returns the y the items table starts at.

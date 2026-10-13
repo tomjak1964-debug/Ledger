@@ -661,7 +661,10 @@ one email with every selected document attached (`EmailModal`'s `buildAttachment
 addressed to the customer's contact when they're all for one customer; **Save** downloads one file each
 (a proposal's PDF opens, saves and closes each in turn; Word and invoice PDFs need no viewer). Proposals
 add **Mark Submitted** / **Mark Lost** — each only where the row menu would offer it, the rest skipped and
-counted, so a won or superseded proposal never changes. Invoices add **Mark Printed** / **Mark Unprinted**,
+counted, so a won or superseded proposal never changes. Invoices add **Print** — the selection as one PDF (`invoicesPdf()` in `lib/invoicePdf.js`, each invoice
+starting on its own page, drawn by the same `drawInvoice()` as a single one) shown in `components/PdfView.jsx`,
+which opens the printer dialog straight away, so the lot goes to the printer as one job and is marked printed —
+then **Mark Printed** / **Mark Unprinted**,
 and their bulk **Delete skips any invoice with a payment on it** (the receipts would go with it; the row's
 own Delete still asks about it one by one).
 

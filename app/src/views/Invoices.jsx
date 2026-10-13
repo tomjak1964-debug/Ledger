@@ -10,7 +10,8 @@ import LineItemsEditor from "../components/LineItemsEditor.jsx";
 import EmailModal from "../components/EmailModal.jsx";
 import InvoiceFromSOModal from "../components/InvoiceFromSOModal.jsx";
 import Attachments from "../components/Attachments.jsx";
-import { invoicePdf } from "../lib/invoicePdf.js";
+import { invoicePdf, invoicesPdf } from "../lib/invoicePdf.js";
+import PdfView from "../components/PdfView.jsx";
 import { saveBlob } from "../lib/saveFile.js";
 import AccountSelect from "../components/AccountSelect.jsx";
 import { incomeAccountOf, accountLabel } from "../calc/accounts.js";
@@ -39,6 +40,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
   const [picked, setPicked] = useState({});
   const [bulkEmail, setBulkEmail] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [printSet, setPrintSet] = useState(null);   // { blob, filename, ids } — the selection as one PDF
   const customers = db.contacts.filter(c => c.type === "customer");
   const f = useFilters({ partyKind: "customer", contacts: db.contacts });
   const openSOs = db.salesOrders.filter(s => s.status === "open");
@@ -95,6 +97,14 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
     setBulkBusy(false);
     endSelect();
   };
+  // Print the selection together: one PDF, each invoice on its own pages, one
+  // trip to the printer dialog. Printing marks them printed, as printing one does.
+  const bulkPrint = async () => {
+    setBulkBusy(true);
+    try { const { blob, filename } = await invoicesPdf(chosen, db); setPrintSet({ blob, filename, ids: chosen.map(i => i.id) }); }
+    catch (e) { toast("⚠ Couldn't make the PDF: " + (e.message || e)); }
+    setBulkBusy(false);
+  };
   const bulkSave = async () => {
     setBulkBusy(true);
     try {
@@ -149,6 +159,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
       {chosen.length > 0 && <span className="subtle mono">{money(chosen.reduce((t, i) => t + lineTotals(i.lineItems, i.taxRate).total, 0))}</span>}
       <span style={{ marginLeft: "auto", display: "inline-flex", gap: 8, flexWrap: "wrap" }}>
         <button className="btn" disabled={!chosen.length || bulkBusy} onClick={() => setBulkEmail(true)}><Ico d={ICONS.mail} size={15} />Email</button>
+        <button className="btn" disabled={!chosen.length || bulkBusy} onClick={bulkPrint}><Ico d={ICONS.print} size={15} />Print</button>
         <button className="btn" disabled={!chosen.length || bulkBusy} onClick={bulkSave}><Ico d={ICONS.download} size={15} />Save {chosen.length > 1 ? plural(chosen.length, "PDF") : "PDF"}</button>
         {!readOnly && <>
           <button className="btn" disabled={!chosen.length || bulkBusy} onClick={() => bulkPrinted(true)}>Mark Printed</button>
@@ -229,6 +240,9 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
       defaultBody={`Please find attached invoice ${email.number}.\n\nThank you for your business.\n\n${db.settings.company}\n${db.settings.companyPhone || ""}`}
       buildAttachment={() => invoicePdf(email, db)}
       onClose={() => setEmail(null)} toast={toast} />}
+    {printSet && <PdfView blob={printSet.blob} filename={printSet.filename} autoPrint
+      onPrinted={readOnly ? undefined : () => actions.markInvoicePrinted(printSet.ids, true)}
+      onClose={() => { setPrintSet(null); endSelect(); }} />}
     {bulkEmail && <EmailModal docType="invoice"
       title={`Email · ${plural(chosen.length)}`}
       defaultTo={emailTo()}

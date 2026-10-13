@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
+import RateSheetDoc from "../components/RateSheetDoc.jsx";
 import { uid, money, fmtDate, todayISO, nameOf, cls, pickable } from "../lib/helpers.js";
 import { proposalConfig, priceProposal, ioBlocks, phaseAmount, SPEC_FIELDS, DEFAULT_PHASES, defaultProposalCustomer } from "../calc/proposals.js";
 import { Ico, ICONS, Badge, Empty, Field, MenuItem, ActionMenu, Modal, SortTh, useTableSort, blankZero } from "../components/ui.jsx";
@@ -12,7 +13,7 @@ import { newEstimate, priceEstimate } from "../calc/estimates.js";
 
 // Shared by the print view and the Word export — the proposal letter content.
 export function buildProposalContent(p, db) {
-  const cfg = proposalConfig(db.settings);
+  const cfg = proposalConfig(db.settings, db.timeCategories);
   const mt = db.machineTypes.find(m => m.id === p.machineTypeId);
   const customer = db.contacts.find(c => c.id === p.customerId);
   // Effective contact: the proposal's free-text name, else a linked contact
@@ -78,12 +79,13 @@ const emptySpecs = () => Object.fromEntries(SPEC_FIELDS.map(([k]) => [k, 0]));
 export default function ProposalsView({ db, actions, toast, readOnly }) {
   const [edit, setEdit] = useState(null);
   const [doc, setDoc] = useState(null);
+  const [rateSheet, setRateSheet] = useState(false);
   const [phasesFor, setPhasesFor] = useState(null);
   const [search, setSearch] = useState("");
   const [importing, setImporting] = useState(false);
   const [importingLineup, setImportingLineup] = useState(false);
   const customers = db.contacts.filter(c => c.type === "customer");
-  const cfg = proposalConfig(db.settings);
+  const cfg = proposalConfig(db.settings, db.timeCategories);
 
   const filtered = db.proposals.filter(p => {
     const s = search.toLowerCase(); if (!s) return true;
@@ -148,7 +150,9 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
   return <div>
     <div className="toolbar">
       <div className="search"><Ico d={ICONS.search} size={15} /><input className="input" placeholder="Search proposals…" value={search} onChange={e => setSearch(e.target.value)} /></div>
-      {!readOnly && <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setImportingLineup(true)}>
+      <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setRateSheet(true)} title="The standard hourly rates, overtime and travel terms — print or save as PDF">
+        <Ico d={ICONS.print} size={15} />Rate Sheet</button>
+      {!readOnly && <button className="btn" onClick={() => setImportingLineup(true)}>
         <Ico d={ICONS.quote} size={15} />Import Lineup</button>}
       {!readOnly && <button className="btn" onClick={() => setImporting(true)}>
         <Ico d={ICONS.quote} size={15} />Import Quote Chart</button>}
@@ -194,6 +198,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
     {importing && <ImportProposalsModal db={db} actions={actions} toast={toast} onClose={() => setImporting(false)} />}
     {importingLineup && <ImportLineupModal db={db} actions={actions} toast={toast} onClose={() => setImportingLineup(false)} />}
     {doc && <ProposalDoc p={doc} db={db} onClose={() => setDoc(null)} toast={toast} />}
+    {rateSheet && <RateSheetDoc settings={db.settings} timeCategories={db.timeCategories} onClose={() => setRateSheet(false)} />}
     {phasesFor && <PhasesModal p={db.proposals.find(x => x.id === phasesFor.id) || phasesFor} db={db} actions={actions} toast={toast} onClose={() => setPhasesFor(null)} />}
   </div>;
 }

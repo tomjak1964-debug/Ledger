@@ -484,6 +484,23 @@ flags the SO lines invoiced, and invoicing the SO marks the proposal's phases bi
 billed twice. A controls estimate with no schedule still lands as one line per group it priced
 (Engineering / Hardware / Field Services / Contingency).
 
+**Rates have one home: Settings → Time Categories** (bill rate and cost rate per category). Logged time bills
+at a category's rate; a system proposal prices each task (Hardware Design, Drafting, PLC, HMI, Start-Up, PM,
+Documentation) and its support rate from the category picked for it in Settings → Proposals → *Labor Rate
+Card* (`settings.proposal.roleCategory`, role → category id; until one is picked, a category of the usual name
+stands in — `ROLE_DEFAULT_CATEGORY` / `roleCategory()` in `calc/proposals.js`, and `proposalConfig(settings,
+timeCategories)` derives `laborRates` and `supportRate` from them, falling back to stored rates only where no
+category matches). Pass `db.timeCategories` wherever a proposal is priced.
+
+**Rate sheet** (`lib/rateSheet.js`, `components/RateSheetDoc.jsx`): a one-page, customer-facing sheet listing
+every active Time Category with its standard, overtime and double-time rate (1.5× / 2× by default), the
+premium-time rules (overtime after 10 hours a day, after 50 a week and on Saturdays; double time on Sundays and
+recognized holidays — the holiday list is kept in settings but not printed), and travel terms (none inside the
+local area, Metro Detroit by default; outside it, travel and living at actual cost, vehicles at the current IRS
+mileage rate, meals at the GSA per diem for the location). **Rate Sheet** on the Proposals page opens it;
+Settings → Proposals → *Rate Sheet* holds the effective date, thresholds, multipliers, local area, holidays and a
+closing note (`settings.rateSheet`). Print / Save PDF; the file is named `<Company> Rate Sheet <year>`.
+
 **Estimating from a lineup** (`src/lib/lineup.js`, `src/components/ImportLineupModal.jsx`): an integrator's
 *Electrical Engineering Line-up* — one document per fixture with a header (job #, end user, fixture, PLC, HMI,
 runoff), the sequence of operations, the components on the machine with `(xN)` quantities, the valve manifold

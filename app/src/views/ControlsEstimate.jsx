@@ -18,7 +18,7 @@ const samePhases = (a, b) => a.length === b.length && a.every((x, i) => x.key ==
 /* ---------------- document content ---------------- */
 
 export function buildControlsContent(p, db) {
-  const cfg = proposalConfig(db.settings);
+  const cfg = proposalConfig(db.settings, db.timeCategories);
   const customer = db.contacts.find(c => c.id === p.customerId);
   const personRec = db.contactPeople.find(x => x.id === p.contactPersonId);
   const contactName = (p.contactName || personRec?.name || customer?.contact || "").trim();

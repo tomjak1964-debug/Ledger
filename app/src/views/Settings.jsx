@@ -2,10 +2,12 @@ import { useState, useRef, useEffect } from "react";
 import { uid, money, todayISO, fmtDate, isoDate } from "../lib/helpers.js";
 import { Ico, ICONS, Field, PasswordInput } from "../components/ui.jsx";
 import ChangePassword from "../components/ChangePassword.jsx";
+import RateSheetDoc from "../components/RateSheetDoc.jsx";
+import { rateSheetConfig } from "../lib/rateSheet.js";
 import { AREAS, isAdminRole } from "../lib/permissions.js";
 import { supabase } from "../lib/supabaseClient.js";
 import FormsTab from "../components/FormsEditor.jsx";
-import { proposalConfig } from "../calc/proposals.js";
+import { proposalConfig, roleCategory } from "../calc/proposals.js";
 import { ROLE_LABELS, HOUR_MODEL_LABELS } from "../calc/estimates.js";
 import { REV } from "../lib/version.js";
 import AccountSelect from "../components/AccountSelect.jsx";
@@ -110,7 +112,7 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
     </div>}
 
     {tab === "forms" && <FormsTab s={s} set={set} readOnly={readOnly} saveAll={saveAll} />}
-    {tab === "proposals" && <ProposalsTab s={s} set={set} readOnly={readOnly} saveAll={saveAll} />}
+    {tab === "proposals" && <ProposalsTab db={db} s={s} set={set} readOnly={readOnly} saveAll={saveAll} />}
     {tab === "accounts" && <AccountsTab db={db} s={s} set={set} readOnly={readOnly} saveAll={saveAll} />}
 
     {tab === "users" && isAdmin && <UsersCard db={db} actions={actions} toast={toast} session={session} />}
@@ -211,7 +213,7 @@ function TimeCategoriesCard({ db, actions, toast }) {
       <button className="btn primary sm" style={{ marginLeft: "auto" }} onClick={() => setEdit({ id: uid(), _new: true, name: "", rate: "", costRate: "", active: true, sort: cats.length })}><Ico d={ICONS.plus} size={14} />New Category</button>
     </div>
     <div className="card-body">
-      <p className="subtle" style={{ marginTop: 0 }}>Categories and flat hourly rates users pick when logging time. The rate is snapshotted onto each time entry.</p>
+      <p className="subtle" style={{ marginTop: 0 }}><b>The one place rates are set.</b> Logged time bills at a category's rate (snapshotted onto each entry), system proposals price each task from the category picked under Settings → Proposals → Labor Rate Card, and the customer Rate Sheet lists every active category.</p>
       {cats.length === 0
         ? <p className="subtle" style={{ margin: 0 }}>No categories yet — add Engineering, Field Service, etc.</p>
         : cats.map(c => <div key={c.id} className="cat-row">
@@ -462,11 +464,10 @@ function AccountsTab({ db, s, set, readOnly, saveAll }) {
 // read from settings.proposal (calc/proposals.js proposalConfig). The rate
 // card and the hour model price a controls estimate; the letter fields go on
 // both documents.
-function ProposalsTab({ s, set, readOnly, saveAll }) {
-  const cfg = proposalConfig(s);
+function ProposalsTab({ db, s, set, readOnly, saveAll }) {
+  const cfg = proposalConfig(s, db.timeCategories);
   const p = s.proposal || {};
   const setP = (k, v) => set("proposal", { ...p, [k]: v });
-  const setRate = (k, v) => setP("laborRates", { ...(p.laborRates || {}), [k]: Number(v) || 0 });
   const setHm = (table, key, v) => setP("hourModel", { ...(p.hourModel || {}), [table]: { ...((p.hourModel || {})[table] || {}), [key]: Number(v) || 0 } });
   const setHmScalar = (key, v) => setP("hourModel", { ...(p.hourModel || {}), [key]: Number(v) || 0 });
   const phaseRows = (key, phases, onChange) => <div>
@@ -499,17 +500,21 @@ function ProposalsTab({ s, set, readOnly, saveAll }) {
         </div>
         <div className="row">
           <Field label="Offer valid for (days)"><input className="input mono" type="number" min="0" value={cfg.validityDays} disabled={readOnly} onChange={e => setP("validityDays", Number(e.target.value) || 0)} /></Field>
-          <Field label="Support rate ($/hr)" hint="Stand-by / production support beyond the scope"><input className="input mono" type="number" min="0" value={cfg.supportRate} disabled={readOnly} onChange={e => setP("supportRate", Number(e.target.value) || 0)} /></Field>
         </div>
       </div>
     </div>
 
     <div className="card" style={{ marginBottom: 16 }}>
-      <div className="card-head"><h3>Labor Rate Card</h3><span className="subtle" style={{ marginLeft: "auto" }}>$/hour — prices a system proposal</span></div>
+      <div className="card-head"><h3>Labor Rate Card</h3><span className="subtle" style={{ marginLeft: "auto" }}>which Time Category prices each task — rates are set under Settings → Time Categories</span></div>
       <div className="card-body"><div className="row">
-        {Object.entries(ROLE_LABELS).map(([k, label]) => <Field key={k} label={label}>
-          <input className="input mono" type="number" min="0" step="any" value={cfg.laborRates[k] ?? 0} disabled={readOnly} onChange={e => setRate(k, e.target.value)} />
-        </Field>)}
+        {[...Object.entries(ROLE_LABELS), ["support", "Support beyond the scope"]].map(([k, label]) => {
+          const cur = roleCategory(s, db.timeCategories, k);
+          return <Field key={k} label={label} hint={cur ? money(Number(cur.rate)) + "/hr" : "No category — pick one"}>
+            <select className="select" value={cur?.id || ""} disabled={readOnly} onChange={e => setP("roleCategory", { ...(p.roleCategory || {}), [k]: e.target.value })}>
+              <option value="">— pick a category —</option>
+              {(db.timeCategories || []).filter(c => c.active !== false || c.id === cur?.id).map(c => <option key={c.id} value={c.id}>{c.name} · {money(Number(c.rate))}/hr</option>)}
+            </select></Field>;
+        })}
       </div>
       <div className="row">
         <Field label="Travel & living ($ per person-day)"><input className="input mono" type="number" min="0" value={cfg.travelPerDay} disabled={readOnly} onChange={e => setP("travelPerDay", Number(e.target.value) || 0)} /></Field>
@@ -517,6 +522,8 @@ function ProposalsTab({ s, set, readOnly, saveAll }) {
         <Field label="Default contingency (%)"><input className="input mono" type="number" min="0" step="any" value={cfg.contingencyPct} disabled={readOnly} onChange={e => setP("contingencyPct", Number(e.target.value) || 0)} /></Field>
       </div></div>
     </div>
+
+    <RateSheetCard db={db} s={s} set={set} readOnly={readOnly} />
 
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-head"><h3>Hour Model</h3><span className="subtle" style={{ marginLeft: "auto" }}>hours a system proposal suggests per unit of content</span></div>
@@ -556,4 +563,33 @@ function ProposalsTab({ s, set, readOnly, saveAll }) {
 
     {!readOnly && <button className="btn primary" onClick={saveAll}><Ico d={ICONS.check} size={15} />Save Proposal Settings</button>}
   </>;
+}
+
+// Settings → Proposals → Rate Sheet: what the printed rate sheet says beyond
+// the rates themselves (lib/rateSheet.js). The rates are the card above.
+function RateSheetCard({ db, s, set, readOnly }) {
+  const rs = rateSheetConfig(s);
+  const r = s.rateSheet || {};
+  const setR = (k, v) => set("rateSheet", { ...r, [k]: v });
+  const [open, setOpen] = useState(false);
+  return <div className="card" style={{ marginBottom: 16 }}>
+    <div className="card-head"><h3>Rate Sheet</h3><span className="subtle" style={{ marginLeft: 12 }}>every active Time Category, with overtime and travel terms — for customers</span>
+      <button className="btn sm" style={{ marginLeft: "auto" }} onClick={() => setOpen(true)}><Ico d={ICONS.print} size={14} />View Rate Sheet</button></div>
+    <div className="card-body">
+      <div className="row">
+        <Field label="Effective date"><input className="input" type="date" value={r.effectiveDate || ""} disabled={readOnly} onChange={e => setR("effectiveDate", e.target.value)} /></Field>
+        <Field label="Overtime after (hours / day)"><input className="input mono" type="number" min="0" value={rs.dailyHours} disabled={readOnly} onChange={e => setR("dailyHours", Number(e.target.value) || "")} /></Field>
+        <Field label="Overtime after (hours / week)"><input className="input mono" type="number" min="0" value={rs.weeklyHours} disabled={readOnly} onChange={e => setR("weeklyHours", Number(e.target.value) || "")} /></Field>
+        <Field label="Overtime ×"><input className="input mono" type="number" min="1" step="0.25" value={rs.otMultiplier} disabled={readOnly} onChange={e => setR("otMultiplier", Number(e.target.value) || "")} /></Field>
+        <Field label="Double time ×"><input className="input mono" type="number" min="1" step="0.25" value={rs.dtMultiplier} disabled={readOnly} onChange={e => setR("dtMultiplier", Number(e.target.value) || "")} /></Field>
+      </div>
+      <div className="row">
+        <Field label="Local area" hint="No travel or living charges inside it"><input className="input" value={r.localArea ?? rs.localArea} disabled={readOnly} onChange={e => setR("localArea", e.target.value)} /></Field>
+        <Field label="Recognized holidays" hint="One per line — double time. The sheet says 'recognized holidays'; the list isn't printed"><textarea className="input" rows={4} value={(r.holidays || rs.holidays).join("\n")} disabled={readOnly} onChange={e => setR("holidays", e.target.value.split("\n").map(x => x.trim()).filter(Boolean))} /></Field>
+        <Field label="Closing note"><textarea className="input" rows={4} value={r.notes ?? rs.notes} disabled={readOnly} onChange={e => setR("notes", e.target.value)} /></Field>
+      </div>
+      <p className="subtle" style={{ margin: 0 }}>Blank effective date prints today's. Save Settings to keep changes; the sheet is also under Proposals → Rate Sheet.</p>
+    </div>
+    {open && <RateSheetDoc settings={s} timeCategories={db.timeCategories} onClose={() => setOpen(false)} />}
+  </div>;
 }

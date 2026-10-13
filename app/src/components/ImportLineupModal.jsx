@@ -17,7 +17,7 @@ const stateOf = addr => (String(addr || "").match(/\b([A-Z]{2})\.?\s+\d{5}/) || 
 const cityLine = addr => String(addr || "").split("\n").map(t => t.trim()).filter(Boolean).pop() || "";
 
 export default function ImportLineupModal({ db, actions, toast, onClose, onDone }) {
-  const cfg = proposalConfig(db.settings);
+  const cfg = proposalConfig(db.settings, db.timeCategories);
   const customers = db.contacts.filter(c => c.type === "customer");
   const [customerId, setCustomerId] = useState("");
   const [date, setDate] = useState(todayISO());

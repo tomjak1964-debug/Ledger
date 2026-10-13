@@ -429,3 +429,19 @@ tr.sub-row td{background:var(--canvas);font-size:12.5px}
 .ms.invoiced{background:var(--billed-wash);border-color:var(--billed);color:var(--billed)}
 .ms.closed{background:var(--canvas);color:var(--muted-2);text-decoration:line-through}
 .ms .mono{margin-left:5px}
+
+/* ---------- rate sheet (components/RateSheetDoc.jsx) ---------- */
+.rate-sheet{font-size:13px;line-height:1.55}
+.rate-sheet .rs-hr{font-size:11px;color:#6b7280;margin-left:1px}
+.rate-sheet .rs-section{margin-top:22px;break-inside:avoid}
+.rate-sheet .rs-section h4{font-family:"Space Grotesk";font-size:14px;letter-spacing:.04em;text-transform:uppercase;color:#13233B;
+  border-bottom:2px solid #13233B;padding-bottom:5px;margin:0 0 8px}
+.rate-sheet .rs-section ul{margin:0;padding-left:18px}
+.rate-sheet .rs-section li{margin:0 0 6px}
+.rate-sheet .doc-top{margin-bottom:22px}
+.rate-sheet table.doc-items td{padding:7px 12px}
+.rate-sheet table.doc-items{margin-bottom:6px}
+.rate-sheet .rs-section{margin-top:16px}
+.rate-sheet .doc-notes{margin-top:18px;padding-top:10px}
+.rate-sheet .doc-foot{margin-top:12px}
+@media print{.rate-sheet{font-size:12px}.rate-sheet .rs-section li{margin-bottom:3px}.rate-sheet .doc-co img{width:110px!important;margin-bottom:6px!important}.rate-sheet .doc-top{margin-bottom:14px}.rate-sheet .rs-section{margin-top:12px}}

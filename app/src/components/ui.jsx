@@ -36,7 +36,7 @@ export function SortTh({ label, col, sort, onSort, num, style }) {
 // button, because a card scrolls sideways when its table is wider than the
 // page, and a panel absolutely positioned inside the card would be clipped by
 // that scrolling box. `children` is a function of close().
-export function ActionMenu({ children, title = "More", minWidth = 180, icon }) {
+export function ActionMenu({ children, title = "More", minWidth = 180, icon, label, disabled }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const btn = useRef();
@@ -65,7 +65,9 @@ export function ActionMenu({ children, title = "More", minWidth = 180, icon }) {
     };
   }, [open]);
   return <>
-    <button ref={btn} className="btn ghost icon" onClick={toggle} title={title}>{icon ? <Ico d={icon} size={16} /> : "⋯"}</button>
+    {label
+      ? <button ref={btn} className="btn" onClick={toggle} title={title} disabled={disabled}>{icon && <Ico d={icon} size={15} />}{label}</button>
+      : <button ref={btn} className="btn ghost icon" onClick={toggle} title={title} disabled={disabled}>{icon ? <Ico d={icon} size={16} /> : "⋯"}</button>}
     {open && pos && createPortal(<div ref={panel} className="action-menu" style={{ top: pos.top, right: pos.right, minWidth }}>
       {typeof children === "function" ? children(close) : children}
     </div>, document.body)}

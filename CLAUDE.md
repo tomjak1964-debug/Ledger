@@ -655,6 +655,19 @@ opens the document and goes straight to the printer dialog (`openDoc(…, { auto
 `auto`, `RemittanceView`'s `autoPrint`), Save writes the PDF under its usual name (a proposal's Save is a
 menu, PDF or Word), Email opens the email dialog.
 
+**Select several at once** (Proposals and Invoices): **Select** at the top of the list adds a tick column
+(a row click ticks it too, the heading ticks all shown) and a bar of actions for what's ticked. **Email** sends
+one email with every selected document attached (`EmailModal`'s `buildAttachment` may return a list),
+addressed to the customer's contact when they're all for one customer; **Save** downloads one file each
+(a proposal's PDF opens, saves and closes each in turn; Word and invoice PDFs need no viewer). Proposals
+add **Mark Submitted** / **Mark Lost** — each only where the row menu would offer it, the rest skipped and
+counted, so a won or superseded proposal never changes. Invoices add **Print** — the selection as one PDF (`invoicesPdf()` in `lib/invoicePdf.js`, each invoice
+starting on its own page, drawn by the same `drawInvoice()` as a single one) shown in `components/PdfView.jsx`,
+which opens the printer dialog straight away, so the lot goes to the printer as one job and is marked printed —
+then **Mark Printed** / **Mark Unprinted**,
+and their bulk **Delete skips any invoice with a payment on it** (the receipts would go with it; the row's
+own Delete still asks about it one by one).
+
 **The menu folds away.** Picking a page from the sidebar folds the sidebar (`menuOut` in `App.jsx`, the
 `.app.menu-in` grid) so the page runs full width; the tab at the top left brings it back. There is no Back in the top bar (the tab is the
 way back to the menu); `go()` keeps a history of the pages visited so closing the Rate Sheet returns to

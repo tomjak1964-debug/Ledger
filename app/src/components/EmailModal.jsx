@@ -9,7 +9,8 @@ const blobToBase64 = blob => new Promise(res => {
 });
 
 // Generic "email this document" dialog. buildAttachment is async and returns
-// { blob, filename } (or null for no attachment). docType ("invoice" |
+// { blob, filename }, a list of them (several documents on one email), or null
+// for no attachment. docType ("invoice" |
 // "remittance" | "proposal" | "ratesheet") is all the app says about the sender: the
 // send-document function picks the From address for that type from its own
 // fixed list.
@@ -23,7 +24,8 @@ export default function EmailModal({ title, defaultTo, defaultSubject, defaultBo
     setBusy(true);
     try {
       const att = buildAttachment ? await buildAttachment() : null;
-      const attachments = att ? [{ filename: att.filename, content: await blobToBase64(att.blob) }] : [];
+      const list = Array.isArray(att) ? att : att ? [att] : [];
+      const attachments = await Promise.all(list.map(async a => ({ filename: a.filename, content: await blobToBase64(a.blob) })));
       const html = body.split("\n").map(l => l.trim() === "" ? "<br/>" : `<p style="margin:0 0 2px">${l.replace(/</g, "&lt;")}</p>`).join("");
       const { data, error } = await supabase.functions.invoke("send-document", {
         body: { to: to.trim(), subject, html, attachments, docType },

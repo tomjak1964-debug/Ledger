@@ -69,7 +69,8 @@ export function buildProposalContent(p, db) {
   const salesNotes = [
     "This is a proposal for Engineering Services and material listed in the deliverables section of this proposal.",
     "All Field Components (Sensors, Cables, Duct, Cylinders, Valves, Remote E-Stop, Cycle Start, etc.) and Step-Down Transformers are not provided as part of this proposal.",
-    "Stand-by and production support is not included as part of this proposal and can be purchased for a rate of $70/hour U.S. and actual expenses.",
+    // The support rate is the Time Category's (the one place rates are set), not a number typed here.
+    `Stand-by and production support is not included as part of this proposal and can be purchased for a rate of $${Number(cfg.supportRate) || 0}/hour U.S. and actual expenses.`,
   ];
 
   const phases = (p.phases?.length ? p.phases : cfg.phases).map(ph => ({ ...ph, amount: phaseAmount(pricing.total, ph.pct) }));

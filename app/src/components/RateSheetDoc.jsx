@@ -36,7 +36,7 @@ export default function RateSheetDoc({ settings, timeCategories, onClose, toast 
   return createPortal(<div className="doc-screen">
     <DocActions onClose={onClose} onEmail={() => setEmail(true)} onPrint={() => window.print()} busy={busy}
       saves={[{ label: "Save PDF", hint: stem + ".pdf", run: savePdf }]} />
-    {email && <EmailModal docType="proposal" title="Email · Rate Sheet" defaultTo=""
+    {email && <EmailModal docType="ratesheet" title="Email · Rate Sheet" defaultTo=""
       defaultSubject={`${s.company || ""} rate sheet — effective ${fmtDate(rs.effectiveDate)}`}
       defaultBody={`Please find attached our current rate sheet, effective ${fmtDate(rs.effectiveDate)}.\n\nRegards,\n${s.company || ""}\n${s.companyPhone || ""}`}
       buildAttachment={pdf} onClose={() => setEmail(false)} toast={toast || (() => {})} />}

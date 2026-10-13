@@ -4,6 +4,8 @@
 //   RESEND_API_KEY          — from resend.com (API Keys)
 //   EMAIL_FROM_INVOICE      — e.g. "TMJ Engineering <invoices@tmjengineering.com>"
 //   EMAIL_FROM_REMITTANCE   — e.g. "TMJ Engineering <remittances@tmjengineering.com>"
+//   EMAIL_FROM_SALES        — e.g. "TMJ Engineering <sales@tmjengineering.com>"
+//                             (proposals and the rate sheet)
 //   EMAIL_FROM              — the sender for anything else, and the fallback
 //                             while a per-type setting isn't there yet
 // The sender is chosen HERE from the document type the app names (FROM_BY_TYPE)
@@ -23,7 +25,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const FROM_BY_TYPE: Record<string, string> = {
   invoice: "EMAIL_FROM_INVOICE",       // invoices, credit memos, payment reminders
   remittance: "EMAIL_FROM_REMITTANCE", // remittance advice for vendor payments
-  proposal: "EMAIL_FROM",              // proposals and quotes
+  proposal: "EMAIL_FROM_SALES",        // proposals and quotes
+  ratesheet: "EMAIL_FROM_SALES",       // the customer rate sheet
 };
 function senderFor(docType: unknown): string {
   const general = Deno.env.get("EMAIL_FROM") || "onboarding@resend.dev";

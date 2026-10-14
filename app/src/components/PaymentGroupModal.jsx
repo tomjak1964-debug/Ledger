@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { money, fmtDate, todayISO, pickable } from "../lib/helpers.js";
-import { lineTotals, balance, paid, round2, billBalance } from "../calc/ledger.js";
+import { lineTotals, balance, paid, round2, billBalance, applyAgainst, applyOldestFirst } from "../calc/ledger.js";
 import { checkNumberTaken, normRef } from "../lib/checks.js";
 import { Modal, Field, Badge } from "./ui.jsx";
 import AccountSelect from "./AccountSelect.jsx";
@@ -13,6 +13,12 @@ const METHODS = ["Check", "ACH / Wire", "Credit Card", "Cash", "Other"];
 // check covers, and apply an amount per line. Nothing is ticked for you — a
 // payment covers what was actually paid for, so you say which items those are
 // (Select all is one click away when the check clears everything).
+//
+// Partial payments: type the amount received (or being paid) at the top and it
+// is spread oldest due first — each item in full until the money runs out, the
+// last one taking what's left. Any line's Applied can be cut below its balance
+// by hand too; the Left open column shows what each will still owe. A line is
+// never applied for more than it owes.
 //
 // Pass `group` (a row from receiptGroups) to edit an existing receipt or
 // payment instead of creating one: the items already on it come in ticked,
@@ -34,6 +40,8 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
   // Explicit per-document overrides: { [id]: { checked, amount } }. Anything not
   // in here uses the default below.
   const [alloc, setAlloc] = useState({});
+  // The check / transfer amount, when typed. Blank means "add up the lines".
+  const [received, setReceived] = useState("");
 
   // What this receipt / payment already covers, per document. A group holds one
   // line per payment ROW, and a document can carry several of them on the same
@@ -78,9 +86,30 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
       : checkNumberTaken(db, ref, ownIds) ? `Check #${normRef(ref)} is already used by another check.` : ""
     : "";
 
-  const pickParty = (id) => { setPartyId(id); setAlloc({}); };
+  const pickParty = (id) => { setPartyId(id); setAlloc({}); setReceived(""); };
   const setLine = (d, patch) => setAlloc(prev => ({ ...prev, [d.id]: { ...eff(d), ...patch } }));
   const setAll = (checked) => setAlloc(Object.fromEntries(items.map(d => [d.id, { ...eff(d), checked }])));
+
+  // Spread the amount received oldest first. Credits keep whatever they were
+  // set to — they are ticked by hand, never spent automatically.
+  const spread = (v) => {
+    setReceived(v);
+    if (!(Number(v) > 0)) return;
+    const { amounts } = applyOldestFirst(items, v, openBal);
+    setAlloc(Object.fromEntries(items.map(d => [d.id, openBal(d) < 0 ? eff(d)
+      : d.id in amounts ? { ...eff(d), checked: true, amount: amounts[d.id], discount: 0 }
+        : { ...eff(d), checked: false, amount: openBal(d), discount: 0 }])));
+  };
+  const fitOf = (d) => { const a = eff(d); return applyAgainst(openBal(d), a.amount, a.discount); };
+  const overDocs = items.filter(d => eff(d).checked && fitOf(d).over);
+  const partCount = items.filter(d => eff(d).checked && fitOf(d).partial).length;
+  const recNum = round2(Number(received) || 0);
+  const owedTotal = round2(items.reduce((s, d) => s + Math.max(0, openBal(d)), 0));
+  const recErr = received === "" || !(recNum > 0) ? ""
+    : recNum > owedTotal + 0.005 ? `${money(recNum)} is more than this ${L.party.toLowerCase()} owes in total (${money(owedTotal)}).`
+      : Math.abs(recNum - net) > 0.005 ? `${money(net)} of the ${money(recNum)} is applied — ${money(round2(recNum - net))} ${recNum > net ? "still to apply" : "too much applied"}.` : "";
+  const overErr = overDocs.length
+    ? `${overDocs.map(d => isBill ? (d.ref || d.number) : d.number).join(", ")}: applied more than ${overDocs.length > 1 ? "they owe" : "it owes"}.` : "";
 
   const submit = async () => {
     const allocations = items.filter(d => eff(d).checked)
@@ -96,10 +125,10 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
   return <Modal title={editing ? L.edit + (group.ref ? " · #" + group.ref : "") : L.create} onClose={onClose} wide
     foot={<>
       <div className="subtle" style={{ marginRight: "auto", alignSelf: "center" }}>
-        {selectedCount ? `${selectedCount} item${selectedCount > 1 ? "s" : ""} selected` : `Select the items this ${L.one} covers`}
+        {selectedCount ? `${selectedCount} item${selectedCount > 1 ? "s" : ""} selected${partCount ? ` · ${partCount} part-paid` : ""}` : `Select the items this ${L.one} covers`}
       </div>
       <button className="btn" onClick={onClose}>Cancel</button>
-      <button className="btn primary" disabled={saving || net === 0 || !selectedCount || !!refErr} onClick={submit}>
+      <button className="btn primary" disabled={saving || net === 0 || !selectedCount || !!refErr || !!overErr || !!recErr} onClick={submit}>
         {saving ? "Saving…" : (editing ? "Save " : "Record ") + money(net)}
       </button>
     </>}>
@@ -107,6 +136,10 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
       <Field label={L.party}><select className="select" value={partyId} disabled={editing} onChange={e => pickParty(e.target.value)}>
         <option value="">Select {L.party.toLowerCase()}…</option>{pickable(parties, partyId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
       </select></Field>
+      <Field label={L.total} hint={editing ? "Optional — re-spreads oldest first" : "Optional — spreads oldest first"}>
+        <input className="input mono" type="number" step="any" value={received} placeholder="0.00"
+          disabled={!partyId} onChange={e => spread(e.target.value)}
+          style={recErr ? { borderColor: "var(--neg)" } : undefined} /></Field>
       <Field label="Date"><input className="input" type="date" value={date} onChange={e => setDate(e.target.value)} /></Field>
       <Field label="Method"><select className="select" value={method} onChange={e => setMethod(e.target.value)}>
         {METHODS.map(m => <option key={m}>{m}</option>)}
@@ -133,6 +166,7 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
           <table><thead><tr>
             <th style={{ width: 34 }}></th><th>{L.doc}</th><th>Date</th><th>Due</th><th></th>
             <th className="num">Balance</th><th className="num" style={{ width: 120 }}>Discount</th><th className="num" style={{ width: 150 }}>Applied</th>
+            <th className="num">Left open</th>
           </tr></thead>
             <tbody>{items.map(d => {
               const a = eff(d); const bal = openBal(d);
@@ -150,8 +184,12 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
                 <td className="num"><input className="input mono" type="number" step="any" style={{ textAlign: "right" }}
                   title="Discount taken — settles the document without cash"
                   value={a.discount || 0} disabled={!a.checked} onChange={e => setLine(d, { discount: e.target.value })} /></td>
-                <td className="num"><input className="input mono" type="number" step="any" style={{ textAlign: "right" }}
+                <td className="num"><input className="input mono" type="number" step="any" style={{ textAlign: "right", ...(a.checked && fitOf(d).over ? { borderColor: "var(--neg)" } : {}) }}
                   value={a.amount} disabled={!a.checked} onChange={e => setLine(d, { amount: e.target.value })} /></td>
+                <td className="num">{!a.checked ? null
+                  : fitOf(d).over ? <span style={{ color: "var(--neg)", fontSize: 12 }}>over by {money(Math.abs(round2(fitOf(d).left)))}</span>
+                    : fitOf(d).partial ? <span className="mono" title="Part payment — the rest stays open">{money(fitOf(d).left)}</span>
+                      : <span className="subtle" style={{ fontSize: 12 }}>{isCredit ? "used in full" : "paid in full"}</span>}</td>
               </tr>;
             })}</tbody></table>
         </>}
@@ -160,6 +198,7 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
       <span className="subtle">{L.total}</span>
       <span className="mono" style={{ fontWeight: 700, fontSize: 18, color: net < 0 ? "var(--accent)" : undefined }}>{money(net)}</span>
     </div>
+    {(overErr || recErr) && <p className="subtle" style={{ margin: "8px 0 0", color: "var(--neg)" }}>{overErr || recErr}</p>}
     {net < 0 && <p className="subtle" style={{ margin: "8px 0 0", color: "var(--accent)" }}>This receipt nets negative — the selected credits exceed the invoices. Add the invoices being paid, or record it to carry the credit.</p>}
     {editing && isBill && <p className="subtle" style={{ margin: "8px 0 0" }}>
       Reprint the check or remittance from the bill's payment history if what this {L.one} covers has changed.

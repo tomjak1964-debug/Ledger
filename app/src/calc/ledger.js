@@ -24,6 +24,36 @@ export function balance(doc) { return round2(lineTotals(doc.lineItems, doc.taxRa
 export function billBalance(bill) { return round2((Number(bill.amount) || 0) - settled(bill)); }
 export const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
 
+// How one payment (cash + any discount) sits against a document's open balance:
+// what it leaves open, whether that is a part payment, and whether it is more
+// than the document owes. A credit carries a negative balance, so the test is on
+// size in the same direction.
+export function applyAgainst(bal, amount, discount = 0) {
+  const b = round2(Number(bal) || 0);
+  const settles = round2((Number(amount) || 0) + (Number(discount) || 0));
+  const left = round2(b - settles);
+  const over = b >= 0 ? settles > b + 0.005 : settles < b - 0.005;
+  return { settles, left, over, partial: !over && Math.abs(settles) > 0.005 && Math.abs(left) > 0.005 };
+}
+
+// Spread one amount received (or paid) across open documents, oldest due date
+// first: each is paid in full until the money runs out, and the one it runs out
+// on takes what is left — a part payment. Credits (negative balances) are never
+// spent this way; they're ticked by hand. Returns the amount per document id
+// and whatever is more than all of them owe.
+export function applyOldestFirst(docs, total, balOf) {
+  let rest = round2(Number(total) || 0);
+  const out = {};
+  [...docs].filter(d => balOf(d) > 0.005)
+    .sort((a, b) => (a.dueDate || a.date || "").localeCompare(b.dueDate || b.date || "") || (a.date || "").localeCompare(b.date || ""))
+    .forEach(d => {
+      if (rest <= 0.005) return;
+      const amt = round2(Math.min(balOf(d), rest));
+      out[d.id] = amt; rest = round2(rest - amt);
+    });
+  return { amounts: out, unapplied: rest > 0.005 ? rest : 0 };
+}
+
 export function invoiceStatus(inv) {
   const t = lineTotals(inv.lineItems, inv.taxRate).total;
   const p = settled(inv);

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { uid, money, fmtDate, todayISO } from "../lib/helpers.js";
-import { paid, balance, round2, billBalance } from "../calc/ledger.js";
+import { paid, balance, round2, billBalance, applyAgainst } from "../calc/ledger.js";
 import { Modal, Field, Ico, ICONS } from "./ui.jsx";
 import AccountSelect from "./AccountSelect.jsx";
 import { accountLabel, accountSettings } from "../calc/accounts.js";
@@ -25,6 +25,7 @@ export default function PaymentModal({ db, doc, onClose, onSave, onVoid, onDelet
   const [cashAccount, setCashAccount] = useState("");   // blank = the default cash account
   const [stage, setStage] = useState("entry");   // entry | check | done
   const [saved, setSaved] = useState(null);
+  const [leftOpen, setLeftOpen] = useState(0);   // what the recorded payment left on the document
   const [busy, setBusy] = useState(false);
 
   const isCheck = isBill && method === "Check";
@@ -54,7 +55,11 @@ export default function PaymentModal({ db, doc, onClose, onSave, onVoid, onDelet
   const refErr = isCheck
     ? !ref.trim() ? "Enter the check number." : isRefTaken?.(ref) ? `Check #${ref.trim()} has already been used.` : ""
     : "";
-  const err = amt === 0 && disc === 0 ? "Enter an amount." : refErr;
+  // A part payment is fine — the document stays open for the rest. More than it
+  // owes is not: that money belongs on another document or a credit.
+  const fit = applyAgainst(bal, amt, disc);
+  const overErr = fit.over ? `That's ${money(Math.abs(round2(fit.settles - bal)))} more than ${doc.number} owes (${money(bal)}).` : "";
+  const err = amt === 0 && disc === 0 ? "Enter an amount." : overErr || refErr;
 
   const record = async () => {
     setBusy(true);
@@ -63,6 +68,7 @@ export default function PaymentModal({ db, doc, onClose, onSave, onVoid, onDelet
     setBusy(false);
     if (!ok) return;
     setSaved(p);
+    setLeftOpen(fit.partial ? fit.left : 0);
     if (isCheck) { onPrintCheck?.(p); setStage("check"); }
     else setStage("done");
   };
@@ -96,6 +102,7 @@ export default function PaymentModal({ db, doc, onClose, onSave, onVoid, onDelet
     foot={<button className="btn primary" onClick={onClose}><Ico d={ICONS.check} size={15} />Done</button>}>
     <div style={{ marginBottom: 16, padding: "12px 14px", background: "var(--pos-wash)", borderRadius: 9 }}>
       <div style={{ fontWeight: 600 }}>{money(saved.amount)} applied to {doc.number}</div>
+      {leftOpen !== 0 && <div className="subtle">Part payment — {money(leftOpen)} still open on {doc.number}.</div>}
       <div className="subtle">{saved.method}{saved.ref ? " #" + saved.ref : ""} · {fmtDate(saved.date)}</div>
     </div>
     <p className="subtle" style={{ marginTop: 0 }}>Send the {isBill ? "vendor a remittance advice" : "customer a receipt"} now, or just save.</p>
@@ -112,6 +119,7 @@ export default function PaymentModal({ db, doc, onClose, onSave, onVoid, onDelet
     <div style={{ marginBottom: 16, padding: "12px 14px", background: "var(--canvas)", borderRadius: 9, display: "flex", justifyContent: "space-between" }}>
       <span className="subtle">Outstanding balance</span><span className="mono" style={{ fontWeight: 600, fontSize: 16 }}>{money(bal)}</span>
     </div>
+    <p className="subtle" style={{ margin: "-8px 0 12px" }}>Enter less than the balance to record a part payment; the rest stays open on {doc.number}.</p>
     <div className="row">
       <Field label="Amount"><input className="input mono" type="number" step="any" value={amount} onChange={e => setAmount(e.target.value)} /></Field>
       <Field label="Discount taken" hint={disc > 0 ? `Settles ${money(round2(amt + disc))} of the balance` : "Early-payment terms"}>
@@ -134,6 +142,14 @@ export default function PaymentModal({ db, doc, onClose, onSave, onVoid, onDelet
           <button className="btn sm" style={{ marginLeft: "auto" }} disabled={disc === offerAmt}
             onClick={() => takeDiscount(offerAmt)}>{disc === offerAmt ? "Discount taken" : "Take " + money(offerAmt)}</button>
         </div>)}
+    {overErr
+      ? <p className="subtle" style={{ margin: "0 0 8px", color: "var(--neg)" }}>{overErr}</p>
+      : fit.partial
+        ? <div style={{ margin: "0 0 10px", padding: "10px 12px", background: "var(--accent-wash)", borderRadius: 9, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span><strong>Part payment</strong> — leaves <span className="mono" style={{ fontWeight: 600 }}>{money(fit.left)}</span> open on {doc.number}.</span>
+            <button className="btn sm" style={{ marginLeft: "auto" }} onClick={() => setAmount(round2(bal - disc))}>Pay in full · {money(round2(bal - disc))}</button>
+          </div>
+        : (amt !== 0 || disc !== 0) && <p className="subtle" style={{ margin: "0 0 8px" }}>Pays {doc.number} in full.</p>}
     {refErr && <p className="subtle" style={{ margin: "0 0 8px", color: "var(--neg)" }}>{refErr}</p>}
     {isCheck && <p className="subtle" style={{ margin: "0 0 8px" }}>Recording prints the check on your stock (alignment in Settings → Forms), then asks you to confirm it printed.</p>}
     {(doc.payments || []).length > 0 && <><div className="divider"></div><div className="subtle" style={{ marginBottom: 8, fontWeight: 600 }}>Payment history</div>

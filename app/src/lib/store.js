@@ -17,7 +17,7 @@ import { uid, todayISO, addDays, pad4, money, sum } from "./helpers.js";
 import { defaultSettings, sampleData } from "./seed.js";
 import { proposalConfig, phaseAmount } from "../calc/proposals.js";
 import { proposalSpecs, proposalBudget } from "../calc/jobs.js";
-import { round2, lineTotals, balance } from "../calc/ledger.js";
+import { round2, lineTotals, balance, billBalance, applyAgainst } from "../calc/ledger.js";
 import { checkNumberTaken, isCheckPayment, normRef } from "./checks.js";
 import { incomeAccountOf, expenseAccountOfBill, accountSettings } from "../calc/accounts.js";
 
@@ -212,6 +212,17 @@ export function useLedger(session, onError) {
     if (parentType !== "bill" || !isCheckPayment(p)) return;
     if (checkNumberTaken(dbRef.current, p.ref, allowIds))
       throw new Error(`Check #${normRef(p.ref)} has already been used. Void that check first, or use a different number.`);
+  };
+
+  // A payment may part-pay a document but never pay it past what it owes: that
+  // money belongs on another document. The dialogs say so first; this is the
+  // backstop for anything that reaches the store another way.
+  const guardOverpay = (parentType, parentId, amount, discount) => {
+    const doc = (parentType === "invoice" ? dbRef.current.invoices : dbRef.current.bills).find(d => d.id === parentId);
+    if (!doc) throw new Error("That document is no longer on file.");
+    const bal = parentType === "invoice" ? balance(doc) : billBalance(doc);
+    if (applyAgainst(bal, amount, discount).over)
+      throw new Error(`${money(Math.abs(round2((Number(amount) || 0) + (Number(discount) || 0))))} is more than ${parentType === "invoice" ? doc.number : (doc.ref || doc.number)} owes (${money(bal)}).`);
   };
 
   // Claim the next number for a doc type atomically; bumps the local counter.
@@ -787,6 +798,7 @@ export function useLedger(session, onError) {
     async recordPayment(parentType, parentId, p) {
       try {
         guardCheckNumber(parentType, p);
+        guardOverpay(parentType, parentId, p.amount, p.discount);
         th(await supabase.from("payments").insert(A.paymentToRow(p, parentType, parentId)));
         setDb(d => parentType === "invoice"
           ? { ...d, invoices: d.invoices.map(i => i.id === parentId ? { ...i, payments: [...(i.payments || []), p] } : i) }
@@ -877,6 +889,10 @@ export function useLedger(session, onError) {
           .map(a => ({ invoiceId: a.docId, payment: { id: uid(), amount: round2(Number(a.amount) || 0), discount: round2(Number(a.discount) || 0), date: meta.date, method: meta.method, ref: meta.ref || "", cashAccount: meta.cashAccount || "" } }))
           .filter(r => Math.abs(r.payment.amount) > 0.005 || Math.abs(r.payment.discount) > 0.005);
         if (!rows.length) throw new Error("Nothing to apply — select at least one item with an amount.");
+        [...new Set(rows.map(r => r.invoiceId))].forEach(id => {
+          const mine = rows.filter(r => r.invoiceId === id);
+          guardOverpay("invoice", id, mine.reduce((s, r) => s + r.payment.amount, 0), mine.reduce((s, r) => s + r.payment.discount, 0));
+        });
         th(await supabase.from("payments").insert(rows.map(r => A.paymentToRow(r.payment, "invoice", r.invoiceId))));
         setDb(d => ({
           ...d,

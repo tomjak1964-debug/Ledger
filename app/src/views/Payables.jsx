@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { uid, money, fmtDate, todayISO, addDays, nameOf, sum, pickable } from "../lib/helpers.js";
-import { paid, billStatus, agingBuckets, round2, billBalance } from "../calc/ledger.js";
+import { paid, billStatus, agingBuckets, round2, billBalance, applyAgainst } from "../calc/ledger.js";
 import { checksPdf } from "../lib/checkPrint.js";
 import { remittancesPdf } from "../lib/remittance.js";
 import { nextCheckNumber, checkNumberTaken, remitEmail } from "../lib/checks.js";
@@ -253,7 +253,12 @@ function PayBillsModal({ db, actions, toast, onClose }) {
   const chkErr = !checkCount ? ""
     : !/^\d+$/.test(String(startChk).trim()) ? "Enter the number of the first check on the stack."
       : runRefs.filter(r => checkNumberTaken(db, r)).map(r => "#" + r).join(", ");
-  const err = chkErr ? (chkErr.startsWith("#") ? `Already used: ${chkErr}. Void those checks or start from a different number.` : chkErr) : "";
+  // A bill can be part-paid — the rest stays open for a later run — but never
+  // paid past what it owes.
+  const overRows = sel.filter(r => applyAgainst(billBalance(r.bill), r.amount, r.discount).over);
+  const partCount = sel.filter(r => applyAgainst(billBalance(r.bill), r.amount, r.discount).partial).length;
+  const overErr = overRows.length ? `More than the balance: ${overRows.map(r => r.bill.ref || r.bill.number).join(", ")}. A bill can be part-paid, not overpaid.` : "";
+  const err = chkErr ? (chkErr.startsWith("#") ? `Already used: ${chkErr}. Void those checks or start from a different number.` : chkErr) : overErr;
 
   const record = async () => {
     setBusy(true);
@@ -351,21 +356,22 @@ function PayBillsModal({ db, actions, toast, onClose }) {
       <Field label="Payment Date"><input className="input" type="date" value={date} onChange={e => setDate(e.target.value)} /></Field>
       <Field label="Starting Check #" hint="Checks are numbered from here, one per vendor">
         <input className="input mono" value={startChk} onChange={e => setStartChk(e.target.value)} placeholder="1001"
-          style={err ? { borderColor: "var(--neg)" } : undefined} /></Field>
+          style={chkErr ? { borderColor: "var(--neg)" } : undefined} /></Field>
       <Field label="Pay From" hint={"Default: " + (accountLabel(db, accountSettings(db.settings).cash) || "Checking")}>
         <AccountSelect db={db} value={cashAccount} onChange={setCashAccount} types={["Cash"]} blank="— default cash account —" /></Field>
     </div>
     {err && <p className="subtle" style={{ margin: "0 0 8px", color: "var(--neg)" }}>{err}</p>}
     <div className="toolbar" style={{ marginBottom: 8 }}>
-      <span className="subtle">Tick the bills this run pays.</span>
+      <span className="subtle">Tick the bills this run pays. Lower a Pay Amount to part-pay a bill; the rest stays open.{partCount ? ` · ${partCount} part-paid` : ""}</span>
       {untaken.length > 0 && <button className="btn sm" onClick={takeAllDiscounts}>
         Take {untaken.length} available discount{untaken.length === 1 ? "" : "s"} · {money(sum(untaken, o => o.amount))}</button>}
       <button className="btn sm" style={{ marginLeft: "auto" }} disabled={rows.every(r => r.sel)} onClick={() => setAll(true)}>Select all</button>
       <button className="btn sm" disabled={!rows.some(r => r.sel)} onClick={() => setAll(false)}>Deselect all</button>
     </div>
-    <table><thead><tr><th></th><th>Vendor</th><th>Bill / Ref</th><th>Due</th><th className="num">Balance</th><th className="num">Discount</th><th className="num">Pay Amount</th><th>Method</th></tr></thead>
+    <table><thead><tr><th></th><th>Vendor</th><th>Bill / Ref</th><th>Due</th><th className="num">Balance</th><th className="num">Discount</th><th className="num">Pay Amount</th><th className="num">Left open</th><th>Method</th></tr></thead>
       <tbody>{rows.map((r, i) => {
         const bal = billBalance(r.bill);
+        const fit = applyAgainst(bal, r.amount, r.discount);
         return <tr key={r.bill.id}>
           <td><input type="checkbox" checked={r.sel} onChange={e => upd(i, { sel: e.target.checked })} /></td>
           <td style={{ fontWeight: 600 }}>{nameOf(db, r.bill.vendorId)}</td>
@@ -379,8 +385,13 @@ function PayBillsModal({ db, actions, toast, onClose }) {
               <div><button className="btn sm" style={{ marginTop: 4 }} title={`${available[i].label}, until ${fmtDate(available[i].until)}`}
                 onClick={() => updDiscount(i, available[i].amount)}>Take {money(available[i].amount)}</button></div>}
           </td>
-          <td className="num"><input className="input mono" style={{ maxWidth: 110, textAlign: "right" }} type="number" step="any" value={r.amount}
-            onChange={e => upd(i, { amount: e.target.value, sel: true })} /></td>
+          <td className="num"><input className="input mono" type="number" step="any" value={r.amount}
+            onChange={e => upd(i, { amount: e.target.value, sel: true })}
+            style={{ maxWidth: 110, textAlign: "right", ...(r.sel && fit.over ? { borderColor: "var(--neg)" } : {}) }} /></td>
+          <td className="num">{!r.sel ? null
+            : fit.over ? <span style={{ color: "var(--neg)", fontSize: 12 }}>over by {money(Math.abs(fit.left))}</span>
+              : fit.partial ? <span className="mono" title="Part payment — the rest stays open">{money(fit.left)}</span>
+                : <span className="subtle" style={{ fontSize: 12 }}>paid in full</span>}</td>
           <td><select className="select" style={{ minWidth: 110 }} value={r.method} onChange={e => upd(i, { method: e.target.value, sel: true })}>
             {["Check", "ACH / Wire", "Credit Card", "Other"].map(m => <option key={m}>{m}</option>)}
           </select></td>

@@ -635,6 +635,14 @@ above the MICR clear band.
 drive it. Forms live in the settings jsonb (`settings.forms`, `settings.formFor`) — no migration.
 Invoices and remittances keep their standard renderers; they are listed so every document type names its form.
 
+**Partial payments** (`applyAgainst()` / `applyOldestFirst()` in `calc/ledger.js`): any invoice or bill can be
+part-paid and stays open (status *partial*) for the rest. The single Pay / Receive dialog says *Part payment —
+leaves $X open* with a **Pay in full** button; the whole-receipt/payment dialog takes an optional **Amount
+received / paid** that spreads oldest due first — each item in full until the money runs out, the last one taking
+what's left (credits are never spent this way) — and every line shows **Left open**; the Pay Bills run has the
+same Left open column. Nothing can be applied for more than a document owes: the dialogs refuse it, and
+`guardOverpay()` in `store.js` refuses it again in `recordPayment` / `recordReceipt`.
+
 **Discounts taken:** enterable wherever a payment is created or corrected — the single Pay /
 Receive dialog, the Pay Bills run (a Discount column; typing one drops the cash by the same
 amount and ticks the row), the whole-receipt/payment editor, and the register's line editor.

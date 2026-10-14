@@ -834,7 +834,13 @@ the bill it should have been (vendor's invoice # defaults to the line's YYMMDD, 
 account unless one is picked) and pays it — by check when the line has a check number, else ACH / Wire — then
 ticks the payment cleared. `suggestVendorPayment()` (`calc/bankRecon.js`) pre-selects it: an open bill for exactly
 the amount (narrowed to the vendor the line names), else a vendor whose name's first two words appear in the line.
-Apply waits while a vendor row is missing its vendor or invoice #, would overpay its bill, or repeats an invoice #. Reports → Account Reconciliation → **Reconciliation Summary** lists each
+Apply waits while a vendor row is missing its vendor or invoice #, would overpay its bill, or repeats an invoice #.
+Money **in** from a customer the books don't have is the mirror image — **Customer receipt**: it pays one open
+invoice (part payment allowed), spreads over the customer's open invoices oldest first, or writes a one-line
+invoice for it (auto-numbered, no tax, the customer's sales account unless one is picked) and receives it, then
+ticks every receipt row cleared. `suggestCustomerReceipt()` pre-selects it: an open invoice for exactly the amount
+(narrowed to the customer the line names), else the named customer — oldest first when they owe at least that
+much, else a new invoice. Reports → Account Reconciliation → **Reconciliation Summary** lists each
 statement with its cleared balance, outstanding items and book balance. Cleared keys are not carried by a
 JSON backup import, because the import gives payments new ids.
 
@@ -858,7 +864,13 @@ In **Bank Reconciliation** a money-out line naming a card (its match words) or e
 balance defaults to *Post to* the card's account as a journal entry (Dr card / Cr checking) with a note of that
 statement's business and personal totals — the charges are already on the books. What a card owes per the books
 is its account's balance, shown on the Credit Cards page. Expenses' *Paid From* lists the card accounts too
-(`AccountSelect`'s `extra`).
+(`AccountSelect`'s `extra`). A business charge can instead be given a **vendor** (pre-picked when the merchant
+names a vendor on file, and remembered per merchant): posting then pays an open bill of theirs, or writes the bill
+(invoice # defaults to the charge's YYMMDD; the line's account, else the vendor's usual one), with a `Credit Card`
+payment from the card's account — still Dr expense / Cr card, but the vendor's account is right. The line keeps
+`vendorId` / `billId` / `paymentId` / `newBillId` (jsonb, no migration); Unpost deletes the payment and the bill it
+wrote, unless something else has since been paid on that bill. **The 1099 report leaves out card payments**
+(method `Credit Card`, or paid from a card's account): the card company reports those on a 1099-K.
 
 **Network failures on a save:** every PostgREST request goes through `ledgerFetch()` in
 `lib/supabaseClient.js` — a request the browser could not send at all ("Failed to fetch", typically

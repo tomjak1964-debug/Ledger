@@ -1,8 +1,9 @@
 import { useState, useRef } from "react";
 import { uid, todayISO, isoDate, money, fmtDate, sum, pickable } from "../lib/helpers.js";
-import { round2, billBalance } from "../calc/ledger.js";
+import { round2, billBalance, balance, applyOldestFirst } from "../calc/ledger.js";
 import { accountSettings, accountLabel, TYPE_GROUP, accountByNumber } from "../calc/accounts.js";
-import { reconcileState, matchStatement, suggestVendorPayment } from "../calc/bankRecon.js";
+import { reconcileState, matchStatement, suggestVendorPayment, suggestCustomerReceipt, openInvoices } from "../calc/bankRecon.js";
+import { AUTO_NUMBER } from "../lib/store.js";
 import { readStatementFile, parseStatement, parsePasted } from "../lib/bankStatement.js";
 import AccountSelect from "../components/AccountSelect.jsx";
 import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort, ActionMenu, MenuItem } from "../components/ui.jsx";
@@ -231,6 +232,7 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
   // account and their 1099 right.
   const vendors = db.contacts.filter(c => c.type === "vendor");
   const vendorPay = (line) => suggestVendorPayment(db, line);
+  const customers = db.contacts.filter(c => c.type === "customer");
   const yymmdd = d => String(d || "").slice(2).replace(/-/g, "");
   const load = (p) => {
     const inRange = p.lines.filter(l => l.date <= recon.statementDate);
@@ -239,7 +241,9 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
     setRows(matched.map(m => {
       const cp = !m.item && cardPaid(m.line);
       const vp = !m.item && !cp && vendorPay(m.line);
-      return { ...m, take: true, action: m.item ? "clear" : vp ? "vendor" : "post", account: cp ? String(cp.card.account) : m.line.amount < 0 ? "" : "4300",
+      const cr = !m.item && suggestCustomerReceipt(db, m.line);
+      return { ...m, take: true, action: m.item ? "clear" : vp ? "vendor" : cr ? "customer" : "post",
+        customerId: cr ? cr.customerId : "", invoiceId: cr ? cr.invoiceId : "", invDesc: m.line.desc, invAccount: "", account: cp ? String(cp.card.account) : m.line.amount < 0 ? "" : "4300",
         payee: cp ? cp.card.name : guessPayee(m.line.desc), recordAs: cp ? "journal" : m.line.amount < 0 ? "expense" : "journal", cardPay: cp || null,
         vendorId: vp ? vp.vendorId : "", billId: vp ? vp.billId : "", billRef: yymmdd(m.line.date), billAccount: "" };
     }));
@@ -270,7 +274,21 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
     if (db.bills.some(b => b.vendorId === r.vendorId && (b.ref || "").trim().toLowerCase() === ref.toLowerCase())) return `This vendor already has a bill with invoice # ${ref}`;
     return "";
   };
-  const canApply = rows.length > 0 && toPost.every(r => r.account) && toVendor.every(r => !vendorProblem(r));
+  const toCustomer = rows.filter(r => r.take && !r.item && r.action === "customer");
+  const customerProblem = (r) => {
+    if (!r.customerId) return "Pick the customer";
+    const amt = r.line.amount;
+    if (r.invoiceId === "oldest") {
+      const owed = round2(sum(openInvoices(db, r.customerId), balance));
+      return amt > owed + 0.005 ? `They only owe ${money(owed)} across their open invoices` : "";
+    }
+    if (r.invoiceId) {
+      const inv = db.invoices.find(x => x.id === r.invoiceId);
+      return inv && amt > balance(inv) + 0.005 ? `${inv.number} only owes ${money(balance(inv))}` : "";
+    }
+    return (r.invDesc || "").trim() ? "" : "Describe what the invoice was for";
+  };
+  const canApply = rows.length > 0 && toPost.every(r => r.account) && toVendor.every(r => !vendorProblem(r)) && toCustomer.every(r => !customerProblem(r));
   const apply = async () => {
     setBusy(true);
     try {
@@ -309,6 +327,29 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
         await actions.setCleared(recon, [{ key: "payment:" + payment.id, date: payment.date, amount: -amt }], true);
         posted++;
       }
+      // Customer receipts: onto the invoice it pays, spread over their open
+      // invoices oldest first, or a new invoice written for it — then cleared.
+      // The rows share a date, method and reference, so the register shows
+      // one receipt, as the bank does.
+      for (const r of toCustomer) {
+        const amt = round2(r.line.amount);
+        let alloc;
+        if (r.invoiceId === "oldest") alloc = Object.entries(applyOldestFirst(openInvoices(db, r.customerId), amt, balance).amounts);
+        else if (r.invoiceId) alloc = [[r.invoiceId, amt]];
+        else {
+          const inv = await actions.saveInvoice({ id: uid(), number: AUTO_NUMBER, _new: true, kind: "invoice", salesOrderId: "", quoteId: "", customerId: r.customerId,
+            poNumber: "", date: r.line.date, dueDate: r.line.date, lineItems: [{ id: uid(), desc: r.invDesc.trim(), qty: 1, unit: "", unitPrice: amt }],
+            taxRate: 0, notes: "", incomeAccount: r.invAccount || "", payments: [] });
+          if (!inv) { failed++; continue; }
+          alloc = [[inv.id, amt]];
+        }
+        const stamp = { discount: 0, date: r.line.date, method: r.line.checkNo ? "Check" : "ACH / Wire", ref: r.line.checkNo || "", cashAccount: state.account };
+        const entries = alloc.map(([id, a]) => ({ parentType: "invoice", parentId: id, payment: { id: uid(), amount: a, ...stamp } }));
+        const ok = await actions.recordPayments(entries);
+        if (!ok) { failed++; continue; }
+        await actions.setCleared(recon, entries.map(e => ({ key: "receipt:" + e.payment.id, date: e.payment.date, amount: e.payment.amount })), true);
+        posted++;
+      }
       toast(`${cleared} matched and cleared · ${posted} posted${failed ? " · " + failed + " failed" : ""}`);
       if (!failed) onClose();
     } finally { setBusy(false); }
@@ -317,7 +358,7 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
   const postAccounts = (out) => out ? ["expense", "cos", "equity", "liability", "asset"] : ["income", "equity", "liability", "asset"];
   return <Modal title={"Import Statement — " + fmtDate(recon.statementDate)} onClose={onClose} wide
     foot={<>
-      <span className="subtle" style={{ marginRight: "auto" }}>{rows.length ? `${toClear.length} matched · ${toPost.length + toVendor.length} to post · ${rows.filter(r => !r.item && r.action === "skip").length} left alone` : ""}</span>
+      <span className="subtle" style={{ marginRight: "auto" }}>{rows.length ? `${toClear.length} matched · ${toPost.length + toVendor.length + toCustomer.length} to post · ${rows.filter(r => !r.item && r.action === "skip").length} left alone` : ""}</span>
       <button className="btn" onClick={onClose}>Cancel</button>
       <button className="btn primary" disabled={busy || !canApply} onClick={apply}>{busy ? "Working…" : "Apply"}</button></>}>
     {!parsed ? <>
@@ -349,6 +390,7 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
                 <select className="select" value={r.action} onChange={e => setRow(i, { action: e.target.value })}>
                   <option value="post">{r.line.amount < 0 ? "Post as money out" : "Post as money in"}</option>
                   {r.line.amount < 0 && <option value="vendor">Vendor bill payment (keeps the vendor's account and 1099)</option>}
+                  {r.line.amount > 0 && <option value="customer">Customer receipt (keeps the customer's account)</option>}
                   <option value="skip">Leave it — I'll enter it myself</option></select>
                 {r.action === "vendor" && (() => {
                   const open = db.bills.filter(b => b.vendorId === r.vendorId && billBalance(b) > 0.005).sort((a, b) => (a.date || "").localeCompare(b.date || ""));
@@ -370,6 +412,29 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
                       : <span className="subtle" style={{ fontSize: 12 }}>{r.billId ? "Records the payment on that bill" : "Writes the bill dated " + fmtDate(r.line.date) + " and pays it"}{r.line.checkNo ? " by check " + r.line.checkNo : ""}, and ticks it cleared.</span>}
                   </>;
                 })()}
+                {r.action === "customer" && (() => {
+                  const open = openInvoices(db, r.customerId);
+                  const owed = round2(sum(open, balance));
+                  const problem = customerProblem(r);
+                  return <>
+                    <select className="select" value={r.customerId} onChange={e => setRow(i, { customerId: e.target.value, invoiceId: "" })}>
+                      <option value="">— which customer? —</option>
+                      {pickable(customers, r.customerId).sort((a, b) => a.name.localeCompare(b.name)).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                    {r.customerId && <select className="select" value={r.invoiceId} onChange={e => setRow(i, { invoiceId: e.target.value })}>
+                      <option value="">New invoice for {money(r.line.amount)} (it wasn't entered)</option>
+                      {open.length > 0 && <option value="oldest">Their open invoices, oldest first — {money(owed)} owed</option>}
+                      {open.map(inv => <option key={inv.id} value={inv.id}>Pays {inv.number} — {money(balance(inv))} owed{r.line.amount < balance(inv) - 0.005 ? " (part payment)" : ""}</option>)}
+                    </select>}
+                    {r.customerId && !r.invoiceId && <>
+                      <input className="input" value={r.invDesc} placeholder="What the invoice was for" onChange={e => setRow(i, { invDesc: e.target.value })} />
+                      <AccountSelect db={db} value={r.invAccount} onChange={v => setRow(i, { invAccount: v })} groups={["income"]} blank="— the customer's usual sales account —" />
+                    </>}
+                    {problem ? <span style={{ color: "var(--warn)", fontSize: 12 }}>{problem}</span>
+                      : <span className="subtle" style={{ fontSize: 12 }}>{r.invoiceId === "oldest" ? "Spreads the receipt over their open invoices, oldest first"
+                        : r.invoiceId ? "Records the receipt on that invoice" : "Writes the invoice dated " + fmtDate(r.line.date) + " and receives it"}{r.line.checkNo ? " (check " + r.line.checkNo + ")" : ""}, and ticks it cleared.</span>}
+                  </>;
+                })()}
                 {r.action === "post" && <>
                   <AccountSelect db={db} value={r.account} onChange={v => setRow(i, { account: v, recordAs: (r.line.amount < 0 && ["expense", "cos"].includes(TYPE_GROUP[accountByNumber(db, v)?.type])) ? "expense" : "journal" })}
                     groups={postAccounts(r.line.amount < 0)} blank={r.line.amount < 0 ? "— what was it? (Distributions, Office Supplies, a loan…) —" : "— what was it? (Other Income, Interest, a loan…) —"} />
@@ -381,7 +446,7 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
                 </>}
               </div>}</td>
           </tr>)}</tbody></table>}
-      <p className="subtle" style={{ margin: "10px 0 0" }}>A match is the same amount on the same side within ten days, or the same check number. Lines the books don't have are posted from {accountLabel(db, state.account)} to the account you pick and ticked as cleared; a customer receipt the bank has but the books don't should be recorded under Receivables instead, so leave it.</p>
+      <p className="subtle" style={{ margin: "10px 0 0" }}>A match is the same amount on the same side within ten days, or the same check number. Lines the books don't have are posted from {accountLabel(db, state.account)} to the account you pick and ticked as cleared. Money from a customer or to a vendor is best recorded as their receipt or bill payment, so their account stays right — a journal entry only puts the ledger right.</p>
     </>}
   </Modal>;
 }

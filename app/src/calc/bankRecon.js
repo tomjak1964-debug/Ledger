@@ -18,7 +18,7 @@
 // reconciled balance" to carry, because the cleared items carry it.
 import { journal } from "./gl.js";
 import { accountSettings } from "./accounts.js";
-import { round2, billBalance } from "./ledger.js";
+import { round2, billBalance, balance } from "./ledger.js";
 import { sum, daysBetween } from "../lib/helpers.js";
 
 export const itemKey = (source, lineIdx) =>
@@ -102,10 +102,11 @@ export function matchStatement(lines, items, { days = 10 } = {}) {
 // 1099 right. → { vendorId, billId } or null.
 const nameWords = s => String(s || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/)
   .filter(w => w.length >= 3 && !/^(inc|llc|ltd|corp|co|the|and|services?)$/.test(w));
-export function vendorNamedIn(db, desc) {
+export function partyNamedIn(db, desc, type) {
   const d = " " + String(desc || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ") + " ";
-  return db.contacts.filter(c => c.type === "vendor").find(v => { const w = nameWords(v.name); return w.length && w.slice(0, 2).every(x => d.includes(" " + x + " ")); }) || null;
+  return db.contacts.filter(c => c.type === type).find(v => { const w = nameWords(v.name); return w.length && w.slice(0, 2).every(x => d.includes(" " + x + " ")); }) || null;
 }
+export const vendorNamedIn = (db, desc) => partyNamedIn(db, desc, "vendor");
 export function suggestVendorPayment(db, line) {
   if (!line || line.amount >= 0) return null;
   const amt = Math.abs(line.amount);
@@ -114,4 +115,25 @@ export function suggestVendorPayment(db, line) {
   if (open.length === 1) return { vendorId: open[0].vendorId, billId: open[0].id };
   if (named) return { vendorId: named.id, billId: "" };
   return null;
+}
+
+// The customer side: a deposit the books don't have. An open invoice for
+// exactly this amount (narrowed to the customer the line names), else the
+// customer the line names — spread over their open invoices oldest first when
+// they owe at least this much, else a new invoice written for it. Recording it
+// as that customer's receipt — not bare income — keeps their account right.
+// → { customerId, invoiceId } where invoiceId is a document id, "oldest" or ""
+// (a new invoice), or null.
+export const openInvoices = (db, customerId) => db.invoices
+  .filter(i => i.customerId === customerId && balance(i) > 0.005)
+  .sort((a, b) => (a.dueDate || a.date || "").localeCompare(b.dueDate || b.date || ""));
+export function suggestCustomerReceipt(db, line) {
+  if (!line || line.amount <= 0) return null;
+  const amt = line.amount;
+  const named = partyNamedIn(db, line.desc, "customer");
+  const exact = db.invoices.filter(i => Math.abs(balance(i) - amt) < 0.005 && (!named || i.customerId === named.id));
+  if (exact.length === 1) return { customerId: exact[0].customerId, invoiceId: exact[0].id };
+  if (!named) return null;
+  const owed = round2(sum(openInvoices(db, named.id), balance));
+  return { customerId: named.id, invoiceId: owed >= amt - 0.005 ? "oldest" : "" };
 }

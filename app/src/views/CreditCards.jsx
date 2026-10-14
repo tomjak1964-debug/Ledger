@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from "react";
-import { uid, money, fmtDate, sum } from "../lib/helpers.js";
-import { round2 } from "../calc/ledger.js";
+import { uid, money, fmtDate, sum, pickable } from "../lib/helpers.js";
+import { round2, billBalance } from "../calc/ledger.js";
+import { vendorNamedIn } from "../calc/bankRecon.js";
 import { accountSettings, accountLabel } from "../calc/accounts.js";
 import { journal } from "../calc/gl.js";
 import { readCardFile, readCardPaste, parseCardStatement, learnedChoices, suggest, statementTotals } from "../lib/cardStatement.js";
@@ -92,7 +93,9 @@ export default function CreditCardsView({ db, actions, toast, readOnly }) {
         <tbody>{(view.lines || []).map(l => <tr key={l.id}>
           <td className="subtle">{fmtDate(l.date)}</td><td>{l.desc}</td>
           <td>{l.kind === "payment" ? <span className="subtle">Payment</span> : l.use === "business" ? "Business" : l.use === "personal" ? "Personal" : "—"}</td>
-          <td className="subtle">{l.use === "business" ? accountLabel(db, l.account) : ""}</td>
+          <td className="subtle">{l.use !== "business" ? "" : l.vendorId
+            ? <>Bill paid · {db.contacts.find(c => c.id === l.vendorId)?.name || "vendor"}{db.bills.find(b => b.id === l.billId)?.ref ? " · inv " + db.bills.find(b => b.id === l.billId).ref : ""}</>
+            : accountLabel(db, l.account)}</td>
           <td className="num mono">{money(l.amount)}</td></tr>)}</tbody></table>
     </Modal>}
   </div>;
@@ -150,18 +153,43 @@ function ImportStatement({ db, actions, toast, cardAccount, onClose }) {
   const [carry, setCarry] = useState(true);  // first statement: carry its previous balance
   const fileRef = useRef();
 
+  const vendors = db.contacts.filter(c => c.type === "vendor");
+  const yymmdd = d => String(d || "").slice(2).replace(/-/g, "");
+  // A charge from a vendor on file is offered as that vendor's bill payment,
+  // so their account and 1099 stay right; an expense entry only puts the
+  // ledger right.
   const load = (src) => {
     try {
       const p = parseCardStatement(src);
       if (!p.lines.length) throw new Error("No transactions found. Try the card's .csv download, or paste the transaction rows.");
-      setErr(""); setSt({ id: uid(), cardAccount, ...p, lines: suggest(p.lines, learned) });
+      const lines = suggest(p.lines, learned).map(l => {
+        if (l.vendorId || l.kind === "payment" || !(Number(l.amount) > 0)) return l;
+        const v = vendorNamedIn(db, l.desc);
+        return v ? { ...l, use: l.use || "business", vendorId: v.id, billId: "", billRef: yymmdd(l.date) } : l;
+      });
+      setErr(""); setSt({ id: uid(), cardAccount, ...p, lines });
     } catch (e) { setErr(e.message || String(e)); }
   };
   const onFile = async (f) => { if (f) load(await readCardFile(f)); };
   const setLine = (id, patch) => setSt(s => ({ ...s, lines: s.lines.map(l => l.id === id ? { ...l, ...patch } : l) }));
   const setAllUndecided = (use) => setSt(s => ({ ...s, lines: s.lines.map(l => (l.kind !== "payment" && !l.use ? { ...l, use } : l)) }));
 
+  // What's wrong with a vendor line, if anything — Post waits until none are.
+  const vendorProblem = (l) => {
+    if (l.use !== "business" || !l.vendorId) return "";
+    const amt = round2(Number(l.amount) || 0);
+    if (l.billId) {
+      const b = db.bills.find(x => x.id === l.billId);
+      return b && amt > billBalance(b) + 0.005 ? `${b.ref || b.number} only has ${money(billBalance(b))} left to pay` : "";
+    }
+    const ref = (l.billRef || "").trim().toLowerCase();
+    if (!ref) return "Enter the vendor's invoice #";
+    if (db.bills.some(b => b.vendorId === l.vendorId && (b.ref || "").trim().toLowerCase() === ref)) return `This vendor already has a bill with invoice # ${l.billRef.trim()}`;
+    if (st.lines.some(x => x.id !== l.id && x.use === "business" && x.vendorId === l.vendorId && !x.billId && (x.billRef || "").trim().toLowerCase() === ref)) return `Another charge on this statement uses invoice # ${l.billRef.trim()}`;
+    return "";
+  };
   const t = st ? statementTotals(st.lines) : null;
+  const vendorIssues = st ? st.lines.filter(vendorProblem).length : 0;
   const first = prior.length === 0;
   const openingAmt = st && first && st.previousBalance ? Number(st.previousBalance) : 0;
   // A check on the reading: previous balance + every line = new balance.
@@ -181,9 +209,10 @@ function ImportStatement({ db, actions, toast, cardAccount, onClose }) {
       <span className="subtle" style={{ marginRight: "auto" }}>
         Business <b className="mono">{money(t.business)}</b> · Personal <b className="mono">{money(t.personal)}</b>
         {t.undecided ? <span style={{ color: "var(--warn)" }}> · {t.undecided} to mark</span> : null}
-        {t.noAccount ? <span style={{ color: "var(--warn)" }}> · {t.noAccount} need an account</span> : null}</span>
+        {t.noAccount ? <span style={{ color: "var(--warn)" }}> · {t.noAccount} need an account</span> : null}
+        {vendorIssues ? <span style={{ color: "var(--warn)" }}> · {vendorIssues} vendor line{vendorIssues > 1 ? "s" : ""} to finish</span> : null}</span>
       <button className="btn" onClick={onClose}>Cancel</button>
-      <button className="btn primary" disabled={busy || t.undecided > 0 || t.noAccount > 0 || !st.closingDate} onClick={post}><Ico d={ICONS.check} size={15} />{busy ? "Posting…" : "Post Statement"}</button>
+      <button className="btn primary" disabled={busy || t.undecided > 0 || t.noAccount > 0 || vendorIssues > 0 || !st.closingDate} onClick={post}><Ico d={ICONS.check} size={15} />{busy ? "Posting…" : "Post Statement"}</button>
     </>}>
     {!st ? <>
       <p className="subtle" style={{ marginTop: 0 }}>The card company's <b>.csv download</b> reads most reliably; a statement <b>PDF</b> works too, or paste the transaction rows.</p>
@@ -211,7 +240,7 @@ function ImportStatement({ db, actions, toast, cardAccount, onClose }) {
         <button className="btn sm" onClick={() => setAllUndecided("business")}>Mark the rest Business</button>
         <span className="subtle" style={{ marginLeft: "auto", alignSelf: "center" }}>Merchants are remembered from earlier statements.</span>
       </div>
-      <table className="li-table"><thead><tr><th style={{ width: 100 }}>Date</th><th>Description</th><th className="num" style={{ width: 110 }}>Amount</th><th style={{ width: 200 }}>Business / Personal</th><th style={{ minWidth: 220 }}>Expense account</th></tr></thead>
+      <table className="li-table"><thead><tr><th style={{ width: 100 }}>Date</th><th>Description</th><th className="num" style={{ width: 110 }}>Amount</th><th style={{ width: 200 }}>Business / Personal</th><th style={{ minWidth: 240 }}>Vendor / expense account</th></tr></thead>
         <tbody>{sorted.map(l => <tr key={l.id} style={l.kind === "payment" ? { opacity: 0.55 } : {}}>
           <td className="subtle">{fmtDate(l.date)}</td>
           <td>{l.desc}{l.kind === "credit" && <span className="subtle"> · credit</span>}</td>
@@ -219,11 +248,25 @@ function ImportStatement({ db, actions, toast, cardAccount, onClose }) {
           <td>{l.kind === "payment" ? <span className="subtle">Payment — reconciled on the bank side</span>
             : <span style={{ display: "inline-flex", gap: 4 }}>
               <button className={"btn sm" + (l.use === "business" ? " primary" : "")} onClick={() => setLine(l.id, { use: "business" })}>Business</button>
-              <button className={"btn sm" + (l.use === "personal" ? " primary" : "")} onClick={() => setLine(l.id, { use: "personal", account: "" })}>Personal</button>
+              <button className={"btn sm" + (l.use === "personal" ? " primary" : "")} onClick={() => setLine(l.id, { use: "personal", account: "", vendorId: "", billId: "" })}>Personal</button>
             </span>}</td>
-          <td>{l.use === "business" && <AccountSelect db={db} value={l.account} onChange={v => setLine(l.id, { account: v })} groups={["expense", "cos"]} blank="— pick an account —" />}</td>
+          <td>{l.use === "business" && <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {Number(l.amount) > 0 && <select className="select" value={l.vendorId || ""} onChange={e => setLine(l.id, { vendorId: e.target.value, billId: "", billRef: l.billRef || yymmdd(l.date) })}>
+              <option value="">No vendor — an expense entry</option>
+              {pickable(vendors, l.vendorId).sort((a, b) => a.name.localeCompare(b.name)).map(v => <option key={v.id} value={v.id}>Vendor bill · {v.name}</option>)}
+            </select>}
+            {l.vendorId && <select className="select" value={l.billId || ""} onChange={e => setLine(l.id, { billId: e.target.value })}>
+              <option value="">New bill for {money(l.amount)} (it wasn't entered)</option>
+              {db.bills.filter(b => b.vendorId === l.vendorId && billBalance(b) > 0.005).sort((a, b) => (a.date || "").localeCompare(b.date || ""))
+                .map(b => <option key={b.id} value={b.id}>Pays {b.number}{b.ref ? " · inv " + b.ref : ""} — {money(billBalance(b))} owed</option>)}
+            </select>}
+            {l.vendorId && !l.billId && <input className="input mono" value={l.billRef || ""} placeholder="Vendor's invoice #" onChange={e => setLine(l.id, { billRef: e.target.value })} />}
+            {!(l.vendorId && l.billId) && <AccountSelect db={db} value={l.account} onChange={v => setLine(l.id, { account: v })} groups={["expense", "cos"]}
+              blank={l.vendorId ? "— the vendor's usual expense account —" : "— pick an account —"} />}
+            {vendorProblem(l) && <span style={{ color: "var(--warn)", fontSize: 12 }}>{vendorProblem(l)}</span>}
+          </div>}</td>
         </tr>)}</tbody></table>
-      <p className="subtle" style={{ marginBottom: 0 }}>Posting writes an expense for each business line, paid from {accountLabel(db, cardAccount)}, and one entry moving the personal total to owner draws.
+      <p className="subtle" style={{ marginBottom: 0 }}>Posting writes an expense for each business line, paid from {accountLabel(db, cardAccount)} — or, for a line given a vendor, that vendor's bill paid by the card, so their account and 1099 stay right — and one entry moving the personal total to owner draws.
         Unpost the statement to undo it.</p>
     </>}
   </Modal>;

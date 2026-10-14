@@ -194,7 +194,10 @@ export const journalEntryFromRow = r => ({ id: r.id, number: r.number || "", dat
 // Credit card statements (migration 031). lines: [{ id, date, desc, amount,
 // kind, use, account, expenseId }] — amount as the card prints it.
 const cardLine = l => ({ id: l.id || crypto.randomUUID(), date: l.date || "", desc: l.desc ?? "", amount: num(l.amount), kind: l.kind || "charge",
-  use: l.use || "", account: String(l.account ?? ""), ...(l.expenseId ? { expenseId: l.expenseId } : {}) });
+  use: l.use || "", account: String(l.account ?? ""), ...(l.expenseId ? { expenseId: l.expenseId } : {}),
+  // A charge recorded as a vendor's bill payment (paid by card) instead of an expense.
+  ...(l.vendorId ? { vendorId: l.vendorId, billId: l.billId || "", billRef: l.billRef || "" } : {}),
+  ...(l.paymentId ? { paymentId: l.paymentId } : {}), ...(l.newBillId ? { newBillId: l.newBillId } : {}) });
 export const cardStatementToRow = s => ({ id: s.id, card_account: String(s.cardAccount), card_name: s.cardName ?? "", closing_date: dateOrNull(s.closingDate),
   period_from: dateOrNull(s.periodFrom), previous_balance: s.previousBalance == null || s.previousBalance === "" ? null : num(s.previousBalance),
   new_balance: s.newBalance == null || s.newBalance === "" ? null : num(s.newBalance), business_total: num(s.businessTotal), personal_total: num(s.personalTotal),

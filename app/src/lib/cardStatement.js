@@ -131,14 +131,14 @@ export function merchantKey(desc) {
 }
 
 // How each merchant was treated on earlier statements, newest first wins:
-// { [merchantKey]: { use, account } }.
+// { [merchantKey]: { use, account, vendorId } }.
 export function learnedChoices(statements) {
   const out = {};
   [...(statements || [])].sort((a, b) => String(a.closingDate).localeCompare(String(b.closingDate))).forEach(st =>
     (st.lines || []).forEach(l => {
       if (l.kind === "payment" || !l.use || l.use === "skip") return;
       const k = merchantKey(l.desc);
-      if (k) out[k] = { use: l.use, account: l.use === "business" ? l.account || "" : "" };
+      if (k) out[k] = { use: l.use, account: l.use === "business" ? l.account || "" : "", vendorId: l.use === "business" ? l.vendorId || "" : "" };
     }));
   return out;
 }
@@ -150,7 +150,7 @@ export function suggest(lines, learned) {
   return lines.map(l => {
     if (l.kind === "payment") return { ...l, use: "skip", account: "" };
     const was = learned[merchantKey(l.desc)];
-    return { ...l, use: was?.use || "", account: was?.account || "" };
+    return { ...l, use: was?.use || "", account: was?.account || "", ...(was?.vendorId && Number(l.amount) > 0 ? { vendorId: was.vendorId, billId: "", billRef: String(l.date || "").slice(2).replace(/-/g, "") } : {}) };
   });
 }
 
@@ -161,6 +161,7 @@ export function statementTotals(lines) {
     personal: sum(l => l.use === "personal"),
     payments: sum(l => l.kind === "payment"),
     undecided: lines.filter(l => l.kind !== "payment" && !l.use).length,
-    noAccount: lines.filter(l => l.use === "business" && !l.account).length,
+    // A charge paid to a vendor's bill can lean on the vendor's usual expense account.
+    noAccount: lines.filter(l => l.use === "business" && !l.account && !l.vendorId).length,
   };
 }

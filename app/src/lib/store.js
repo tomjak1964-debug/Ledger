@@ -1352,7 +1352,7 @@ export function useLedger(session, onError) {
        asked — the balance it carried from before Ledger (Dr Retained Earnings
        / Cr card). If any part is refused, what was written is taken back. */
     async postCardStatement(st, { opening = null } = {}) {
-      const written = { expenses: [], entries: [] };
+      const written = { expenses: [], entries: [], payments: [], bills: [] };
       try {
         const d0 = dbRef.current;
         const acct = accountSettings(d0.settings);
@@ -1363,21 +1363,43 @@ export function useLedger(session, onError) {
           throw new Error(`The ${card.name} statement closing ${st.closingDate} has already been posted.`);
         const lines = st.lines || [];
         if (lines.some(l => l.kind !== "payment" && !l.use)) throw new Error("Mark every charge Business or Personal first.");
-        if (lines.some(l => l.use === "business" && !l.account)) throw new Error("Pick an expense account for every business charge.");
+        if (lines.some(l => l.use === "business" && !l.account && !l.vendorId)) throw new Error("Pick an expense account for every business charge.");
+        if (lines.some(l => l.use === "business" && l.vendorId && !(Number(l.amount) > 0))) throw new Error("Only a charge can be paid to a vendor's bill — enter a credit as an expense.");
         const lock = acct.lockDate;
         const dates = [...lines.filter(l => l.use === "business").map(l => l.date), st.closingDate, ...(opening ? [opening.date] : [])];
         if (lock && dates.some(d => d && d <= lock)) throw new Error(`The books are locked through ${lock}. Move the lock date in Settings → Accounts to post this statement.`);
 
         // Business charges → expenses paid from the card (a credit is a negative expense).
         const tag = `${card.name} statement ${st.closingDate}`;
-        const posted = lines.map(l => (l.use === "business" ? { ...l, expenseId: uid() } : l));
-        const expenses = posted.filter(l => l.use === "business").map(l => ({
+        const posted = lines.map(l => (l.use === "business" && !l.vendorId ? { ...l, expenseId: uid() } : l.use === "business" ? { ...l } : l));
+        const expenses = posted.filter(l => l.expenseId).map(l => ({
           id: l.expenseId, date: l.date, category: "Other", vendor: l.desc, amount: round2(Number(l.amount) || 0), method: card.name,
           notes: tag, salesOrderId: "", account: l.account, cashAccount: String(card.account), costCategory: "",
         }));
         if (expenses.length) th(await supabase.from("expenses").insert(expenses.map(A.expenseToRow)));
         written.expenses = expenses.map(e => e.id);
         setDb(d => ({ ...d, expenses: [...expenses, ...d.expenses] }));
+
+        // Charges to a vendor → that vendor's bill, paid by the card: onto an open
+        // bill of theirs, or a bill written for the charge. The vendor's account
+        // and 1099 stay right, and the ledger still reads Dr expense / Cr card.
+        for (const l of posted.filter(x => x.use === "business" && x.vendorId)) {
+          const amt = round2(Number(l.amount) || 0);
+          let billId = l.billId;
+          if (billId) {
+            const b = dbRef.current.bills.find(x => x.id === billId);
+            if (!b) throw new Error("A bill picked for a card charge is no longer on file.");
+            if (amt > billBalance(b) + 0.005) throw new Error(`${l.desc}: ${money(amt)} is more than ${b.ref || b.number} owes (${money(billBalance(b))}).`);
+          } else {
+            const b = await actions.saveBill({ id: uid(), _new: true, vendorId: l.vendorId, date: l.date, dueDate: l.date, amount: amt, ref: (l.billRef || "").trim(),
+              notes: `Paid on the ${card.name}: ${l.desc}`, salesOrderId: "", expenseAccount: l.account || "", payments: [] });
+            if (!b) throw new Error(`The bill for ${l.desc} wasn't saved.`);
+            billId = b.id; l.newBillId = b.id; written.bills.push(b.id);
+          }
+          const payment = { id: uid(), amount: amt, discount: 0, date: l.date, method: "Credit Card", ref: card.name, cashAccount: String(card.account) };
+          if (!await actions.recordPayments([{ parentType: "bill", parentId: billId, payment }])) throw new Error(`The card payment for ${l.desc} wasn't saved.`);
+          l.billId = billId; l.paymentId = payment.id; written.payments.push(payment.id);
+        }
 
         // Personal charges → the owner's draws, one entry for the statement.
         const personal = round2(sum(posted.filter(l => l.use === "personal"), l => Number(l.amount) || 0));
@@ -1414,7 +1436,10 @@ export function useLedger(session, onError) {
         try {
           for (const id of written.entries) await supabase.from("journal_entries").delete().eq("id", id);
           if (written.expenses.length) await supabase.from("expenses").delete().in("id", written.expenses);
-          setDb(d => ({ ...d, expenses: d.expenses.filter(x => !written.expenses.includes(x.id)), journalEntries: (d.journalEntries || []).filter(j => !written.entries.includes(j.id)) }));
+          if (written.payments.length) await supabase.from("payments").delete().in("id", written.payments);
+          if (written.bills.length) await supabase.from("bills").delete().in("id", written.bills);
+          setDb(d => ({ ...d, expenses: d.expenses.filter(x => !written.expenses.includes(x.id)), journalEntries: (d.journalEntries || []).filter(j => !written.entries.includes(j.id)),
+            bills: d.bills.filter(b => !written.bills.includes(b.id)).map(b => (b.payments || []).some(p => written.payments.includes(p.id)) ? { ...b, payments: b.payments.filter(p => !written.payments.includes(p.id)) } : b) }));
         } catch (_) { /* reported below */ }
         return fail(e);
       }
@@ -1424,16 +1449,24 @@ export function useLedger(session, onError) {
       try {
         const lock = accountSettings(dbRef.current.settings).lockDate;
         const exp = (st.lines || []).map(l => l.expenseId).filter(Boolean);
-        const dates = [...(st.lines || []).filter(l => l.expenseId).map(l => l.date), st.closingDate];
+        const dates = [...(st.lines || []).filter(l => l.expenseId || l.paymentId).map(l => l.date), st.closingDate];
+        const pays = (st.lines || []).map(l => l.paymentId).filter(Boolean);
+        // A bill written for a charge goes with it — unless someone has since
+        // paid more on it, in which case only the card payment comes off.
+        const bills = (st.lines || []).map(l => l.newBillId).filter(Boolean)
+          .filter(id => !(dbRef.current.bills.find(b => b.id === id)?.payments || []).some(p => !pays.includes(p.id)));
         const opening = (dbRef.current.journalEntries || []).find(j => j.id === st.openingEntryId);
         if (opening) dates.push(opening.date);
         if (lock && dates.some(d => d && d <= lock)) throw new Error(`The books are locked through ${lock}. Move the lock date in Settings → Accounts to unpost this statement.`);
         for (const id of [st.openingEntryId, st.drawEntryId].filter(Boolean)) th(await supabase.from("journal_entries").delete().eq("id", id));
         if (exp.length) th(await supabase.from("expenses").delete().in("id", exp));
+        if (pays.length) th(await supabase.from("payments").delete().in("id", pays));
+        if (bills.length) th(await supabase.from("bills").delete().in("id", bills));
         th(await supabase.from("card_statements").delete().eq("id", st.id));
         const gone = [st.openingEntryId, st.drawEntryId].filter(Boolean);
         setDb(d => ({ ...d, cardStatements: (d.cardStatements || []).filter(x => x.id !== st.id), expenses: d.expenses.filter(x => !exp.includes(x.id)),
-          journalEntries: (d.journalEntries || []).filter(j => !gone.includes(j.id)) }));
+          journalEntries: (d.journalEntries || []).filter(j => !gone.includes(j.id)),
+          bills: d.bills.filter(b => !bills.includes(b.id)).map(b => (b.payments || []).some(p => pays.includes(p.id)) ? { ...b, payments: b.payments.filter(p => !pays.includes(p.id)) } : b) }));
         return true;
       } catch (e) { return fail(e); }
     },

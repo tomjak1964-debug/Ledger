@@ -330,15 +330,20 @@ export function vendor1099(db, year) {
   const y = String(year);
   const norm = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
   const vendors = db.contacts.filter(c => c.type === "vendor" && (c.ten99 === "nec" || c.ten99 === "misc"));
+  // Paid by card is not the payer's to report — the card company reports it on
+  // a 1099-K — so a payment made by credit card, or from a company card's
+  // account, is left out.
+  const cardAccts = new Set((accountSettings(db.settings).cards || []).map(c => String(c.account)));
+  const byCard = x => x.method === "Credit Card" || cardAccts.has(String(x.cashAccount || ""));
   const rows = vendors.map(v => {
     const lines = [];
     db.bills.filter(b => b.vendorId === v.id).forEach(b => (b.payments || []).forEach(p => {
-      if (!p.date || !p.date.startsWith(y) || p.method === CREDIT_METHOD) return;
+      if (!p.date || !p.date.startsWith(y) || p.method === CREDIT_METHOD || byCard(p)) return;
       const amount = Number(p.amount) || 0;
       if (Math.abs(amount) > 0.005) lines.push({ date: p.date, ref: p.ref || "", bill: b.number, amount });
     }));
     db.expenses.forEach(e => {
-      if (!e.date || !e.date.startsWith(y) || norm(e.vendor) !== norm(v.name)) return;
+      if (!e.date || !e.date.startsWith(y) || norm(e.vendor) !== norm(v.name) || byCard(e)) return;
       lines.push({ date: e.date, ref: e.method || "", bill: "expense", amount: Number(e.amount) || 0 });
     });
     lines.sort((a, b) => a.date.localeCompare(b.date) || a.ref.localeCompare(b.ref, undefined, { numeric: true }));

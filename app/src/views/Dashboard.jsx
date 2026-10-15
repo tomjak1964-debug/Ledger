@@ -35,18 +35,18 @@ export default function Dashboard({ db, go, member }) {
 
   // KPI cards — only the ones this user can see.
   const stats = [
-    canAR && <Stat key="ar" label="Open Receivables" value={money(arOut)} meta={openInv.length + " open invoice" + (openInv.length === 1 ? "" : "s")} />,
-    canAR && <Stat key="col" label="Collected · 30d" value={money(collected30)} tone="pos" meta="payments received" />,
-    canAP && <Stat key="ap" label="Payables Due" value={money(apOut)} tone={apOut > 0 ? "neg" : ""} meta={db.bills.length + " vendor bill" + (db.bills.length === 1 ? "" : "s")} />,
-    canExp && <Stat key="exp" label="Expenses · 30d" value={money(exp30)} meta="recorded spend" />,
+    canAR && <Stat key="ar" label="Open Receivables" value={money(arOut)} meta={openInv.length + " open invoice" + (openInv.length === 1 ? "" : "s")} onClick={() => go("receivables")} title="Open Receivables" />,
+    canAR && <Stat key="col" label="Collected · 30d" value={money(collected30)} tone="pos" meta="payments received" onClick={() => go("receivables")} title="Open Receivables" />,
+    canAP && <Stat key="ap" label="Payables Due" value={money(apOut)} tone={apOut > 0 ? "neg" : ""} meta={db.bills.length + " vendor bill" + (db.bills.length === 1 ? "" : "s")} onClick={() => go("payables")} title="Open Payables" />,
+    canExp && <Stat key="exp" label="Expenses · 30d" value={money(exp30)} meta="recorded spend" onClick={() => go("expenses")} title="Open Expenses" />,
   ].filter(Boolean);
 
   // Pipeline stages — same gating; the arrow sits on every stage but the last.
   const stages = [
-    canQ && { cls: "q", lbl: "Quotes Out", count: openQuotes.length, val: valQ },
-    canSO && { cls: "s", lbl: "Sales Orders", count: openSOs.length, val: valS },
-    canInv && { cls: "i", lbl: "Awaiting Payment", count: openInv.length, val: valI },
-    canAR && { cls: "p", lbl: "Collected · 30d", count: db.invoices.filter(i => invoiceStatus(i) === "paid" && daysBetween(i.date, todayISO()) <= 60).length, val: collected30 },
+    canQ && { cls: "q", lbl: "Quotes Out", view: "quotes", count: openQuotes.length, val: valQ },
+    canSO && { cls: "s", lbl: "Sales Orders", view: "salesOrders", count: openSOs.length, val: valS },
+    canInv && { cls: "i", lbl: "Awaiting Payment", view: "invoices", count: openInv.length, val: valI },
+    canAR && { cls: "p", lbl: "Collected · 30d", view: "receivables", count: db.invoices.filter(i => invoiceStatus(i) === "paid" && daysBetween(i.date, todayISO()) <= 60).length, val: collected30 },
   ].filter(Boolean);
 
   const recent = [
@@ -81,7 +81,8 @@ export default function Dashboard({ db, go, member }) {
     {stages.length > 0 && <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-head"><h3>Quote-to-Cash Pipeline</h3><span className="subtle" style={{ marginLeft: "auto" }}>Where value sits right now</span></div>
       <div className="pipeline">
-        {stages.map((st, idx) => <div key={st.cls} className={"stage " + st.cls}>
+        {stages.map((st, idx) => <div key={st.cls} className={"stage linked " + st.cls} role="link" tabIndex={0} title={"Open " + st.lbl}
+          onClick={() => go(st.view)} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(st.view); } }}>
           <div className="st-lbl"><span className="marker"></span>{st.lbl}</div>
           <div className="st-count">{st.count}</div>
           <div className="st-val">{money(st.val)}</div>

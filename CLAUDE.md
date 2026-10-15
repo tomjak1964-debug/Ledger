@@ -294,7 +294,9 @@ so counters must be updated inside the same `setDb` call that adds the doc.
 
 ### Dashboard pipeline (the signature UI)
 Four stages — Quotes out (draft/sent), Sales Orders (open), Awaiting Payment (unpaid/partial/
-overdue), Collected 30d — each showing count + summed value. Don't reduce this to generic stat cards;
+overdue), Collected 30d — each showing count + summed value. In `app/` every stage and every KPI card is a link
+to the page behind it (Open Receivables / Collected → Receivables, Payables Due → Payables, Expenses → Expenses,
+the stages → Quotes / Sales Orders / Invoices / Receivables) — `Stat`'s `onClick`, styled `.linked`. Don't reduce this to generic stat cards;
 the pipeline is the app's identity.
 
 ---

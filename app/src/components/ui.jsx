@@ -150,8 +150,10 @@ export function Badge({ status }) {
   return <span className={"badge " + c}><span className="dot"></span>{l}</span>;
 }
 
-export function Stat({ label, value, meta, tone }) {
-  return <div className="stat"><div className="lbl">{label}</div><div className={cls("val mono", tone)}>{value}</div>{meta && <div className="meta">{meta}</div>}</div>;
+// Give it onClick and the card becomes a link to the page behind the figure.
+export function Stat({ label, value, meta, tone, onClick, title }) {
+  const link = onClick ? { role: "link", tabIndex: 0, title, onClick, onKeyDown: e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } } : {};
+  return <div className={cls("stat", onClick && "linked")} {...link}><div className="lbl">{label}</div><div className={cls("val mono", tone)}>{value}</div>{meta && <div className="meta">{meta}</div>}</div>;
 }
 
 export function Empty({ icon, title, msg, action }) {

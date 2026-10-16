@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { uid, money, fmtDate, todayISO, addDays, nameOf, sum, pickable } from "../lib/helpers.js";
+import { remitVendor } from "../lib/people.js";
 import { paid, billStatus, agingBuckets, round2, billBalance, applyAgainst } from "../calc/ledger.js";
 import { checksPdf } from "../lib/checkPrint.js";
 import { remittancesPdf } from "../lib/remittance.js";
@@ -26,7 +27,7 @@ export default function PayablesView({ db, actions, toast, readOnly, go }) {
   const [payRun, setPayRun] = useState(false);
   const [showPaid, setShowPaid] = useState(false);
   const remitArgs = (bill, p) => ({
-    payment: p, vendor: db.contacts.find(c => c.id === bill.vendorId),
+    payment: p, vendor: remitVendor(db, db.contacts.find(c => c.id === bill.vendorId)),
     lines: [{ ref: bill.ref || bill.number, date: bill.date, desc: bill.notes, amount: p.amount }],
     settings: db.settings,
   });
@@ -183,7 +184,7 @@ export default function PayablesView({ db, actions, toast, readOnly, go }) {
       onEdit={go ? () => { setViewRemit(null); setPay(null); go("payments"); } : undefined} />}
     {emailRemit && <EmailModal docType="remittance"
       title={"Email Remittance · " + (nameOf(db, emailRemit.bill.vendorId))}
-      defaultTo={remitEmail(db.contacts.find(c => c.id === emailRemit.bill.vendorId))}
+      defaultTo={remitEmail(remitVendor(db, db.contacts.find(c => c.id === emailRemit.bill.vendorId)))}
       defaultSubject={`Payment remittance — ${db.settings.company}`}
       defaultBody={`Please find attached remittance advice for our payment of ${money(emailRemit.payment.amount)} dated ${emailRemit.payment.date}.\n\n${db.settings.company}`}
       buildAttachment={() => Promise.resolve(remittancePdf(remitArgs(emailRemit.bill, emailRemit.payment)))}
@@ -300,7 +301,7 @@ function PayBillsModal({ db, actions, toast, onClose }) {
     setBusy(false);
     if (!written) return;
     toast(`${sel.length} payment${sel.length > 1 ? "s" : ""} recorded — ${money(total)}`);
-    const vend = id => db.contacts.find(c => c.id === id);
+    const vend = id => remitVendor(db, db.contacts.find(c => c.id === id));
     const lines = g => g.rows.map(r => ({ ref: r.bill.ref || r.bill.number, date: r.bill.date, desc: r.bill.notes,
       invoiceAmount: Number(r.bill.amount) || 0, discount: Number(r.discount) || 0, amount: Number(r.amount) || 0 }));
     const checkGroups = groups.filter(g => g.method === "Check");

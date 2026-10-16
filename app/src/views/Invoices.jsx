@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { uid, money, fmtDate, todayISO, addDays, nameOf, pickable } from "../lib/helpers.js";
+import { emailFor } from "../lib/people.js";
 import { lineTotals, balance, invoiceStatus } from "../calc/ledger.js";
 import { AUTO_NUMBER } from "../lib/store.js";
 import { useFilters } from "../components/useFilters.jsx";
@@ -131,7 +132,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
   const emailTo = () => {
     const ids = [...new Set(chosen.map(i => i.customerId))];
     if (ids.length !== 1) return "";
-    return db.contactPeople.find(p => p.id === chosen[0].contactPersonId)?.email || db.contacts.find(c => c.id === ids[0])?.email || "";
+    return emailFor(db, ids[0], "invoice", chosen[0].contactPersonId);
   };
 
   if (edit) return <InvoiceEditor invoice={edit} customers={customers} catalog={db.catalog} onCancel={() => setEdit(null)} onSave={save} db={db} actions={actions} toast={toast} readOnly={readOnly} />;
@@ -235,7 +236,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
       onCloseLine={async (lineId, closed) => { if (await actions.setLineClosed(invoiceSO.id, lineId, closed)) toast(closed ? "Line closed" : "Line reopened"); }} />}
     {email && <EmailModal docType="invoice"
       title={"Email · " + email.number}
-      defaultTo={db.contactPeople.find(p => p.id === email.contactPersonId)?.email || db.contacts.find(c => c.id === email.customerId)?.email || ""}
+      defaultTo={emailFor(db, email.customerId, "invoice", email.contactPersonId)}
       defaultSubject={`Invoice ${email.number} — ${db.settings.company}`}
       defaultBody={`Please find attached invoice ${email.number}.\n\nThank you for your business.\n\n${db.settings.company}\n${db.settings.companyPhone || ""}`}
       buildAttachment={() => invoicePdf(email, db)}

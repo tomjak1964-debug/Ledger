@@ -1,5 +1,6 @@
 import { Fragment, useState } from "react";
 import { money, fmtDate, nameOf, sum } from "../lib/helpers.js";
+import { remitVendor } from "../lib/people.js";
 import { round2 } from "../calc/ledger.js";
 import { receiptGroups } from "../calc/reports.js";
 import { checkNumberTaken, normRef, remitEmail } from "../lib/checks.js";
@@ -77,7 +78,7 @@ export default function PaymentRegister({ db, actions, toast, readOnly, kind }) 
   // by any other method.
   const remitArgs = (g) => ({
     payment: { amount: g.amount, date: g.date, ref: g.ref, method: g.method },
-    vendor: db.contacts.find(c => c.id === g.partyId),
+    vendor: remitVendor(db, db.contacts.find(c => c.id === g.partyId)),
     lines: g.lines.map(l => {
       const b = db.bills.find(x => x.id === l.docId);
       return { ref: b?.ref || l.number, date: l.docDate, desc: b?.notes || "", amount: l.amount };

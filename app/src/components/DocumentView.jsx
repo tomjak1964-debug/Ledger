@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { money, fmtDate } from "../lib/helpers.js";
+import { emailFor, contactNameFor } from "../lib/people.js";
 import { lineTotals, paid, balance } from "../calc/ledger.js";
 import { invoicePages } from "../lib/invoiceLayout.js";
 import { termsLabel } from "../lib/terms.js";
@@ -54,7 +55,7 @@ export default function DocumentView({ kind, doc, contact, settings, onClose, on
       <div className="doc-parties">
         <div className="blk">
           <div className="h">{isPO ? "Vendor" : "Quote For"}</div>
-          <div className="b">{contact ? [contact.name, contact.contact, contact.address, contact.email].filter(Boolean).join("\n") : "—"}</div>
+          <div className="b">{contact ? [contact.name, db ? contactNameFor(db, contact, contact.type === "customer" ? "invoice" : "po") : contact.contact, contact.address, contact.email].filter(Boolean).join("\n") : "—"}</div>
         </div>
         <div className="doc-meta-grid">
           <div className="m"><div className="h">Date</div><div className="v">{fmtDate(doc.date)}</div></div>
@@ -122,7 +123,7 @@ function InvoiceDoc({ inv, contact, settings, onClose, print, db, toast, onEdit 
       saves={db ? [{ label: "Save PDF", hint: inv.number + ".pdf", run: savePdf }] : []} />
     {email && <EmailModal docType="invoice"
       title={"Email · " + inv.number}
-      defaultTo={db.contactPeople.find(p => p.id === inv.contactPersonId)?.email || contact?.email || ""}
+      defaultTo={emailFor(db, inv.customerId, "invoice", inv.contactPersonId)}
       defaultSubject={`${isCredit ? "Credit Memo" : "Invoice"} ${inv.number} — ${settings.company}`}
       defaultBody={`Please find attached ${isCredit ? "credit memo" : "invoice"} ${inv.number}.\n\nThank you for your business.\n\n${settings.company}\n${settings.companyPhone || ""}`}
       buildAttachment={() => invoicePdf(inv, db)}

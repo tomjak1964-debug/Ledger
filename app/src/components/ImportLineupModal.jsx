@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef } from "react";
 import { uid, money, todayISO, fmtDate, pickable } from "../lib/helpers.js";
+import { proposalAttn } from "../lib/people.js";
 import { proposalConfig } from "../calc/proposals.js";
 import { newEstimate, priceEstimate, derivedIo, DEVICE_FIELDS, STRUCTURE_FIELDS, LINEUP_FIELDS, SAFETY_OPTIONS, contentSummary } from "../calc/estimates.js";
 import { readLineupFile, textLines, parseLineup, driversFromLineup, lineupAssumptions, guessCustomer } from "../lib/lineup.js";
@@ -95,7 +96,7 @@ export default function ImportLineupModal({ db, actions, toast, onClose, onDone 
       const note = [r.fileName && "From lineup " + r.fileName, r.header.endUser && "End user: " + r.header.endUser,
         r.header.references && "Reference jobs: " + r.header.references].filter(Boolean).join(" · ");
       const saved = await actions.saveProposal({
-        id: uid(), _new: true, kind: "controls", rev: 0, customerId, contactPersonId: "", contactName: customer?.contact || "",
+        id: uid(), _new: true, kind: "controls", rev: 0, customerId, ...proposalAttn(db, customer),
         date, status: "draft", jobNumber: r.header.customerJob ? String(r.header.customerJob) : "", description: r.header.fixture || "",
         location, machineTypeId: "", specs, pricing, phases: cfg.controlsPhases.engineering.map(ph => ({ ...ph })), notes: note,
       });

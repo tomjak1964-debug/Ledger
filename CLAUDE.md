@@ -371,9 +371,8 @@ amounts; nothing is ticked by default and Select all / Deselect all sit above th
 the same modal records a receipt) · **a payment can be moved to another
 document** (the "Applied to" selector in the single-line editor, `updatePayment`'s
 `toParentId`) — money landed on the wrong bill or invoice is re-pointed keeping its
-date, method and reference, and both documents re-settle themselves · vendor **remittance contact** (A/P name /
-number / email / remit-to address, migration 017 — the email default when sending a remittance,
-and the mail-to block on printed checks and remittances) · installable PWA (manifest + icons +
+date, method and reference, and both documents re-settle themselves · vendor **remit-to address** (migration 017 — the mail-to block on printed checks and remittances; who a
+remittance is emailed to is now the contact preferred for remittances, migration 034) · installable PWA (manifest + icons +
 service worker; Supabase never cached).
 
 **Issuing a credit note** (`src/components/CreditNoteModal.jsx`, migration 020): a credit note is an
@@ -561,6 +560,19 @@ false` drops Travel & Living. `specs.lineup` holds the header (`LINEUP_FIELDS`) 
 and in the Word export as **Basis of Estimate**, with `contentSummary()` ("197 discrete I/O · 23 pneumatic
 cylinders · 1 robot…") under it, so the customer sees what the price was built on. Estimates saved before
 this keep working: a missing device count is zero, a `vision: true` tick still prices as one vision system.
+
+**Contacts and who gets what** (`lib/people.js`, migration 034). A customer or vendor no longer has a single
+"contact person" field: its **Contacts** list (the `contact_people` table — Name, Title, Email, Phone) holds the
+people, and each company names who gets its documents — `prefInvoicePersonId` / `prefProposalPersonId` for a
+customer, `prefRemitPersonId` for a vendor (plain uuids, no FK, so a removed person just reads as none). The
+toggles sit on each contact row in the Customers / Vendors editor and save with the company. Every email dialog
+opens on `emailFor(db, companyId, kind, docPersonId)`: the person the document itself names, else the preferred
+person (if they have an email), else (remittances) the old typed remit email, else the company email. New proposals
+start on the preferred proposal person (`proposalAttn()`), and typing a name in Attn links the contact of that name;
+`proposalPerson()` finds the record. Remittance renderers read `remitVendor(db, vendor)`, so the preferred person
+is the remittance's Attn. The vendor's remit-to **address** stays on the vendor. Migration 034 turned each old
+contact name into a person and, for customers, made them preferred for invoices and proposals (who proposals
+already defaulted to); the old `contact` / `remit_*` columns are kept, unread except as fallbacks.
 
 **Payment terms live on the contact** (`src/lib/terms.js`, migration 019). Each customer and vendor
 carries `terms` (days), `discountPct` and `discountDays`; `terms` blank means "use the company default"

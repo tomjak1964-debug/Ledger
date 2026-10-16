@@ -1750,7 +1750,9 @@ export function useLedger(session, onError) {
         const remapItems = items => (items || []).map(it => ({ ...it, id: uid() }));
 
         const contacts = arr("contacts").map(c => ({ ...c, id: nid(c.id) }));
-        const contactPeople = arr("contactPeople").map(p => ({ ...p, id: uid(), contactId: nid(p.contactId) }));
+        const contactPeople = arr("contactPeople").map(p => ({ ...p, id: nid(p.id), contactId: nid(p.contactId) }));
+        // Preferred people (migration 034) point at people, who get new ids too.
+        contacts.forEach(c => ["prefInvoicePersonId", "prefProposalPersonId", "prefRemitPersonId"].forEach(k => { if (c[k]) c[k] = nid(c[k]); }));
         const catalog = arr("catalog").map(c => ({ ...c, id: nid(c.id) }));
         const quotes = arr("quotes").map(q => ({ ...q, id: nid(q.id), customerId: nid(q.customerId), salesOrderId: q.salesOrderId ? nid(q.salesOrderId) : undefined, lineItems: remapItems(q.lineItems) }));
         const sos = arr("salesOrders").map(s => ({ ...s, id: nid(s.id), quoteId: nid(s.quoteId), customerId: nid(s.customerId), invoiceId: s.invoiceId ? nid(s.invoiceId) : undefined, lineItems: remapItems(s.lineItems) }));

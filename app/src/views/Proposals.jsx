@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import DocActions from "../components/DocActions.jsx";
 import { pagesToPdf, saveBlob } from "../lib/saveFile.js";
 import { uid, money, fmtDate, todayISO, nameOf, cls, pickable } from "../lib/helpers.js";
+import { emailFor, proposalAttn, proposalPerson, contactNameFor, remitVendor, peopleOf } from "../lib/people.js";
 import { proposalConfig, priceProposal, ioBlocks, phaseAmount, SPEC_FIELDS, DEFAULT_PHASES, defaultProposalCustomer } from "../calc/proposals.js";
 import { Ico, ICONS, Badge, Empty, Field, MenuItem, ActionMenu, Modal, SortTh, useTableSort, blankZero } from "../components/ui.jsx";
 import { downloadProposalDocx, proposalDocxBlob, proposalFileStem } from "../lib/proposalDocx.js";
@@ -19,9 +20,11 @@ export function buildProposalContent(p, db) {
   const customer = db.contacts.find(c => c.id === p.customerId);
   // Effective contact: the proposal's free-text name, else a linked contact
   // person, else the customer's contact field.
-  const personRec = db.contactPeople.find(x => x.id === p.contactPersonId);
+  const personRec = proposalPerson(db, p, customer);
   const contactName = (p.contactName || personRec?.name || customer?.contact || "").trim();
-  const person = contactName ? { name: contactName, email: personRec?.email || "" } : null;
+  // A named person with no email of their own falls back to whoever the
+  // customer's proposals go to, then the company email.
+  const person = contactName ? { name: contactName, email: (personRec?.email || "").trim() || emailFor(db, p.customerId, "proposal") } : null;
   const s = p.specs || {};
   const cams = Number(s.cameras) || 0, gens = Number(s.generators) || 0, welds = Number(s.welds) || 0;
   const torque = Number(s.torque) || 0, ioLink = Number(s.ioLink) || 0;
@@ -111,13 +114,13 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
   const startSystemCustomer = defaultProposalCustomer(db, "controls");
   const startNewControls = () => setEdit({
     id: uid(), _new: true, kind: "controls", rev: 0, number: "(assigned at save)", customerId: startSystemCustomer?.id || "",
-    contactPersonId: "", contactName: startSystemCustomer?.contact || "", date: todayISO(), status: "draft", jobNumber: "", description: "",
+    ...proposalAttn(db, startSystemCustomer), date: todayISO(), status: "draft", jobNumber: "", description: "",
     location: "", machineTypeId: "", specs: newEstimate(cfg), pricing: {},
     phases: cfg.controlsPhases.engineering.map(ph => ({ ...ph })), notes: "",
   });
   const startNew = () => setEdit({
     id: uid(), _new: true, kind: "machine", rev: 0, number: "(assigned at save)", customerId: startCustomer?.id || "",
-    contactPersonId: "", contactName: startCustomer?.contact || "", date: todayISO(), status: "draft", jobNumber: "", description: "",
+    ...proposalAttn(db, startCustomer), date: todayISO(), status: "draft", jobNumber: "", description: "",
     location: cfg.location, machineTypeId: db.machineTypes[0]?.id || "",
     specs: { ...emptySpecs(), dataNational: true, ioBlocks: "" },
     pricing: {}, phases: cfg.phases.map(ph => ({ ...ph })), notes: "",
@@ -188,7 +191,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
     const ids = [...new Set(chosen.map(p => p.customerId))];
     if (ids.length !== 1) return "";
     const c = chosen[0].kind === "controls" ? buildControlsContent(chosen[0], db) : buildProposalContent(chosen[0], db);
-    return c.person?.email || c.customer?.email || "";
+    return c.person?.email || emailFor(db, ids[0], "proposal");
   };
 
   if (edit?.kind === "controls") return <ControlsEstimateEditor p={edit} db={db} cfg={cfg} customers={customers} onCancel={() => setEdit(null)} onSave={save} />;
@@ -347,17 +350,19 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
     <div className="card" style={{ marginBottom: 16 }}><div className="card-body">
       <div className="row">
         <Field label="Customer"><select className="select" value={x.customerId} onChange={e => {
-          const cid = e.target.value, cc = db.contacts.find(c => c.id === cid)?.contact || "";
+          const cid = e.target.value, attn = proposalAttn(db, db.contacts.find(c => c.id === cid));
           // The contact belongs to the customer: a new customer brings its own
           // contact, or none — never the one picked for the customer before.
-          setX(prev => ({ ...prev, customerId: cid, contactPersonId: "", contactName: cc }));
+          setX(prev => ({ ...prev, customerId: cid, ...attn }));
         }}>
           <option value="">Select customer…</option>{pickable(customers, x.customerId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select></Field>
         <Field label="Contact / Attn" hint="Type any name, or pick a suggestion">
-          <input className="input" list={"attn-" + x.customerId} value={x.contactName || ""} onChange={e => set("contactName", e.target.value)} placeholder="e.g. Mr. John Murphy" />
+          <input className="input" list={"attn-" + x.customerId} value={x.contactName || ""} placeholder="e.g. Mr. John Murphy"
+            onChange={e => { const v = e.target.value, hit = people.find(cp => (cp.name || "").trim().toLowerCase() === v.trim().toLowerCase());
+              setX(prev => ({ ...prev, contactName: v, contactPersonId: hit?.id || "" })); }} />
           <datalist id={"attn-" + x.customerId}>
-            {[db.contacts.find(c => c.id === x.customerId)?.contact, ...people.map(cp => cp.name)].filter(Boolean).map((n, i) => <option key={i} value={n} />)}
+            {[...new Set(people.map(cp => cp.name).filter(Boolean))].map((n, i) => <option key={i} value={n} />)}
           </datalist>
         </Field>
         <Field label="Date"><input className="input" type="date" value={x.date} onChange={e => set("date", e.target.value)} /></Field>
@@ -505,7 +510,7 @@ function ProposalDoc({ p, db, onClose, toast, onEdit, auto }) {
       saves={[{ label: "Save PDF", hint: proposalFileStem(p) + ".pdf", run: savePdf }, { label: "Save Word", hint: proposalFileStem(p) + ".docx", run: word }]} />
     {email && <EmailModal docType="proposal"
       title={"Email · " + p.number}
-      defaultTo={c.person?.email || c.customer?.email || ""}
+      defaultTo={c.person?.email || emailFor(db, p.customerId, "proposal")}
       defaultSubject={`Proposal ${p.number}${revLabel(p) ? " " + revLabel(p) : ""} — ${[p.jobNumber, p.description].filter(Boolean).join(" – ")}`}
       defaultBody={`${c.salutation.replace(/:$/, ",")}\n\nPlease find attached proposal ${p.number} for ${p.description || "the machine"}.\n\nRegards,\n${c.cfg.signer || s.company}`}
       buildAttachment={() => proposalDocxBlob(p, db)}

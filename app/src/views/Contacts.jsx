@@ -4,6 +4,7 @@ import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort, blankZero } from
 import { termsLabel } from "../lib/terms.js";
 import AccountSelect from "../components/AccountSelect.jsx";
 import { TEN99_TYPES, ten99Label, accountLabel } from "../calc/accounts.js";
+import { PREF_FIELD, PREF_LABEL, PREF_KINDS, contactNameFor } from "../lib/people.js";
 
 // One page per side of the ledger: Customers (under Customers & Sales) and
 // Vendors (under Vendors & Purchases). Both are contacts rows; `type` picks
@@ -23,8 +24,11 @@ export default function ContactsView({ db, actions, toast, readOnly, type = "cus
     if (await actions.deleteContact(id)) toast("Deleted " + (rec?.name || "contact"), { actionLabel: "Undo", onAction: async () => { if (await actions.restoreRecord("contact", rec)) toast((rec.name || "Contact") + " restored"); } });
   };
   const startNew = () => setEdit({ id: uid(), type: tab, name: "", contact: "", email: "", phone: "", address: "", code: "", lat: "", lng: "", terms: "", discountPct: 0, discountDays: 0, remitName: "", remitPhone: "", remitEmail: "", remitAddress: "", taxId: "", salesAccount: "", expenseAccount: "", ten99: "", active: true });
+  // The person this list shows: who the invoices go to (customers) or the
+  // remittances (vendors), else the first contact on file.
+  const listKind = tab === "customer" ? "invoice" : "remittance";
   const { sorted: contactRows, sort, onSort } = useTableSort(list, {
-    name: c => c.name, status: c => (c.active === false ? 1 : 0), contact: c => c.contact || "", email: c => c.email || "", phone: c => c.phone || "", taxId: c => c.taxId || "",
+    name: c => c.name, status: c => (c.active === false ? 1 : 0), contact: c => contactNameFor(db, c, listKind), email: c => c.email || "", phone: c => c.phone || "", taxId: c => c.taxId || "",
     account: c => (tab === "customer" ? c.salesAccount : c.expenseAccount) || "", ten99: c => ten99Label(c.ten99),
   }, { key: "name", dir: "asc" });
   return <div>
@@ -49,7 +53,7 @@ export default function ContactsView({ db, actions, toast, readOnly, type = "cus
           <th></th></tr></thead>
           <tbody>{contactRows.map(c => (
             <tr key={c.id}>
-              <td style={{ fontWeight: 600, opacity: c.active === false ? 0.6 : 1 }}>{c.name}{c.active === false && <> <span className="badge gray"><span className="dot"></span>Inactive</span></>}</td><td className="subtle">{c.contact || "—"}</td>
+              <td style={{ fontWeight: 600, opacity: c.active === false ? 0.6 : 1 }}>{c.name}{c.active === false && <> <span className="badge gray"><span className="dot"></span>Inactive</span></>}</td><td className="subtle">{contactNameFor(db, c, listKind) || "—"}</td>
               <td className="subtle">{c.email || "—"}</td><td className="mono subtle">{c.phone || "—"}</td>
               <td className="mono subtle">{accountLabel(db, tab === "customer" ? c.salesAccount : c.expenseAccount) || "—"}</td>
               {tab === "vendor" && <td className="subtle">{c.ten99 ? ten99Label(c.ten99) : "—"}</td>}
@@ -68,7 +72,6 @@ export default function ContactsView({ db, actions, toast, readOnly, type = "cus
         <span><b>Inactive</b> <span className="subtle">— kept with all its history and still in reports, but left out of every pick list for new work.</span></span></label>
       <div className="row">
         <Field label="Company / Name"><input className="input" value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} /></Field>
-        <Field label="Contact Person"><input className="input" value={edit.contact} onChange={e => setEdit({ ...edit, contact: e.target.value })} /></Field>
         {edit.type === "customer" && <Field label="Invoice Code" hint="Numbers this customer's invoices, e.g. VG → VG260728-01">
           <input className="input mono" style={{ maxWidth: 110 }} value={edit.code || ""} onChange={e => setEdit({ ...edit, code: e.target.value.toUpperCase() })} /></Field>}
         {edit.type === "vendor" && <Field label="Vendor ID" hint="Short code, as on the Sage vendor list">
@@ -116,44 +119,49 @@ export default function ContactsView({ db, actions, toast, readOnly, type = "cus
         <Field label="Tax ID (EIN or SSN)" hint="Printed on the 1099 vendor report. Kept as typed, dashes and all.">
           <input className="input mono" style={{ maxWidth: 180 }} value={edit.taxId || ""} onChange={e => setEdit({ ...edit, taxId: e.target.value })} placeholder="12-3456789" /></Field>
         <div className="divider"></div>
-        <div className="subtle" style={{ fontWeight: 700, marginBottom: 6 }}>Remittance Contact</div>
-        <p className="subtle" style={{ margin: "0 0 8px" }}>Where payment paperwork goes — the A/P desk, not the sales rep. The email here is the default recipient when you email a remittance, and can still be changed on the way out.</p>
-        <div className="row">
-          <Field label="Name"><input className="input" value={edit.remitName || ""} onChange={e => setEdit({ ...edit, remitName: e.target.value })} placeholder="Accounts Receivable" /></Field>
-          <Field label="Number"><input className="input" value={edit.remitPhone || ""} onChange={e => setEdit({ ...edit, remitPhone: e.target.value })} /></Field>
-        </div>
-        <Field label="Email" hint="Default recipient for remittance advice">
-          <input className="input" value={edit.remitEmail || ""} onChange={e => setEdit({ ...edit, remitEmail: e.target.value })} placeholder={edit.email || "ar@vendor.com"} /></Field>
+        <div className="subtle" style={{ fontWeight: 700, marginBottom: 6 }}>Remit-To</div>
+        <p className="subtle" style={{ margin: "0 0 8px" }}>Remittances are emailed to the contact marked <b>Remittances</b> below (the A/P desk, not the sales rep), else to the company email.</p>
         <Field label="Address"><textarea className="input" value={edit.remitAddress || ""} onChange={e => setEdit({ ...edit, remitAddress: e.target.value })} placeholder="Remit-to address, if different from above" /></Field>
       </>}
       {db.contacts.some(c => c.id === edit.id)
-        ? <PeopleEditor contactId={edit.id} db={db} actions={actions} toast={toast} />
-        : <p className="subtle">Save this {edit.type} first, then re-open it to add contact people.</p>}
+        ? <PeopleEditor contactId={edit.id} db={db} actions={actions} toast={toast} readOnly={readOnly}
+            kinds={PREF_KINDS[edit.type] || []} prefs={edit} onPref={(kind, personId) => setEdit(x => ({ ...x, [PREF_FIELD[kind]]: personId }))} />
+        : <p className="subtle">Save this {edit.type} first, then re-open it to add contacts.</p>}
     </Modal>}
   </div>;
 }
 
-// Named people at a company — selectable on proposals and invoices.
-function PeopleEditor({ contactId, db, actions, toast }) {
+// The people at a company — Name, Title, Email, Phone — and which of them its
+// invoices, proposals (customers) or remittances (vendors) go to. A preference
+// is a toggle on the person; picking one moves it off whoever had it. It is
+// part of the company record, so it keeps with the dialog's Save.
+function PeopleEditor({ contactId, db, actions, toast, readOnly, kinds, prefs, onPref }) {
   const [p, setP] = useState(null);
   const people = db.contactPeople.filter(x => x.contactId === contactId);
   const save = async () => {
     if (!p.name.trim()) return;
-    if (await actions.saveContactPerson(p)) { setP(null); toast("Person saved"); }
+    if (await actions.saveContactPerson(p)) { setP(null); toast("Contact saved"); }
   };
+  const isPref = (kind, id) => prefs[PREF_FIELD[kind]] === id;
   return <div>
     <div className="divider"></div>
     <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
-      <span className="subtle" style={{ fontWeight: 700 }}>People</span>
-      <button className="btn sm" style={{ marginLeft: "auto" }} onClick={() => setP({ id: uid(), contactId, name: "", title: "", email: "", phone: "" })}><Ico d={ICONS.plus} size={13} />Add Person</button>
+      <span className="subtle" style={{ fontWeight: 700 }}>Contacts</span>
+      {!readOnly && <button className="btn sm" style={{ marginLeft: "auto" }} onClick={() => setP({ id: uid(), contactId, name: "", title: "", email: "", phone: "" })}><Ico d={ICONS.plus} size={13} />Add Contact</button>}
     </div>
-    {people.length === 0 && !p && <p className="subtle" style={{ margin: "4px 0" }}>No people yet — add the person proposals and invoices should be addressed to (e.g. "Mr. John Murphy").</p>}
-    {people.map(x => <div key={x.id} className="cat-row">
+    {people.length === 0 && !p && <p className="subtle" style={{ margin: "4px 0" }}>No contacts yet — add the people documents should be addressed to (e.g. "Mr. John Murphy").</p>}
+    {people.length > 0 && kinds.length > 0 && <p className="subtle" style={{ margin: "0 0 6px", fontSize: 12 }}>
+      Tick who gets the {kinds.map(k => PREF_LABEL[k].toLowerCase()).join(" and the ")} — the email dialog opens addressed to them. None ticked uses the company email. Save the {prefs.type} to keep it.</p>}
+    {people.map(x => <div key={x.id} className="cat-row" style={{ flexWrap: "wrap", gap: 8 }}>
       <span style={{ fontWeight: 600 }}>{x.name}</span>
       <span className="subtle">{[x.title, x.email, x.phone].filter(Boolean).join(" · ")}</span>
-      <span style={{ marginLeft: "auto", whiteSpace: "nowrap" }}>
-        <button className="btn ghost icon" onClick={() => setP({ ...x })}><Ico d={ICONS.edit} size={14} /></button>
-        <button className="btn ghost icon" onClick={async () => { if (confirm("Remove " + x.name + "?") && await actions.deleteContactPerson(x.id)) toast("Removed"); }}><Ico d={ICONS.trash} size={14} /></button>
+      <span style={{ marginLeft: "auto", display: "inline-flex", gap: 4, alignItems: "center", whiteSpace: "nowrap" }}>
+        {kinds.map(k => <button key={k} type="button" disabled={readOnly} className={"btn sm" + (isPref(k, x.id) ? " primary" : "")}
+          title={isPref(k, x.id) ? `Preferred for ${PREF_LABEL[k].toLowerCase()} — click to clear` : `Make ${x.name} the contact for ${PREF_LABEL[k].toLowerCase()}`}
+          onClick={() => onPref(k, isPref(k, x.id) ? "" : x.id)}>{isPref(k, x.id) && <Ico d={ICONS.check} size={12} />}{PREF_LABEL[k]}</button>)}
+        {isPrefAny(kinds, isPref, x) && !(x.email || "").trim() && <span style={{ color: "var(--warn)", fontSize: 12 }}>no email</span>}
+        {!readOnly && <button className="btn ghost icon" onClick={() => setP({ ...x })}><Ico d={ICONS.edit} size={14} /></button>}
+        {!readOnly && <button className="btn ghost icon" onClick={async () => { if (confirm("Remove " + x.name + "?") && await actions.deleteContactPerson(x.id)) toast("Removed"); }}><Ico d={ICONS.trash} size={14} /></button>}
       </span>
     </div>)}
     {p && <div style={{ background: "var(--canvas)", borderRadius: 9, padding: 12, marginTop: 8 }}>
@@ -163,12 +171,13 @@ function PeopleEditor({ contactId, db, actions, toast }) {
       </div>
       <div className="row">
         <Field label="Email"><input className="input" value={p.email} onChange={e => setP({ ...p, email: e.target.value })} /></Field>
-        <Field label="Phone"><input className="input" value={p.phone} onChange={e => setP({ ...p, phone: e.target.value })} /></Field>
+        <Field label="Phone Number"><input className="input" value={p.phone} onChange={e => setP({ ...p, phone: e.target.value })} /></Field>
       </div>
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
         <button className="btn sm" onClick={() => setP(null)}>Cancel</button>
-        <button className="btn sm primary" onClick={save}>Save Person</button>
+        <button className="btn sm primary" onClick={save}>Save Contact</button>
       </div>
     </div>}
   </div>;
 }
+const isPrefAny = (kinds, isPref, x) => kinds.some(k => isPref(k, x.id));

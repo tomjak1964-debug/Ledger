@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { uid, money, fmtDate, addDays, cls, pickable } from "../lib/helpers.js";
+import { emailFor, proposalAttn, proposalPerson } from "../lib/people.js";
 import { termsLabelFor } from "../lib/terms.js";
 import { proposalConfig } from "../calc/proposals.js";
 import { COMPONENTS, IO_FIELDS, DEVICE_FIELDS, STRUCTURE_FIELDS, LINEUP_FIELDS, SAFETY_OPTIONS, STANDARD_ELEMENTS, ROLE_LABELS,
@@ -20,9 +21,9 @@ const samePhases = (a, b) => a.length === b.length && a.every((x, i) => x.key ==
 export function buildControlsContent(p, db) {
   const cfg = proposalConfig(db.settings, db.timeCategories);
   const customer = db.contacts.find(c => c.id === p.customerId);
-  const personRec = db.contactPeople.find(x => x.id === p.contactPersonId);
+  const personRec = proposalPerson(db, p, customer);
   const contactName = (p.contactName || personRec?.name || customer?.contact || "").trim();
-  const person = contactName ? { name: contactName, email: personRec?.email || "" } : null;
+  const person = contactName ? { name: contactName, email: (personRec?.email || "").trim() || emailFor(db, p.customerId, "proposal") } : null;
   const custName = customer?.name || "Customer";
   const salutation = (() => {
     if (!person?.name) return custName + " Team:";
@@ -225,17 +226,19 @@ export default function ControlsEstimateEditor({ p, db, cfg, customers, onCancel
     <div className="card" style={{ marginBottom: 16 }}><div className="card-body">
       <div className="row">
         <Field label="Customer"><select className="select" value={x.customerId} onChange={e => {
-          const cid = e.target.value, cc = db.contacts.find(c => c.id === cid)?.contact || "";
+          const cid = e.target.value, attn = proposalAttn(db, db.contacts.find(c => c.id === cid));
           // The contact belongs to the customer: a new customer brings its own
           // contact, or none — never the one picked for the customer before.
-          setX(prev => ({ ...prev, customerId: cid, contactPersonId: "", contactName: cc }));
+          setX(prev => ({ ...prev, customerId: cid, ...attn }));
         }}>
           <option value="">Select customer…</option>{pickable(customers, x.customerId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select></Field>
         <Field label="Contact / Attn" hint="Type any name, or pick a suggestion">
-          <input className="input" list={"attn-" + x.customerId} value={x.contactName || ""} onChange={e => set("contactName", e.target.value)} placeholder="e.g. Mr. John Murphy" />
+          <input className="input" list={"attn-" + x.customerId} value={x.contactName || ""} placeholder="e.g. Mr. John Murphy"
+            onChange={e => { const v = e.target.value, hit = people.find(cp => (cp.name || "").trim().toLowerCase() === v.trim().toLowerCase());
+              setX(prev => ({ ...prev, contactName: v, contactPersonId: hit?.id || "" })); }} />
           <datalist id={"attn-" + x.customerId}>
-            {[db.contacts.find(c => c.id === x.customerId)?.contact, ...people.map(cp => cp.name)].filter(Boolean).map((n, i) => <option key={i} value={n} />)}
+            {[...new Set(people.map(cp => cp.name).filter(Boolean))].map((n, i) => <option key={i} value={n} />)}
           </datalist>
         </Field>
         <Field label="Date"><input className="input" type="date" value={x.date} onChange={e => set("date", e.target.value)} /></Field>

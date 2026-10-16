@@ -215,8 +215,14 @@ function PayBillsModal({ db, actions, toast, onClose }) {
   const [startChk, setStartChk] = useState(() => nextCheckNumber(db, db.settings));
   const [busy, setBusy] = useState(false);
   const [docs, setDocs] = useState(null); // after recording: {checkRuns, remitRuns, checkPaymentIds}
+  // Each row starts on the way that vendor was paid last time — a vendor paid
+  // by ACH stays ACH — and on Check only for a vendor never paid before.
+  const PAY_METHODS = ["Check", "ACH / Wire", "Credit Card", "Other"];
+  const lastMethod = (vendorId) => db.bills.filter(b => b.vendorId === vendorId)
+    .flatMap(b => b.payments || []).filter(p => PAY_METHODS.includes(p.method))
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""))[0]?.method || "Check";
   const [rows, setRows] = useState(() => openBills.map(b => ({
-    bill: b, sel: false, amount: round2(billBalance(b)), discount: 0, method: "Check",
+    bill: b, sel: false, amount: round2(billBalance(b)), discount: 0, method: lastMethod(b.vendorId),
   })));
   // Confirmation / trace numbers for the electronic groups, keyed the same way
   // the groups are. Kept across selection changes so re-ticking a row doesn't
@@ -229,6 +235,16 @@ function PayBillsModal({ db, actions, toast, onClose }) {
   const updDiscount = (i, v) => setRows(rs => rs.map((r, x) => x === i
     ? { ...r, discount: v, amount: round2(Math.max(0, billBalance(r.bill) - (Number(v) || 0))), sel: true } : r));
   const setAll = (s) => setRows(rs => rs.map(r => ({ ...r, sel: s })));
+  // One method for everything ticked, in one go.
+  const setSelMethod = (m) => setRows(rs => rs.map(r => r.sel ? { ...r, method: m } : r));
+  // Changing a row's method moves that vendor's other ticked rows with it —
+  // one vendor is normally paid one way — unless they were set differently on
+  // purpose (they're then flagged below).
+  const updMethod = (i, m) => setRows(rs => {
+    const v = rs[i].bill.vendorId, was = rs[i].method;
+    return rs.map((r, x) => x === i ? { ...r, method: m, sel: true }
+      : r.sel && r.bill.vendorId === v && r.method === was ? { ...r, method: m } : r);
+  });
   // What each bill's vendor terms are worth if this run's date is inside the
   // window — never more than the bill's balance.
   const offerOn = (bill) => {
@@ -248,6 +264,12 @@ function PayBillsModal({ db, actions, toast, onClose }) {
   const groups = groupSel(sel);
   const eGroups = groups.filter(g => g.method !== "Check");
   const checkCount = new Set(sel.filter(r => r.method === "Check").map(r => r.bill.vendorId)).size;
+  // A vendor being paid two ways in one run is almost always a row left on the
+  // wrong method — say so before anything is recorded.
+  const mixed = [...new Set(sel.map(r => r.bill.vendorId))].map(v => {
+    const by = {}; sel.filter(r => r.bill.vendorId === v).forEach(r => { by[r.method] = (by[r.method] || 0) + 1; });
+    return Object.keys(by).length > 1 ? `${nameOf(db, v)} is being paid ${Object.entries(by).map(([m, c]) => `${c} by ${m}`).join(" and ")}` : null;
+  }).filter(Boolean);
   // Every number this run will consume, checked against the register up front.
   const runRefs = checkCount ? Array.from({ length: checkCount }, (_, i) => String((parseInt(startChk, 10) || 0) + i)) : [];
   const chkErr = !checkCount ? ""
@@ -362,6 +384,8 @@ function PayBillsModal({ db, actions, toast, onClose }) {
     </div>
     {err && <p className="subtle" style={{ margin: "0 0 8px", color: "var(--neg)" }}>{err}</p>}
     <div className="toolbar" style={{ marginBottom: 8 }}>
+      {sel.length > 0 && <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}><span className="subtle">Pay ticked by</span>
+        {["Check", "ACH / Wire"].map(m => <button key={m} className="btn sm" disabled={sel.every(r => r.method === m)} onClick={() => setSelMethod(m)}>{m}</button>)}</span>}
       <span className="subtle">Tick the bills this run pays. Lower a Pay Amount to part-pay a bill; the rest stays open.{partCount ? ` · ${partCount} part-paid` : ""}</span>
       {untaken.length > 0 && <button className="btn sm" onClick={takeAllDiscounts}>
         Take {untaken.length} available discount{untaken.length === 1 ? "" : "s"} · {money(sum(untaken, o => o.amount))}</button>}
@@ -392,8 +416,8 @@ function PayBillsModal({ db, actions, toast, onClose }) {
             : fit.over ? <span style={{ color: "var(--neg)", fontSize: 12 }}>over by {money(Math.abs(fit.left))}</span>
               : fit.partial ? <span className="mono" title="Part payment — the rest stays open">{money(fit.left)}</span>
                 : <span className="subtle" style={{ fontSize: 12 }}>paid in full</span>}</td>
-          <td><select className="select" style={{ minWidth: 110 }} value={r.method} onChange={e => upd(i, { method: e.target.value, sel: true })}>
-            {["Check", "ACH / Wire", "Credit Card", "Other"].map(m => <option key={m}>{m}</option>)}
+          <td><select className="select" style={{ minWidth: 110 }} value={r.method} onChange={e => updMethod(i, e.target.value)}>
+            {PAY_METHODS.map(m => <option key={m}>{m}</option>)}
           </select></td>
         </tr>;
       })}</tbody></table>
@@ -412,6 +436,10 @@ function PayBillsModal({ db, actions, toast, onClose }) {
             onChange={e => setERefs(p => ({ ...p, [g.key]: e.target.value }))} /></td>
         </tr>)}</tbody></table>
     </>}
-    <p className="subtle" style={{ marginBottom: 0 }}>Multiple bills for the same vendor and method combine into one check or one remittance, with every bill listed on the stub.{checkCount > 0 ? ` This run uses ${checkCount} check${checkCount > 1 ? "s" : ""}: ${runRefs.map(r => "#" + r).join(", ")}.` : ""}</p>
+    {mixed.length > 0 && <div style={{ margin: "10px 0 0", padding: "10px 12px", background: "var(--warn-wash)", borderRadius: 9 }}>
+      <b>Check the methods:</b> {mixed.join("; ")}. If that's not intended, change the odd one out before recording.</div>}
+    <div style={{ margin: "10px 0 0", fontWeight: 600 }}>This run: {checkCount > 0 ? `${checkCount} check${checkCount > 1 ? "s" : ""} to print (${runRefs.map(r => "#" + r).join(", ")})` : "no checks"}
+      {eGroups.length > 0 ? ` · ${eGroups.length} electronic payment${eGroups.length > 1 ? "s" : ""} with a remittance` : ""}</div>
+    <p className="subtle" style={{ marginBottom: 0 }}>Multiple bills for the same vendor and method combine into one check or one remittance, with every bill listed on the stub.</p>
   </Modal>;
 }

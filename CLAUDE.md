@@ -676,7 +676,11 @@ their own printed stub.
 consecutive numbers from the Starting Check #; each electronic group gets its own optional
 Reference # field, listed with its vendor, method and subtotal before you record. The reference
 prints on the remittance advice and identifies the payment in the register — without one,
-two electronic runs to the same vendor on the same day collapse into a single register row.
+two electronic runs to the same vendor on the same day collapse into a single register row. **Methods:** each row starts on the method that vendor was paid by last (Check only for a vendor never
+paid); changing one row moves that vendor's other ticked rows that were on the same method; *Pay ticked by Check /
+ACH* sets them all; a vendor paid two ways in one run is flagged before recording, and a *This run:* line says how
+many checks will print. (A row left on the old Check default turned one of four ACH payments into check #4869 on
+2026-10-16 — `data-fixes/2026-10-16_barnum_check_4869_to_ach.sql`.)
 
 **The actions are on the list row too.** Invoices, Proposals and the electronic rows of Vendors & Purchases →
 Payments each carry View · Email · Print · Save · Edit right on the row, so nothing needs opening first: Print

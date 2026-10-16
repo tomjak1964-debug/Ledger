@@ -728,7 +728,7 @@ page is a one-line edit there. **Customers and Vendors** are the two halves of t
 `contacts` permission area, and `go("contacts")` still lands on Customers). A vendor carries a
 **Tax ID** (`contacts.tax_id`, migration 022) for the 1099 vendor report to come. A customer or vendor can be marked
 **Inactive** (`contacts.active`, migration 033) instead of deleted: it keeps its history and still reports, the
-list hides it unless *Show inactive* is ticked, and every pick list leaves it out — `pickable(list, keepId)` in
+list hides it unless *Show inactive* is ticked (the **Inactive** tick is a column on the list row, saved as you tick it — not in the editor), and every pick list leaves it out — `pickable(list, keepId)` in
 `lib/helpers.js` keeps the one a document already names, so an older document still shows who it's for. New
 documents and the proposal default never start on an inactive contact.
 

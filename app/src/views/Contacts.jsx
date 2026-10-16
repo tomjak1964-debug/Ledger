@@ -18,6 +18,12 @@ export default function ContactsView({ db, actions, toast, readOnly, type = "cus
   const inactiveCount = all.filter(c => c.active === false).length;
   const list = all.filter(c => showInactive || c.active !== false);
   const save = async (c) => { if (await actions.saveContact(c)) { setEdit(null); toast("Saved"); } };
+  // Inactive is set right on the list row: kept with all its history and
+  // still in reports, but left out of every pick list for new work.
+  const setActive = async (c, active) => {
+    if (await actions.saveContact({ ...c, active }))
+      toast(`${c.name} ${active ? "is active again" : "marked inactive" + (showInactive ? "" : " — tick Show inactive to see it")}`);
+  };
   const del = async (id) => {
     if (!confirm("Delete this contact?")) return;
     const rec = db.contacts.find(c => c.id === id);
@@ -44,6 +50,7 @@ export default function ContactsView({ db, actions, toast, readOnly, type = "cus
           action={!readOnly && <button className="btn primary" onClick={startNew}><Ico d={ICONS.plus} size={15} />New {noun}</button>} />
         : <table><thead><tr>
           <SortTh label="Name" col="name" sort={sort} onSort={onSort} />
+          <SortTh label="Inactive" col="status" sort={sort} onSort={onSort} />
           <SortTh label="Contact" col="contact" sort={sort} onSort={onSort} />
           <SortTh label="Email" col="email" sort={sort} onSort={onSort} />
           <SortTh label="Phone" col="phone" sort={sort} onSort={onSort} />
@@ -53,7 +60,9 @@ export default function ContactsView({ db, actions, toast, readOnly, type = "cus
           <th></th></tr></thead>
           <tbody>{contactRows.map(c => (
             <tr key={c.id}>
-              <td style={{ fontWeight: 600, opacity: c.active === false ? 0.6 : 1 }}>{c.name}{c.active === false && <> <span className="badge gray"><span className="dot"></span>Inactive</span></>}</td><td className="subtle">{contactNameFor(db, c, listKind) || "—"}</td>
+              <td style={{ fontWeight: 600, opacity: c.active === false ? 0.6 : 1 }}>{c.name}</td>
+              <td title="Inactive: kept with its history and in reports, left out of pick lists for new work">
+                <input type="checkbox" disabled={readOnly} checked={c.active === false} onChange={e => setActive(c, !e.target.checked)} /></td><td className="subtle">{contactNameFor(db, c, listKind) || "—"}</td>
               <td className="subtle">{c.email || "—"}</td><td className="mono subtle">{c.phone || "—"}</td>
               <td className="mono subtle">{accountLabel(db, tab === "customer" ? c.salesAccount : c.expenseAccount) || "—"}</td>
               {tab === "vendor" && <td className="subtle">{c.ten99 ? ten99Label(c.ten99) : "—"}</td>}
@@ -67,9 +76,6 @@ export default function ContactsView({ db, actions, toast, readOnly, type = "cus
     </div>
     {edit && <Modal title={(db.contacts.some(c => c.id === edit.id) ? "Edit " : "New ") + noun} onClose={() => setEdit(null)}
       foot={<><button className="btn" onClick={() => setEdit(null)}>Cancel</button><button className="btn primary" onClick={() => save(edit)}>Save</button></>}>
-      <label style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 10, cursor: readOnly ? "default" : "pointer" }}>
-        <input type="checkbox" disabled={readOnly} checked={edit.active === false} onChange={e => setEdit({ ...edit, active: !e.target.checked })} style={{ marginTop: 3 }} />
-        <span><b>Inactive</b> <span className="subtle">— kept with all its history and still in reports, but left out of every pick list for new work.</span></span></label>
       <div className="row">
         <Field label="Company / Name"><input className="input" value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} /></Field>
         {edit.type === "customer" && <Field label="Invoice Code" hint="Numbers this customer's invoices, e.g. VG → VG260728-01">

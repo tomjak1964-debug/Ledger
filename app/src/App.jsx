@@ -14,6 +14,7 @@ import Dashboard from "./views/Dashboard.jsx";
 import ReportsView from "./views/Reports.jsx";
 import ProposalsView from "./views/Proposals.jsx";
 import MachineRatesView from "./views/MachineRates.jsx";
+import SystemRatesView from "./views/SystemRates.jsx";
 import QuotesView from "./views/Quotes.jsx";
 import SalesOrdersView from "./views/SalesOrders.jsx";
 import JobsView from "./views/Jobs.jsx";
@@ -70,6 +71,7 @@ const NAV = [
       { k: "timeTracking", label: "Time Tracking", icon: ICONS.clock },
       { k: "catalog", label: "Item Catalog", icon: ICONS.catalog },
       { k: "machineRates", label: "Fixture Rates", icon: ICONS.settings },
+      { k: "systemRates", label: "System Rates", icon: ICONS.settings },
     ]
   },
   {
@@ -102,6 +104,7 @@ const TITLES = {
   proposals: ["Proposals", "Fixture and system proposals — priced, tracked, and documented"],
   rateSheet: ["Rate Sheet", "The standard hourly rates, overtime and travel terms — email, print or save"],
   machineRates: ["Fixture Rates", "The costing table behind fixture proposal pricing"],
+  systemRates: ["System Rates", "The hours each item adds to each task on a system proposal"],
 };
 
 export default function App({ session }) {
@@ -229,6 +232,7 @@ export default function App({ session }) {
         {activeView === "proposals" && <ProposalsView {...props} />}
         {activeView === "rateSheet" && <RateSheetDoc settings={db.settings} timeCategories={db.timeCategories} toast={toast} onClose={back} />}
         {activeView === "machineRates" && <MachineRatesView {...props} />}
+        {activeView === "systemRates" && <SystemRatesView {...props} />}
         {activeView === "quotes" && <QuotesView {...props} />}
         {activeView === "salesOrders" && <SalesOrdersView {...props} />}
         {activeView === "jobs" && <JobsView {...props} />}

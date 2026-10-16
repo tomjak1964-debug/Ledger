@@ -9,7 +9,7 @@
 // Canonical, user-facing access areas shown in the admin permission matrix.
 export const AREAS = [
   { key: "reports", label: "Reports" },
-  { key: "proposals", label: "Proposals & Fixture Rates" },
+  { key: "proposals", label: "Proposals, Fixture & System Rates" },
   { key: "quotes", label: "Quotes" },
   { key: "salesOrders", label: "Sales Orders" },
   { key: "jobs", label: "Jobs & Progress" },
@@ -32,6 +32,7 @@ export const NAV_AREA = {
   reports: "reports",
   proposals: "proposals",
   machineRates: "proposals",
+  systemRates: "proposals",
   rateSheet: "proposals",
   quotes: "quotes",
   salesOrders: "salesOrders",

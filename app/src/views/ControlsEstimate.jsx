@@ -259,7 +259,7 @@ export default function ControlsEstimateEditor({ p, db, cfg, customers, onCancel
     </div>
 
     <div className="card" style={{ marginBottom: 16 }}>
-      <div className="card-head"><h3>Job Content</h3><span className="subtle" style={{ marginLeft: "auto" }}>what the hour model reads — every hour below can be overridden</span></div>
+      <div className="card-head"><h3>Job Content</h3><span className="subtle" style={{ marginLeft: "auto" }}>what the hour model reads (hours per item: Work → System Rates) — every hour below can be overridden</span></div>
       <div className="card-body">
         <div className="subtle" style={{ fontWeight: 600, marginBottom: 6 }}>I/O</div>
         <div className="row">

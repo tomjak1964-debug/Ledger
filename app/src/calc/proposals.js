@@ -101,9 +101,28 @@ export function ioBlocks(specs, cfg) {
 // the proposal rather than printed as $0.00.
 const priced = lines => lines.filter(l => n(l.amount) > 0);
 
+// The lines a fixture proposal can carry, in document order. `key` is what an
+// override is stored under (specs.priceOverrides), so a label can be reworded
+// without losing anyone's numbers.
+export const FIXTURE_PRICE_LINES = [
+  { key: "eng", label: "Engineering/Start/Up", section: "base" },
+  { key: "panel", label: "CompactLogix Control Panel /HMI/Bingo Board", section: "base" },
+  { key: "blockIo", label: "Block I/O", section: "base" },
+  { key: "fieldWiring", label: "Field Wiring", section: "base" },
+  { key: "remoteHmi", label: "Remote HMI", section: "base" },
+  { key: "remoteSonic", label: "Remote Sonic Panel", section: "base" },
+  { key: "dnCheckout", label: "Data National Checkout", section: "premium" },
+  { key: "dnMaterial", label: "Data National Material", section: "premium" },
+  { key: "runoff", label: "Run Off Support", section: "premium" },
+];
+
 // Full price build-up matching the proposal document's Base/Premium sections.
+// Each line is worked out from the Fixture Rates row and the content counts;
+// an amount typed on the proposal (specs.priceOverrides[key]) replaces it —
+// blank means "use the worked-out figure", 0 takes the line off. `lines`
+// carries every possible line with both figures, for the editor.
 export function priceProposal(mt, specs, cfg) {
-  if (!mt) return { baseLines: [], premiumLines: [], base: 0, premium: 0, total: 0, blocks: 0, points: 0 };
+  if (!mt) return { baseLines: [], premiumLines: [], lines: [], base: 0, premium: 0, total: 0, blocks: 0, points: 0 };
   const { points, blocks: computed } = ioBlocks(specs, cfg);
   const blocks = specs.ioBlocks === "" || specs.ioBlocks == null ? computed : n(specs.ioBlocks);
   const dn = !!specs.dataNational;
@@ -111,24 +130,22 @@ export function priceProposal(mt, specs, cfg) {
   // per-unit adders — cameras, torque tools and IO-Link devices — roll into engineering
   const eng = n(mt.engBase) + n(mt.cameraRate) * cams + n(mt.torqueRate) * torque + n(mt.ioLinkRate) * ioLink;
   const blockio = blocks > 0 ? n(mt.ioFirst) + n(mt.ioAddl) * (blocks - 1) : 0;
-
-  const baseLines = priced([
-    { label: "Engineering/Start/Up", amount: eng },
-    { label: "CompactLogix Control Panel /HMI/Bingo Board", amount: n(mt.panelBudget) },
-    { label: "Block I/O", amount: blockio },
-    { label: "Field Wiring", amount: n(mt.fieldWiring) },
-    { label: "Remote HMI", amount: n(mt.remoteHmi) },
-    { label: "Remote Sonic Panel", amount: n(mt.remoteSonic) },
-  ]);
-
-  const premiumLines = priced([
-    { label: "Data National Checkout", amount: dn ? n(mt.dnCheckout) : 0 },
-    { label: "Data National Material", amount: dn ? n(mt.dnMaterial) : 0 },
-    { label: "Run Off Support", amount: n(mt.runoff) },
-  ]);
+  const worked = {
+    eng, panel: n(mt.panelBudget), blockIo: blockio, fieldWiring: n(mt.fieldWiring), remoteHmi: n(mt.remoteHmi), remoteSonic: n(mt.remoteSonic),
+    dnCheckout: dn ? n(mt.dnCheckout) : 0, dnMaterial: dn ? n(mt.dnMaterial) : 0, runoff: n(mt.runoff),
+  };
+  const over = specs.priceOverrides || {};
+  const lines = FIXTURE_PRICE_LINES.map(l => {
+    const o = over[l.key];
+    const overridden = o !== "" && o != null;
+    return { ...l, suggested: round2(worked[l.key]), amount: round2(overridden ? n(o) : worked[l.key]), overridden };
+  });
+  const strip = l => ({ key: l.key, label: l.label, amount: l.amount, ...(l.overridden ? { overridden: true, suggested: l.suggested } : {}) });
+  const baseLines = priced(lines.filter(l => l.section === "base")).map(strip);
+  const premiumLines = priced(lines.filter(l => l.section === "premium")).map(strip);
   const base = round2(baseLines.reduce((t, l) => t + l.amount, 0));
   const premium = round2(premiumLines.reduce((t, l) => t + l.amount, 0));
-  return { baseLines, premiumLines, base, premium, total: round2(base + premium), blocks, points };
+  return { baseLines, premiumLines, lines, base, premium, total: round2(base + premium), blocks, points };
 }
 
 export const phaseAmount = (total, pct) => round2(total * pct / 100);

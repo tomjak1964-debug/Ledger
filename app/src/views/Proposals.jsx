@@ -125,7 +125,8 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
 
   const save = async (p) => {
     const mt = db.machineTypes.find(m => m.id === p.machineTypeId);
-    const pricing = p.kind === "controls" ? priceEstimate(p.specs, cfg) : priceProposal(mt, p.specs, cfg);
+    // The editor's every-line view isn't part of the saved snapshot.
+    const { lines: _all, ...pricing } = p.kind === "controls" ? priceEstimate(p.specs, cfg) : priceProposal(mt, p.specs, cfg);
     const saved = await actions.saveProposal({ ...p, pricing });
     if (saved) { setEdit(null); toast(p._new ? "Proposal " + saved.number + " created" : "Proposal saved"); }
   };
@@ -326,6 +327,12 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
   const people = db.contactPeople.filter(cp => cp.contactId === x.customerId);
   const pricing = useMemo(() => priceProposal(mt, x.specs, cfg), [mt, x.specs, cfg]);
   const { points, blocks } = ioBlocks(x.specs, cfg);
+  const setOverride = (key, v) => setX(prev => {
+    const o = { ...(prev.specs.priceOverrides || {}) };
+    if (v === "") delete o[key]; else o[key] = v;
+    return { ...prev, specs: { ...prev.specs, priceOverrides: o } };
+  });
+  const overrideCount = Object.values(x.specs.priceOverrides || {}).filter(v => v !== "" && v != null).length;
   const save = async () => { setSaving(true); await onSave(x); setSaving(false); };
 
   return <div>
@@ -389,19 +396,29 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
     </div>
 
     <div className="card">
-      <div className="card-head"><h3>Pricing</h3><span className="mono" style={{ marginLeft: "auto", fontWeight: 700, fontSize: 17 }}>{money(pricing.total)}</span></div>
-      <div className="card-body" style={{ display: "flex", gap: 30, flexWrap: "wrap" }}>
-        <div style={{ flex: 1, minWidth: 260 }}>
-          <div className="subtle" style={{ fontWeight: 700, marginBottom: 6 }}>Base Pricing</div>
-          {pricing.baseLines.map(l => <div key={l.label} className="cat-row"><span>{l.label}</span><span className="mono" style={{ marginLeft: "auto" }}>{money(l.amount)}</span></div>)}
-          <div className="cat-row" style={{ fontWeight: 700 }}><span>Base Sub Total</span><span className="mono" style={{ marginLeft: "auto" }}>{money(pricing.base)}</span></div>
-        </div>
-        {pricing.premiumLines.length > 0 && <div style={{ flex: 1, minWidth: 260 }}>
-          <div className="subtle" style={{ fontWeight: 700, marginBottom: 6 }}>Premium Pricing</div>
-          {pricing.premiumLines.map(l => <div key={l.label} className="cat-row"><span>{l.label}</span><span className="mono" style={{ marginLeft: "auto" }}>{money(l.amount)}</span></div>)}
-          <div className="cat-row" style={{ fontWeight: 700 }}><span>Premium Sub Total</span><span className="mono" style={{ marginLeft: "auto" }}>{money(pricing.premium)}</span></div>
-        </div>}
-      </div>
+      <div className="card-head"><h3>Pricing</h3>
+        {overrideCount > 0 && <button className="btn sm" style={{ marginLeft: 12 }} onClick={() => setSpec("priceOverrides", {})}>
+          <Ico d={ICONS.refresh} size={13} />Use Fixture Rates for all ({overrideCount} overridden)</button>}
+        <span className="mono" style={{ marginLeft: "auto", fontWeight: 700, fontSize: 17 }}>{money(pricing.total)}</span></div>
+      <table className="li-table"><thead><tr><th>Line</th><th className="num">From Fixture Rates</th><th className="num" style={{ width: 170 }}>Price on proposal</th><th style={{ width: 40 }}></th></tr></thead>
+        <tbody>{["base", "premium"].map(sec => [
+          <tr key={sec} className="group-row"><td colSpan={4} style={{ background: "var(--canvas)", fontWeight: 700 }}>
+            {sec === "base" ? "Base Pricing" : "Premium Pricing"}
+            <span className="mono" style={{ float: "right" }}>{money(sec === "base" ? pricing.base : pricing.premium)}</span></td></tr>,
+          ...pricing.lines.filter(l => l.section === sec).map(l => {
+            const off = !(l.amount > 0);
+            return <tr key={l.key} style={off ? { opacity: 0.55 } : {}}>
+              <td>{l.label}{off && <span className="subtle" style={{ fontSize: 12 }}> · left off the proposal</span>}
+                {l.overridden && <span className="badge blue" style={{ marginLeft: 8 }}><span className="dot"></span>Overridden</span>}</td>
+              <td className="num mono subtle">{money(l.suggested)}</td>
+              <td className="num"><input className="input mono" type="number" min="0" step="any" style={{ textAlign: "right", ...(l.overridden ? { background: "var(--accent-wash)", borderColor: "var(--accent)" } : {}) }}
+                value={x.specs.priceOverrides?.[l.key] ?? ""} placeholder={String(l.suggested)}
+                title="Blank uses the Fixture Rates figure; 0 leaves the line off" onChange={e => setOverride(l.key, e.target.value)} /></td>
+              <td>{l.overridden && <button className="btn ghost icon" title="Back to the Fixture Rates figure" onClick={() => setOverride(l.key, "")}><Ico d={ICONS.refresh} size={14} /></button>}</td>
+            </tr>;
+          }),
+        ])}</tbody></table>
+      <p className="subtle" style={{ margin: "8px 16px 12px", fontSize: 12 }}>Type a price to override a line for this proposal only — blank uses the Fixture Rates figure, 0 leaves the line off. Changing the content or the fixture type re-works the figures, but a typed price stays until you clear it.</p>
     </div>
   </div>;
 }

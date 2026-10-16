@@ -8,7 +8,7 @@ import { AREAS, isAdminRole } from "../lib/permissions.js";
 import { supabase } from "../lib/supabaseClient.js";
 import FormsTab from "../components/FormsEditor.jsx";
 import { proposalConfig, roleCategory } from "../calc/proposals.js";
-import { ROLE_LABELS, HOUR_MODEL_LABELS } from "../calc/estimates.js";
+import { ROLE_LABELS } from "../calc/estimates.js";
 import { REV } from "../lib/version.js";
 import AccountSelect from "../components/AccountSelect.jsx";
 import { accountSettings } from "../calc/accounts.js";
@@ -468,8 +468,6 @@ function ProposalsTab({ db, s, set, readOnly, saveAll, toast }) {
   const cfg = proposalConfig(s, db.timeCategories);
   const p = s.proposal || {};
   const setP = (k, v) => set("proposal", { ...p, [k]: v });
-  const setHm = (table, key, v) => setP("hourModel", { ...(p.hourModel || {}), [table]: { ...((p.hourModel || {})[table] || {}), [key]: Number(v) || 0 } });
-  const setHmScalar = (key, v) => setP("hourModel", { ...(p.hourModel || {}), [key]: Number(v) || 0 });
   const phaseRows = (key, phases, onChange) => <div>
     {phases.map((ph, i) => <div key={i} className="row" style={{ alignItems: "center", marginBottom: 4 }}>
       <input className="input" value={ph.label} disabled={readOnly} onChange={e => onChange(phases.map((q, j) => j === i ? { ...q, label: e.target.value } : q))} />
@@ -481,8 +479,6 @@ function ProposalsTab({ db, s, set, readOnly, saveAll, toast }) {
       <span className="mono subtle">{phases.reduce((t, ph) => t + (Number(ph.pct) || 0), 0)}%</span>
     </div>
   </div>;
-  const hmKeys = ["hardwareDesign", "drafting", "plc", "hmi", "docs", "fat", "safetyVal"];
-  const hmLabels = { hardwareDesign: "Hdw Design", drafting: "Drafting", plc: "PLC", hmi: "HMI", docs: "Docs", fat: "FAT", safetyVal: "Safety Val." };
 
   return <>
     <div className="card" style={{ marginBottom: 16 }}>
@@ -526,17 +522,9 @@ function ProposalsTab({ db, s, set, readOnly, saveAll, toast }) {
     <RateSheetCard db={db} s={s} set={set} readOnly={readOnly} toast={toast} />
 
     <div className="card" style={{ marginBottom: 16 }}>
-      <div className="card-head"><h3>Hour Model</h3><span className="subtle" style={{ marginLeft: "auto" }}>hours a system proposal suggests per unit of content</span></div>
-      <table><thead><tr><th>Per</th>{hmKeys.map(k => <th key={k} className="num">{hmLabels[k]}</th>)}</tr></thead>
-        <tbody>{Object.entries(HOUR_MODEL_LABELS).map(([table, label]) => <tr key={table}>
-          <td>{label}</td>
-          {hmKeys.map(k => <td key={k} className="num"><input className="input mono" type="number" min="0" step="any" style={{ width: 70 }}
-            value={cfg.hourModel[table]?.[k] ?? ""} placeholder="0" disabled={readOnly} onChange={e => setHm(table, k, e.target.value)} /></td>)}
-        </tr>)}</tbody></table>
-      <div className="card-body"><div className="row">
-        <Field label="Project management (% of engineering hours)"><input className="input mono" type="number" min="0" step="any" value={cfg.hourModel.pmPct} disabled={readOnly} onChange={e => setHmScalar("pmPct", e.target.value)} /></Field>
-        <Field label="Hours in a start-up day"><input className="input mono" type="number" min="0" step="any" value={cfg.hourModel.hoursPerDay} disabled={readOnly} onChange={e => setHmScalar("hoursPerDay", e.target.value)} /></Field>
-      </div></div>
+      <div className="card-head"><h3>Hour Model</h3></div>
+      <div className="card-body"><p className="subtle" style={{ margin: 0 }}>The hours each item (an I/O point, a cylinder, a robot…) adds to each task
+        on a system proposal are set on their own page now: <b>Work → System Rates</b>.</p></div>
     </div>
 
     <div className="card" style={{ marginBottom: 16 }}>

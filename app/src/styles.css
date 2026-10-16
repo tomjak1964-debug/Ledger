@@ -471,3 +471,7 @@ tr.sub-row td{background:var(--canvas);font-size:12.5px}
 .prop-page + .prop-page{margin-top:18px}
 @media print{.prop-page + .prop-page{margin-top:0;break-before:page}}
 .remit-frame{display:block;width:100%;max-width:820px;height:calc(100vh - 110px);margin:0 auto;border:0;border-radius:2px;background:#fff;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+
+/* System Rates: the hour-model grid, grouped by kind of item. */
+.rate-grid tr.group-row td{background:var(--canvas);padding-top:10px;padding-bottom:6px;font-size:12.5px}
+.rate-grid td .input{padding:6px 8px}

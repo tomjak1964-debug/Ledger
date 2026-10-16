@@ -503,6 +503,21 @@ flags the SO lines invoiced, and invoicing the SO marks the proposal's phases bi
 billed twice. A controls estimate with no schedule still lands as one line per group it priced
 (Engineering / Hardware / Field Services / Contingency).
 
+**System Rates** (Work → System Rates, `views/SystemRates.jsx`, view key `systemRates`, gated by `proposals`;
+saving needs Settings write, since it is `settings.proposal.hourModel`) is the hour model laid out like Fixture
+Rates: one row per item a job can contain (base, discrete / analog I/O, each device, stations, steps, panels,
+screens…, safety relay / PLC, data collection, remote access), grouped, one column per task (Hardware Design,
+Drafting, PLC, HMI, Documentation, FAT, Safety Validation) with that task's rate, and the hours one unit adds to
+each — plus hours / unit and cost / unit. Only cells that differ from `DEFAULT_HOUR_MODEL` are stored, and they're
+shaded with a per-row reset; start-up hours per day and PM % sit below. It used to be a table in Settings →
+Proposals, which now just points here.
+
+**Fixture proposal prices can be overridden** per line (`specs.priceOverrides`, keyed by `FIXTURE_PRICE_LINES` in
+`calc/proposals.js`): the editor's Pricing table lists every line with its Fixture Rates figure and a price box —
+blank uses the figure, a typed amount replaces it (shaded, *Overridden*), 0 leaves the line off, and a line worth 0
+on the rates can be priced in. *Use Fixture Rates for all* clears them. `priceProposal()` returns `lines` (every
+line, both figures) for the editor; the saved snapshot drops it.
+
 **Rates have one home: Settings → Time Categories** (bill rate and cost rate per category). Logged time bills
 at a category's rate; a system proposal prices each task (Hardware Design, Drafting, PLC, HMI, Start-Up, PM,
 Documentation) and its support rate from the category picked for it in Settings → Proposals → *Labor Rate

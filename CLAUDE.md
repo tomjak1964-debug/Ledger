@@ -911,9 +911,13 @@ payments. `tools/so-report-sql.py` turns a Sage Sales Order Report PDF into a SQ
 (kept in `app/supabase/data-fixes/`) that fills blank PO numbers and brings each SO line's
 invoiced / closed state into line with Sage's shipped / remaining quantities. See `tools/README.md`.
 
-**The Jobs page counts lines, not percentages:** Progress reads *N available · N invoiced* — available is
-ready to invoice (marked ready, not yet billed or closed) — over a bar that fills orange as lines are invoiced
-and blue for what's available, and the count column is **Available / Total**.
+**The Jobs page counts lines, not percentages:** Progress reads *N invoiced · N ready · N not ready yet* — ready
+is marked ready, not yet billed or closed — over a bar that fills orange as lines are invoiced and blue for what's
+ready. Two count columns: **Ready**, and **Left to Invoice** (*left / total* — every line not invoiced or closed,
+ready or not), because "0 available" on its own read as "nothing left". Sales Orders only offers **Invoice…**
+while a line is left; an order still `open` with every line invoiced or closed says *Nothing left to invoice*, and
+`reload()` marks it `invoiced` (an import or data fix that set the lines but not the order — TMJ885, fixed by
+`data-fixes/2026-10-16_tmj885_lines_invoiced.sql`).
 
 **Jobs: tracking and costing** (`src/calc/jobs.js`, `views/JobReports.jsx`, migration 028). A job is a sales
 order, and it now carries what the shop's job-tracking sheet did: `jobNumber` (the job and fixture, `4724-F3`),

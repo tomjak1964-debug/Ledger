@@ -178,6 +178,18 @@ export function useLedger(session, onError) {
         const hasTask = (dbRef.current?.tasks || []).some(t => t.salesOrderId === so.id && t.type === "create_invoice" && t.status === "open");
         if (hasReady !== hasTask) await reconcileJobTask(so.id);
       }
+      // An order left open with nothing on it left to bill (every line
+      // invoiced or closed — a data fix or an import that set the lines but
+      // not the order) reads complete, so it stops offering Invoice….
+      // Best-effort: a member who can't write orders just sees it next time.
+      for (const so of (dbRef.current?.salesOrders || [])) {
+        const lines = so.lineItems || [];
+        if (so.status !== "open" || !lines.length || !lines.every(li => li.invoiced || li.closed)) continue;
+        try {
+          th(await supabase.from("sales_orders").update({ status: "invoiced" }).eq("id", so.id));
+          setDb(d => ({ ...d, salesOrders: d.salesOrders.map(s => s.id === so.id ? { ...s, status: "invoiced" } : s) }));
+        } catch (_) { /* not this member's to fix */ }
+      }
     } catch (e) {
       setLoadError(e.message || String(e));
     }

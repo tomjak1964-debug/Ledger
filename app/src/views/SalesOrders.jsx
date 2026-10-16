@@ -87,8 +87,9 @@ export default function SalesOrdersView({ db, actions, toast, openDoc, readOnly 
                 <div className="subtle" style={{ fontSize: 12, marginTop: 2 }}>{money(remaining)} left to invoice</div>}</td>
               <td className="num">{money(total)}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                {(so.status === "open"
+                {(so.status === "open" && openLines.length > 0
                   ? !readOnly && <button className="btn sm primary" onClick={() => setInvoiceSO(so)}><Ico d={ICONS.inv} size={14} />Invoice…</button>
+                  : so.status === "open" ? <span className="subtle" title="Every line is invoiced or closed">Nothing left to invoice</span>
                   : orphaned
                     ? !readOnly && <button className="btn sm" title="Prior invoice was deleted" onClick={() => reopen(so)}><Ico d={ICONS.refresh} size={14} />Reopen</button>
                     : <span className="subtle">Invoiced ✓</span>)}

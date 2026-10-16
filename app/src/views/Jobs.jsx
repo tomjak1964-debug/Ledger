@@ -16,11 +16,13 @@ export default function JobsView({ db, actions, toast, readOnly }) {
   // Available = ready to invoice: marked ready and not yet billed or closed.
   const availableOf = so => (so.lineItems || []).filter(li => li.ready && !li.invoiced && !li.closed).length;
   const invoicedOf = so => (so.lineItems || []).filter(li => li.invoiced).length;
+  // Left = not billed and not closed: the work still to invoice, ready or not.
+  const leftOf = so => (so.lineItems || []).filter(li => !li.invoiced && !li.closed).length;
   const { sorted: jobRows, sort, onSort } = useTableSort(jobs.slice().reverse(), {
     number: so => so.number, job: so => jobNumberOf(db, so), desc: so => jobDescriptionOf(db, so),
     customer: so => nameOf(db, so.customerId), po: so => so.poNumber || "",
     progress: so => { const t = (so.lineItems || []).length; return t ? invoicedOf(so) / t : 0; },
-    available: so => availableOf(so),
+    available: so => availableOf(so), left: so => leftOf(so),
   });
 
   const toggleReady = async (so, li, ready) => {
@@ -41,13 +43,15 @@ export default function JobsView({ db, actions, toast, readOnly }) {
           <SortTh label="Customer" col="customer" sort={sort} onSort={onSort} />
           <SortTh label="PO #" col="po" sort={sort} onSort={onSort} />
           <SortTh label="Progress" col="progress" sort={sort} onSort={onSort} />
-          <SortTh label="Available / Total" col="available" sort={sort} onSort={onSort} num />
+          <SortTh label="Ready" col="available" sort={sort} onSort={onSort} num />
+          <SortTh label="Left to Invoice" col="left" sort={sort} onSort={onSort} num />
           <th></th></tr></thead>
           <tbody>{jobRows.map(so => {
             const lines = so.lineItems || [];
             const total = lines.length;
             const available = availableOf(so);
             const invoiced = invoicedOf(so);
+            const left = leftOf(so);
             // The bar fills as lines are billed; the available share shows ahead of it.
             const pctInv = total ? (invoiced / total) * 100 : 0;
             const pctAvail = total ? (available / total) * 100 : 0;
@@ -66,14 +70,15 @@ export default function JobsView({ db, actions, toast, readOnly }) {
                       <div style={{ width: pctAvail + "%", background: "var(--accent)" }}></div>
                     </div>
                   </div>
-                  <span className="subtle" style={{ fontSize: 12 }}>{available} available · {invoiced} invoiced</span>
+                  <span className="subtle" style={{ fontSize: 12 }}>{invoiced} invoiced · {available} ready · {left - available} not ready yet</span>
                 </td>
-                <td className="num mono">{available} / {total}</td>
+                <td className="num mono" title="Lines marked ready and not yet invoiced">{available}</td>
+                <td className="num mono" title="Lines not yet invoiced or closed, ready or not">{left} / {total}</td>
                 <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                   <button className="btn ghost icon" title="Job costs — what's been spent on this job" onClick={e => { e.stopPropagation(); setCostsFor(so); }}><Ico d={ICONS.money} size={15} /></button>
                   <Ico d={ICONS.arrow} size={14} /></td>
               </tr>
-              {isOpen && <tr><td colSpan={8} style={{ background: "var(--canvas)" }}>
+              {isOpen && <tr><td colSpan={9} style={{ background: "var(--canvas)" }}>
                 <table><thead><tr><th style={{ width: 90 }}>Ready</th><th>Description</th><th className="num">Qty</th><th>Status</th></tr></thead>
                   <tbody>{lines.map(li => <tr key={li.id} style={li.closed ? { opacity: 0.55 } : {}}>
                     <td><label style={{ display: "flex", alignItems: "center", gap: 6, cursor: li.invoiced || li.closed || readOnly ? "default" : "pointer" }}>
@@ -88,6 +93,9 @@ export default function JobsView({ db, actions, toast, readOnly }) {
               </td></tr>}
             </Fragment>;
           })}</tbody></table>}
+      {jobs.length > 0 && <p className="subtle" style={{ margin: "10px 16px 12px", fontSize: 12 }}>
+        <b>Ready</b> counts lines whose work is done and ticked Ready (open a job to tick them) — that's what raises the invoice task.
+        <b> Left to Invoice</b> is every line not yet invoiced or closed, ready or not.</p>}
     </div>
     {costsFor && <JobCostsModal db={db} actions={actions} toast={toast} readOnly={readOnly}
       so={db.salesOrders.find(s => s.id === costsFor.id) || costsFor} onClose={() => setCostsFor(null)} />}

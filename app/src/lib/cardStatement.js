@@ -48,7 +48,9 @@ const SECTION_CHARGE = /\b(purchases?|new\s+charges|charges|fees?|interest\s+cha
 const NOISE = /\b(total|subtotal|balance|minimum payment|credit limit|available credit|page \d|account ending|payment due)\b/i;
 const DATE = String.raw`(\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\*?|[A-Za-z]{3}\.?\s+\d{1,2})`;
 const ROW = new RegExp(String.raw`^${DATE}(?:\s+${DATE})?\s+(.*?)\s+(\(?-?\$?[\d,]+\.\d{2}-?\)?)$`);
-export const MARGIN_CODE = /^\d{5,}\s+(?=\d{1,2}[\/-]\d{1,2}\b)/;
+// "276700 02/20 …" or run together, "27670003/19 …" — the shortest run of
+// digits that leaves an MM/DD date behind.
+export const MARGIN_CODE = /^\d{5,}?(?:\s+(?=\d{1,2}[\/-]\d{1,2}\b)|(?=\d{2}[\/-]\d{2}\b))/;
 // A dated line, whatever follows the amount: "12/29 12/29 OPENAI … $20.00 5% on gas …… +$0.00".
 const DATED = new RegExp(String.raw`^${DATE}(?:\s+${DATE})?\s+(.+)$`);
 const AMOUNT_TOKEN = /(^|\s)(\(?[-+]?\$?[\d,]+\.\d{2}-?\)?)(?=\s|$)/g;

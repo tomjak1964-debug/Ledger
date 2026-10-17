@@ -88,7 +88,7 @@ export function parseStatementText(lines, { year } = {}) {
   };
   for (const raw of lines) {
     // A margin control number printed ahead of a row's date isn't part of it.
-    const ln = raw.replace(/\s+/g, " ").trim().replace(/^\d{5,}\s+(?=\d{1,2}\/\d{1,2}\s+\(?-?\$?[\d,]+\.\d{2})/, "");
+    const ln = raw.replace(/\s+/g, " ").trim().replace(/^\d{5,}?(?:\s+(?=\d{1,2}\/\d{1,2}\s+\(?-?\$?[\d,]+\.\d{2})|(?=\d{2}\/\d{2}\s+\(?-?\$?[\d,]+\.\d{2}))/, "");
     if (!ln) { lastTxn = null; continue; }
     const wasTxn = lastTxn; lastTxn = null;
     // PNC's Balance Summary: "Beginning … Ending" headings, then a row of amounts

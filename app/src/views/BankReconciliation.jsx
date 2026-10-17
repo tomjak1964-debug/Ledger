@@ -128,6 +128,7 @@ export function ReconcileScreen({ db, actions, toast, readOnly, recon, onBack, i
   const s = reconcileState(db, recon);
   const done = recon.status === "done";
   const locked = readOnly || done;
+  const balanced = Math.abs(s.difference) < 0.005;
   // A statement read on the New screen opens straight into its review.
   const [importing, setImporting] = useState(!!initialImport && !locked);
   const [preParsed] = useState(initialImport || null);
@@ -142,6 +143,11 @@ export function ReconcileScreen({ db, actions, toast, readOnly, recon, onBack, i
   const finish = async () => {
     if (Math.abs(s.difference) > 0.005) { toast("The difference must be zero to finish."); return; }
     if (await actions.saveReconciliation({ ...recon, status: "done", finishedAt: new Date().toISOString() })) { toast("Reconciled " + fmtDate(recon.statementDate)); onBack(); }
+  };
+  // In balance but not finished: offer to finish on the way out, so it isn't left open by accident.
+  const leave = async () => {
+    if (!locked && balanced && s.items.some(it => it.thisRecon) && confirm("This reconciliation is in balance. Finish it now?\n\nOK finishes it; Cancel leaves it open.")) { await finish(); return; }
+    onBack();
   };
   const saveHeader = async () => {
     if (await actions.saveReconciliation({ ...recon, statementDate: edit.statementDate, statementBalance: Number(edit.statementBalance) || 0 })) { setEdit(null); toast("Statement updated"); }
@@ -165,11 +171,10 @@ export function ReconcileScreen({ db, actions, toast, readOnly, recon, onBack, i
   };
 
   const stat = (label, val, tone, meta) => <div className="stat"><div className="lbl">{label}</div><div className={"val mono" + (tone ? " " + tone : "")}>{val}</div>{meta && <div className="meta">{meta}</div>}</div>;
-  const balanced = Math.abs(s.difference) < 0.005;
 
   return <div>
     <div className="toolbar" style={{ alignItems: "center" }}>
-      <button className="btn" onClick={onBack}>‹ All reconciliations</button>
+      <button className="btn" onClick={leave}>‹ All reconciliations</button>
       <div style={{ marginLeft: 8 }}>
         <div style={{ fontWeight: 700 }}>{accountLabel(db, s.account)}</div>
         <div className="subtle">Statement of {fmtDate(recon.statementDate)} · ending balance <span className="mono">{money(recon.statementBalance)}</span>
@@ -183,6 +188,10 @@ export function ReconcileScreen({ db, actions, toast, readOnly, recon, onBack, i
       </span>
     </div>
 
+    {!locked && balanced && s.items.some(it => it.thisRecon) && <div style={{ marginBottom: 12, padding: "12px 14px", background: "var(--pos-wash)", borderRadius: 9, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+      <span><b>In balance.</b> The cleared items equal the statement's ending balance — finish the reconciliation to close this statement.</span>
+      <button className="btn primary" style={{ marginLeft: "auto" }} onClick={finish}><Ico d={ICONS.check} size={15} />Finish Reconciliation</button>
+    </div>}
     <div className="grid" style={{ gridTemplateColumns: "repeat(4,1fr)", marginBottom: 16 }}>
       {stat("Statement balance", money(recon.statementBalance), null, "from the bank")}
       {stat("Cleared balance", money(s.clearedTotal), null, `${money(s.clearedDeposits)} in · ${money(s.clearedPayments)} out this statement`)}

@@ -144,7 +144,7 @@ export const DEFAULT_ACCOUNTS = [
   ["6500", "Telephone Expense", "Expenses"],
   ["6550", "Other Office Expense", "Expenses"],
   ["6560", "Legal Fees", "Expenses"],
-  ["6570", "Software Purchases", "Expenses"],
+  ["6570", "Software & Subscriptions", "Expenses"],
   ["6600", "Advertising Expense", "Expenses"],
   ["6610", "Charitable Contributions", "Expenses"],
   ["6650", "Commissions and Fees Expense", "Expenses"],

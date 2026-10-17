@@ -885,7 +885,16 @@ account's **opening-balance** journal entry if still outstanding (no statement l
 books don't have can be **Written before Ledger** (a December 2025 check clearing in January, or a deposit in
 transit): a journal entry on the account's opening date (its earliest journal entry, else Dec 31 of the year
 before) between the bank and Retained Earnings — its expense or income is already in last year's books — ticked
-cleared, so the opening balance becomes the true book balance. Reports → Account Reconciliation → **Reconciliation Summary** lists each
+cleared, so the opening balance becomes the true book balance. A reconciliation started and backed out of with nothing cleared is
+discarded (`freshId` in the view). **Matching** also pairs one bank line with several rows that share a
+reference and date and add up to it (a transfer that paid several bills, or netted a vendor credit — `group`), and
+offers a **Close match** — a payment, receipt or expense within $25, or 2% when the payee's name is on the line,
+paired across the whole statement — as **Fix the books**: the row takes the bank's amount (a bill can be raised or
+lowered with it; unticked, the difference stays as a vendor credit or still owing) and is ticked cleared.
+**Recurring lines are remembered** (`settings.bankRules`, keyed by `bankKey()` — the description's words without
+reference numbers, a masked account kept): each post, vendor or customer choice is saved on Apply and fills the
+same line next month ("filled in from last time"); checks are never remembered. Accounts 2600 Line of Credit and
+7150 Interest Expense were added 2026-10-17 (draws and payments post to 2600; interest Dr 7150 / Cr 2600 or the card). Reports → Account Reconciliation → **Reconciliation Summary** lists each
 statement with its cleared balance, outstanding items and book balance. Cleared keys are not carried by a
 JSON backup import, because the import gives payments new ids.
 

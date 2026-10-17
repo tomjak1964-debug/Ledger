@@ -91,8 +91,58 @@ export function matchStatement(lines, items, { days = 10 } = {}) {
   pass((it, ln) => { const a = checkNo(it.ref), b = ln.checkNo || checkNo(ln.desc); return a && b && a === b; });
   pass((it, ln) => Math.abs(daysBetween(it.date, ln.date)) <= days);
   pass((it, ln) => !!(ln.checkNo || checkNo(ln.desc)) && checkNo(it.ref) === (ln.checkNo || checkNo(ln.desc)));   // a check that took a long time to clear
-  lines.forEach((ln, i) => { if (!out[i]) out[i] = { line: ln, item: null }; });
+  // One bank line, several rows in the books: a transfer that paid several
+  // bills (or netted a vendor credit) is one row per document here but one
+  // amount at the bank. Rows sharing a reference and a date that add up to the
+  // line are matched together.
+  lines.forEach((ln, i) => {
+    if (out[i]) return;
+    const groups = new Map();
+    free.filter(f => !f.used && f.it.ref).forEach(f => {
+      const k = f.it.ref + "|" + f.it.date;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(f);
+    });
+    const hit = [...groups.values()].filter(g => g.length > 1
+      && Math.abs(round2(sum(g, f => f.it.amount)) - ln.amount) < 0.005
+      && Math.abs(daysBetween(g[0].it.date, ln.date)) <= days)
+      .sort((a, b) => Math.abs(daysBetween(a[0].it.date, ln.date)) - Math.abs(daysBetween(b[0].it.date, ln.date)))[0];
+    if (!hit) return;
+    hit.forEach(f => { f.used = true; });
+    out[i] = { line: ln, item: hit[0].it, group: hit.map(f => f.it) };
+  });
+  // Close but not equal: a payment, receipt or expense in the books a few
+  // dollars off the bank's figure (typed $6,334 for $6,344) — offered as a
+  // correction, never matched on its own. Within $25, or within 2% when the
+  // payee's name is on the bank line; ten days either way. Pairs are chosen
+  // across the whole statement — a named payee first, then the smallest
+  // difference — so the first line read can't take another line's row.
+  const named = (it, ln) => { const w = nameWords(it.party); const d = " " + String(ln.desc || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ") + " ";
+    return w.length > 0 && w.slice(0, 2).every(x => d.includes(" " + x + " ")); };
+  const pairs = [];
+  lines.forEach((ln, i) => {
+    if (out[i]) return;
+    free.forEach(f => {
+      if (f.used || !["payment", "receipt", "expense"].includes(f.it.type) || Math.sign(f.it.amount) !== Math.sign(ln.amount)) return;
+      const diff = Math.abs(f.it.amount - ln.amount), byName = named(f.it, ln);
+      if (diff < 0.005 || Math.abs(daysBetween(f.it.date, ln.date)) > days) return;
+      if (diff <= 25 || (byName && diff <= Math.abs(ln.amount) * 0.02)) pairs.push({ i, f, diff, byName });
+    });
+  });
+  pairs.sort((a, b) => (b.byName - a.byName) || (a.diff - b.diff));
+  for (const pr of pairs) if (!out[pr.i] && !pr.f.used) { pr.f.used = true; out[pr.i] = { line: lines[pr.i], item: null, near: pr.f.it }; }
+  lines.forEach((ln, i) => { if (!out[i]) out[i] = { line: ln, item: null, near: null }; });
   return out;
+}
+
+// The words that name a recurring bank line, so how it was posted last time can
+// be offered again: no reference numbers or dates (they change every month),
+// but a masked account ("XXXXX1064") stays — it tells two transfers apart.
+export function bankKey(desc) {
+  return String(desc || "").toUpperCase().split(/\s+/)
+    .map(t => t.replace(/^[^A-Z0-9]+|[^A-Z0-9]+$/g, ""))
+    .filter(t => t && (!/\d/.test(t) || /^X{3,}\d{2,}$/.test(t)))
+    .slice(0, 6).join(" ");
 }
 
 // A payment to a vendor the books don't have: an open bill for exactly this

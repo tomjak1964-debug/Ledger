@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { uid, todayISO, isoDate, money, fmtDate, sum, pickable } from "../lib/helpers.js";
 import { round2, billBalance, balance, applyOldestFirst } from "../calc/ledger.js";
 import { accountSettings, accountLabel, TYPE_GROUP, accountByNumber } from "../calc/accounts.js";
-import { reconcileState, matchStatement, suggestVendorPayment, suggestCustomerReceipt, openInvoices } from "../calc/bankRecon.js";
+import { reconcileState, matchStatement, suggestVendorPayment, suggestCustomerReceipt, openInvoices, bankKey } from "../calc/bankRecon.js";
 import { AUTO_NUMBER } from "../lib/store.js";
 import { readStatementFile, parseStatement, parsePasted } from "../lib/bankStatement.js";
 import AccountSelect from "../components/AccountSelect.jsx";
@@ -19,7 +19,10 @@ import { JournalEntryModal } from "./JournalEntries.jsx";
 export default function BankReconciliationView({ db, actions, toast, readOnly }) {
   const [openId, setOpenId] = useState(null);
   const [newRec, setNewRec] = useState(null);
-  const [pendingImport, setPendingImport] = useState(null);   // a statement read on the New screen, reviewed once the reconciliation opens
+  const [pendingImport, setPendingImport] = useState(null);
+  // Started in this visit and nothing ticked yet: backing out discards it, so a
+  // reconciliation is only kept once something has been cleared on it.
+  const [freshId, setFreshId] = useState(null);   // a statement read on the New screen, reviewed once the reconciliation opens
   const [reading, setReading] = useState(false);
   const newFileRef = useRef();
   const recs = db.bankReconciliations || [];
@@ -53,14 +56,22 @@ export default function BankReconciliationView({ db, actions, toast, readOnly })
   const create = async () => {
     const { parsed, fileName, ...rec } = newRec;
     const saved = await actions.saveReconciliation(rec);
-    if (saved) { setNewRec(null); setPendingImport(parsed || null); setOpenId(saved.id); }
+    if (saved) { setNewRec(null); setPendingImport(parsed || null); setFreshId(saved.id); setOpenId(saved.id); }
   };
   const del = async r => {
     if (!confirm(`Delete the ${fmtDate(r.statementDate)} reconciliation? Everything it marked cleared goes back to outstanding.`)) return;
     if (await actions.deleteReconciliation(r.id)) { if (openId === r.id) setOpenId(null); toast("Reconciliation deleted"); }
   };
 
-  if (open) return <ReconcileScreen db={db} actions={actions} toast={toast} readOnly={readOnly} recon={open} onBack={() => setOpenId(null)}
+  const back = async () => {
+    const id = openId;
+    setOpenId(null);
+    if (id && id === freshId && !(db.bankCleared || []).some(c => c.reconciliationId === id)) {
+      setFreshId(null);
+      if (await actions.deleteReconciliation(id)) toast("Nothing was cleared — reconciliation discarded");
+    }
+  };
+  if (open) return <ReconcileScreen db={db} actions={actions} toast={toast} readOnly={readOnly} recon={open} onBack={back}
     initialImport={pendingImport} onImportTaken={() => setPendingImport(null)} />;
 
   return <div>
@@ -264,18 +275,32 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
   const vendorPay = (line) => suggestVendorPayment(db, line);
   const customers = db.contacts.filter(c => c.type === "customer");
   const yymmdd = d => String(d || "").slice(2).replace(/-/g, "");
+  // How each recurring line was posted before (settings.bankRules, keyed by
+  // bankKey): the same transfer, the same rent, the same loan payment comes back
+  // already filled in, as card merchants do.
+  const rules = db.settings.bankRules || {};
   const load = (p) => {
     const inRange = p.lines.filter(l => l.date <= recon.statementDate);
     const matched = matchStatement(inRange, state.items);
     setParsed({ ...p, skippedLater: p.lines.length - inRange.length });
     setRows(matched.map(m => {
       const cp = !m.item && cardPaid(m.line);
+      const rule = !m.item && !m.near && !cp && !m.line.checkNo ? rules[bankKey(m.line.desc)] : null;
       const vp = !m.item && !cp && vendorPay(m.line);
       const cr = !m.item && suggestCustomerReceipt(db, m.line);
-      return { ...m, take: true, action: m.item ? "clear" : vp ? "vendor" : cr ? "customer" : "post",
+      const base = { ...m, take: true, action: m.item ? "clear" : m.near ? "fix" : vp ? "vendor" : cr ? "customer" : "post",
         customerId: cr ? cr.customerId : "", invoiceId: cr ? cr.invoiceId : "", invDesc: m.line.desc, invAccount: "", account: cp ? String(cp.card.account) : m.line.amount < 0 ? "" : "4300",
         payee: cp ? cp.card.name : guessPayee(m.line.desc), recordAs: cp ? "journal" : m.line.amount < 0 ? "expense" : "journal", cardPay: cp || null,
-        vendorId: vp ? vp.vendorId : "", billId: vp ? vp.billId : "", billRef: yymmdd(m.line.date), billAccount: "" };
+        vendorId: vp ? vp.vendorId : "", billId: vp ? vp.billId : "", billRef: yymmdd(m.line.date), billAccount: "", raiseDoc: false, remembered: !!rule };
+      if (!rule) return base;
+      // A rule fills in how it went last time; an open bill or invoice for this
+      // exact amount still wins over a remembered "new one".
+      const sameSide = (rule.action === "vendor" && m.line.amount < 0) || (rule.action === "customer" && m.line.amount > 0) || rule.action === "post";
+      if (!sameSide) return base;
+      return { ...base, action: rule.action, account: rule.account ?? base.account, recordAs: rule.recordAs || base.recordAs, payee: rule.payee || base.payee,
+        vendorId: rule.vendorId || base.vendorId, billId: rule.action === "vendor" && vp && vp.vendorId === rule.vendorId ? vp.billId : "", billAccount: rule.billAccount || "",
+        customerId: rule.customerId || base.customerId, invoiceId: rule.action === "customer" ? (cr && cr.customerId === rule.customerId ? cr.invoiceId : "") : base.invoiceId,
+        invAccount: rule.invAccount || "" };
     }));
   };
   // Read on the New Reconciliation screen: go straight to the review.
@@ -291,6 +316,13 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
   const setRow = (i, patch) => setRows(rows.map((r, j) => j === i ? { ...r, ...patch } : r));
 
   const toClear = rows.filter(r => r.take && r.item);
+  // Correct the books: the row a few dollars off the bank takes the bank's figure.
+  const toFix = rows.filter(r => r.take && !r.item && r.near && r.action === "fix");
+  const findPayment = (it) => {
+    const docs = it.type === "receipt" ? db.invoices : db.bills;
+    for (const d of docs) { const p = (d.payments || []).find(x => x.id === it.sourceId); if (p) return { doc: d, p }; }
+    return null;
+  };
   const toPost = rows.filter(r => r.take && !r.item && r.action === "post");
   const toVendor = rows.filter(r => r.take && !r.item && r.action === "vendor");
   // Written before Ledger started, cleared now: a December check (or deposit)
@@ -335,7 +367,26 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
     setBusy(true);
     try {
       let cleared = 0, posted = 0, failed = 0;
-      if (toClear.length && await actions.setCleared(recon, toClear.map(r => r.item), true)) cleared = toClear.length;
+      if (toClear.length && await actions.setCleared(recon, toClear.flatMap(r => r.group || [r.item]), true)) cleared = toClear.length;
+      for (const r of toFix) {
+        const it = r.near, amt = round2(Math.abs(r.line.amount));
+        let ok = false;
+        if (it.type === "expense") {
+          const e = db.expenses.find(x => x.id === it.sourceId);
+          ok = !!(e && await actions.saveExpense({ ...e, amount: amt }));
+        } else {
+          const f = findPayment(it);
+          if (f) {
+            const isBill = it.type === "payment", diff = round2(amt - (Number(f.p.amount) || 0));
+            // The bill was mistyped too — raise (or lower) it by the same amount.
+            if (isBill && r.raiseDoc && !await actions.saveBill({ ...f.doc, amount: round2((Number(f.doc.amount) || 0) + diff) })) { failed++; continue; }
+            ok = !!await actions.updatePayment(isBill ? "bill" : "invoice", f.doc.id, { ...f.p, amount: amt });
+          }
+        }
+        if (!ok) { failed++; continue; }
+        await actions.setCleared(recon, [{ ...it, amount: r.line.amount }], true);
+        posted++;
+      }
       // The account's opening-balance entry is no line on any statement, but the
       // first reconciliation has to count it cleared — the bank's balance starts there.
       const opening = state.items.find(it => !it.cleared && it.type === "journal" && /opening balance/i.test(it.memo || ""));
@@ -407,6 +458,18 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
         await actions.setCleared(recon, [{ key: `journal:${j.id}:0`, date: j.date, amount: out ? -amt : amt }], true);
         posted++;
       }
+      // Remember how each line was posted, for next month's statement.
+      const learned = { ...rules };
+      let changed = false;
+      for (const r of [...toPost, ...toVendor, ...toCustomer]) {
+        // A check is one payee once, not a recurring line; a key of one word says too little.
+        const k = bankKey(r.line.desc); if (!k || r.line.checkNo || !k.includes(" ")) continue;
+        const rule = { action: r.action, account: r.action === "post" ? r.account : "", recordAs: r.action === "post" ? r.recordAs : "",
+          payee: r.action === "post" ? r.payee : "", vendorId: r.action === "vendor" ? r.vendorId : "", billAccount: r.action === "vendor" ? r.billAccount : "",
+          customerId: r.action === "customer" ? r.customerId : "", invAccount: r.action === "customer" ? r.invAccount : "" };
+        if (JSON.stringify(learned[k]) !== JSON.stringify(rule)) { learned[k] = rule; changed = true; }
+      }
+      if (changed) await actions.saveSettings({ ...db.settings, bankRules: learned });
       toast(`${cleared} matched and cleared · ${posted} posted${failed ? " · " + failed + " failed" : ""}`);
       if (!failed) onClose();
     } finally { setBusy(false); }
@@ -415,7 +478,7 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
   const postAccounts = (out) => out ? ["expense", "cos", "equity", "liability", "asset"] : ["income", "equity", "liability", "asset"];
   return <Modal title={"Import Statement — " + fmtDate(recon.statementDate)} onClose={onClose} wide
     foot={<>
-      <span className="subtle" style={{ marginRight: "auto" }}>{rows.length ? `${toClear.length} matched · ${toPost.length + toVendor.length + toCustomer.length + toPre.length} to post · ${rows.filter(r => !r.item && r.action === "skip").length} left alone` : ""}</span>
+      <span className="subtle" style={{ marginRight: "auto" }}>{rows.length ? `${toClear.length} matched · ${toPost.length + toVendor.length + toCustomer.length + toPre.length + toFix.length} to post · ${rows.filter(r => !r.item && r.action === "skip").length} left alone` : ""}</span>
       <button className="btn" onClick={onClose}>Cancel</button>
       <button className="btn primary" disabled={busy || !canApply} onClick={apply}>{busy ? "Working…" : "Apply"}</button></>}>
     {!parsed ? <>
@@ -440,16 +503,35 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
             <td>{r.line.desc}{r.line.checkNo && <span className="mono subtle"> · check {r.line.checkNo}</span>}</td>
             <td className="num mono" style={{ color: r.line.amount < 0 ? "var(--neg)" : "var(--pos)", fontWeight: 600 }}>{money(r.line.amount)}</td>
             <td>{r.item
-              ? <span><span className="badge green"><span className="dot"></span>Match</span> <span className="subtle">{r.item.memo}{r.item.date !== r.line.date ? " · " + fmtDate(r.item.date) : ""}</span></span>
-              : <span className="badge amber"><span className="dot"></span>Not in Ledger</span>}</td>
+              ? <span><span className="badge green"><span className="dot"></span>Match{r.group ? ` · ${r.group.length} rows` : ""}</span> <span className="subtle">{r.group
+                ? r.group.map(g => `${g.party || g.memo} ${money(Math.abs(g.amount))}`).join(" + ") : r.item.memo}{r.item.date !== r.line.date ? " · " + fmtDate(r.item.date) : ""}</span></span>
+              : r.near
+                ? <span><span className="badge amber"><span className="dot"></span>Close match</span> <span className="subtle">{r.near.party || r.near.memo} · books say <b className="mono">{money(Math.abs(r.near.amount))}</b>{r.near.date !== r.line.date ? " · " + fmtDate(r.near.date) : ""}</span></span>
+                : <span className="badge amber"><span className="dot"></span>Not in Ledger</span>}
+              {r.remembered && <div className="subtle" style={{ fontSize: 11 }}>filled in from last time</div>}</td>
             <td>{r.item ? <span className="subtle">will be marked cleared</span>
               : <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <select className="select" value={r.action} onChange={e => setRow(i, { action: e.target.value })}>
+                  {r.near && <option value="fix">Fix the books — it was {money(Math.abs(r.line.amount))}, not {money(Math.abs(r.near.amount))}</option>}
                   <option value="post">{r.line.amount < 0 ? "Post as money out" : "Post as money in"}</option>
                   {r.line.amount < 0 && <option value="vendor">Vendor bill payment (keeps the vendor's account and 1099)</option>}
                   {r.line.amount > 0 && <option value="customer">Customer receipt (keeps the customer's account)</option>}
                   <option value="pre">{r.line.amount < 0 ? "Written before Ledger — a December check that cleared now" : "Deposited before Ledger — in transit at the start"}</option>
                   <option value="skip">Leave it — I'll enter it myself</option></select>
+                {r.action === "fix" && r.near && (() => {
+                  const f = r.near.type !== "expense" && findPayment(r.near);
+                  const diff = round2(Math.abs(r.line.amount) - Math.abs(r.near.amount));
+                  const isBill = r.near.type === "payment";
+                  return <>
+                    <span className="subtle" style={{ fontSize: 12 }}>Changes the {r.near.type === "expense" ? "expense entry" : isBill ? "payment" : "receipt"}{f ? ` on ${isBill ? (f.doc.ref || f.doc.number) : f.doc.number}` : ""} to the bank's {money(Math.abs(r.line.amount))} and ticks it cleared.</span>
+                    {isBill && f && diff > 0 && <label className="subtle" style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 12 }}>
+                      <input type="checkbox" checked={r.raiseDoc} onChange={e => setRow(i, { raiseDoc: e.target.checked })} style={{ marginTop: 2 }} />
+                      <span>The bill was {money(round2((Number(f.doc.amount) || 0) + diff))} too — raise it. Unticked, the extra {money(diff)} stays as a credit with the vendor.</span></label>}
+                    {isBill && f && diff < 0 && <label className="subtle" style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 12 }}>
+                      <input type="checkbox" checked={r.raiseDoc} onChange={e => setRow(i, { raiseDoc: e.target.checked })} style={{ marginTop: 2 }} />
+                      <span>The bill was {money(round2((Number(f.doc.amount) || 0) + diff))} too — lower it. Unticked, {money(-diff)} stays owing on the bill.</span></label>}
+                  </>;
+                })()}
                 {r.action === "pre" && <span className="subtle" style={{ fontSize: 12 }}>
                   Books it on {fmtDate(preDate(r.line))} against Retained Earnings — its {r.line.amount < 0 ? "expense" : "income"} is already in last year's books — and ticks it cleared.</span>}
                 {r.action === "vendor" && (() => {

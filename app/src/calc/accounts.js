@@ -115,6 +115,7 @@ export const DEFAULT_ACCOUNTS = [
   ["2390", "401K Payable", "Other Current Liabilities"],
   ["2400", "Customer Deposits", "Other Current Liabilities"],
   ["2500", "Current Portion Long-Term Debt", "Other Current Liabilities"],
+  ["2600", "Line of Credit", "Other Current Liabilities"],
   ["2700", "Long Term Debt-Noncurrent", "Long Term Liabilities"],
   ["3909", "Beginning Balance Equity", "Equity-doesn't close"],
   ["3910", "Retained Earnings", "Equity-Retained Earnings"],
@@ -160,4 +161,5 @@ export const DEFAULT_ACCOUNTS = [
   ["6950", "Insurance Expense", "Expenses"],
   ["7050", "Depreciation Expense", "Expenses"],
   ["7100", "Gain/Loss - Sale of Assets Exp", "Expenses"],
+  ["7150", "Interest Expense", "Expenses"],
 ].map(([number, name, type], i) => ({ number, name, type, active: true, sort: i }));

@@ -896,7 +896,10 @@ takes B as the closing date; a page's margin control number (Citi's `276700`) pr
 dropped (`MARGIN_CODE`, spaced or run together — `27670003/19` cost March a $6.03 line, `276700 02/20`
 February's Netflix); a row with nothing between its dates and its amount takes its description from
 the text lines around it (Citi wraps a long merchant name — *POWERHOUSE GENERATOR* above, *01/27 01/28 $275.00*,
-*POWERHOUSEGENMI* below); a minus sign or a "Payments / Credits" section makes it a credit;
+*POWERHOUSEGENMI* below); a charge in another currency is a dated line with no amount and *300.00 CANADIAN
+DOLLAR $211.97* under it — the US-dollar figure is the charge, the foreign amount goes in the description (`FX`);
+a merchant named *Total* (Amex's *TOTAL WINE AND MORE*) is a charge — only *Total fees / new charges / …* is noise.
+All 2026 Citi (Jan–Sep) and Amex statements balance to the cent through the importer; a minus sign or a "Payments / Credits" section makes it a credit;
 a closing date, previous and new balance are read off the page, and a year is wound back for a January statement
 listing December charges). Payments are skipped (they're the bank side); every other line is marked **Business**
 (with an expense account) or **Personal**, pre-filled from how that merchant went on earlier statements

@@ -45,7 +45,12 @@ const NEW_BAL = /new\s+balance[^\d$-]*(-?\$?[\d,]+\.\d{2})/i;
 const PREV_BAL = /previous\s+balance[^\d$-]*(-?\$?[\d,]+\.\d{2})/i;
 const SECTION_CREDIT = /\b(payments?|credits?)\b/i;
 const SECTION_CHARGE = /\b(purchases?|new\s+charges|charges|fees?|interest\s+charged|transactions)\b/i;
-const NOISE = /\b(total|subtotal|balance|minimum payment|credit limit|available credit|page \d|account ending|payment due)\b/i;
+// A statement's own totals — "Total fees for this period", "Total New Charges" — not
+// a merchant that happens to be called Total ("TOTAL WINE AND MORE").
+const NOISE = /\b(sub)?total\s+(fees|interest|new\s+charges|charges|payments|credits|purchases|for|amount|due)\b|\b(balance|minimum payment|credit limit|available credit|page \d|account ending|payment due)\b/i;
+// A charge in another currency: Citi prints the merchant on the dated line and
+// "300.00 CANADIAN DOLLAR $211.97" — foreign amount, currency, US dollars — under it.
+const FX = /^([\d,]+\.\d{2})\s+([A-Z][A-Z .]+?)\s+(\$[\d,]+\.\d{2})$/;
 const DATE = String.raw`(\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\*?|[A-Za-z]{3}\.?\s+\d{1,2})`;
 const ROW = new RegExp(String.raw`^${DATE}(?:\s+${DATE})?\s+(.*?)\s+(\(?-?\$?[\d,]+\.\d{2}-?\)?)$`);
 // "276700 02/20 …" or run together, "27670003/19 …" — the shortest run of
@@ -102,8 +107,12 @@ export function parseCardText(lines, { year } = {}) {
     if (used.has(i)) return;
     // A page's margin control number (Citi's "276700") can land on the same row
     // as a transaction, ahead of its date — it isn't part of the transaction.
-    const ln = raw.replace(/\s+/g, " ").trim().replace(MARGIN_CODE, "");
+    let ln = raw.replace(/\s+/g, " ").trim().replace(MARGIN_CODE, "");
     if (!ln) return;
+    // A dated line with no amount, and the foreign-currency line under it: the
+    // US-dollar figure is the charge, the foreign amount goes in the description.
+    const fx = !/\d\.\d{2}\b/.test(ln) && DATED.test(ln) && norm(lines[i + 1]).match(FX);
+    if (fx) { ln = `${ln} (${fx[1]} ${fx[2].trim()}) ${fx[3]}`; used.add(i + 1); }
     const m = splitRow(ln);
     if (!m) {
       // A heading: "Payments and Other Credits" turns what follows into credits,

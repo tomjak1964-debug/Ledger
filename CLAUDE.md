@@ -878,7 +878,14 @@ invoice (part payment allowed), spreads over the customer's open invoices oldest
 invoice for it (auto-numbered, no tax, the customer's sales account unless one is picked) and receives it, then
 ticks every receipt row cleared. `suggestCustomerReceipt()` pre-selects it: an open invoice for exactly the amount
 (narrowed to the customer the line names), else the named customer — oldest first when they owe at least that
-much, else a new invoice. Reports → Account Reconciliation → **Reconciliation Summary** lists each
+much, else a new invoice. **Starting one:** the New Reconciliation dialog has **Import Statement** at the top — the file's period end
+and ending balance fill the date and balance, and *Start & Match Statement* opens the reconciliation straight
+into the matching review (`initialImport` → `ImportStatementModal`'s `preParsed`). Applying it also ticks the
+account's **opening-balance** journal entry if still outstanding (no statement line ever matches it). A line the
+books don't have can be **Written before Ledger** (a December 2025 check clearing in January, or a deposit in
+transit): a journal entry on the account's opening date (its earliest journal entry, else Dec 31 of the year
+before) between the bank and Retained Earnings — its expense or income is already in last year's books — ticked
+cleared, so the opening balance becomes the true book balance. Reports → Account Reconciliation → **Reconciliation Summary** lists each
 statement with its cleared balance, outstanding items and book balance. Cleared keys are not carried by a
 JSON backup import, because the import gives payments new ids.
 

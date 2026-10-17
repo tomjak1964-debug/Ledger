@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { uid, todayISO, isoDate, money, fmtDate, sum, pickable } from "../lib/helpers.js";
 import { round2, billBalance, balance, applyOldestFirst } from "../calc/ledger.js";
 import { accountSettings, accountLabel, TYPE_GROUP, accountByNumber } from "../calc/accounts.js";
@@ -19,6 +19,9 @@ import { JournalEntryModal } from "./JournalEntries.jsx";
 export default function BankReconciliationView({ db, actions, toast, readOnly }) {
   const [openId, setOpenId] = useState(null);
   const [newRec, setNewRec] = useState(null);
+  const [pendingImport, setPendingImport] = useState(null);   // a statement read on the New screen, reviewed once the reconciliation opens
+  const [reading, setReading] = useState(false);
+  const newFileRef = useRef();
   const recs = db.bankReconciliations || [];
   const open = recs.find(r => r.id === openId);
   const { sorted: rows, sort, onSort } = useTableSort(recs, {
@@ -32,16 +35,33 @@ export default function BankReconciliationView({ db, actions, toast, readOnly })
     const next = d && new Date(d.getFullYear(), d.getMonth() + 2, 0);    // the last day of the next month
     setNewRec({ id: uid(), _new: true, account: acct, statementDate: next ? isoDate(next) : todayISO(), statementBalance: "", status: "open", notes: "" });
   };
+  // Read the statement on the New screen: its period end and ending balance
+  // fill in the two fields, and the lines wait to be reviewed once the
+  // reconciliation opens.
+  const readNewFile = async (f) => {
+    if (!f) return;
+    setReading(true);
+    try {
+      const year = Number((newRec.statementDate || todayISO()).slice(0, 4));
+      const p = parseStatement(await readStatementFile(f), { year });
+      if (!p.lines.length) throw new Error("no transactions found — try the .csv export from online banking");
+      setNewRec(x => ({ ...x, statementDate: p.period?.to || x.statementDate, statementBalance: p.endingBalance != null ? p.endingBalance : x.statementBalance,
+        parsed: p, fileName: f.name }));
+    } catch (e) { toast("⚠ Couldn't read that file: " + (e.message || e)); }
+    finally { setReading(false); if (newFileRef.current) newFileRef.current.value = ""; }
+  };
   const create = async () => {
-    const saved = await actions.saveReconciliation(newRec);
-    if (saved) { setNewRec(null); setOpenId(saved.id); }
+    const { parsed, fileName, ...rec } = newRec;
+    const saved = await actions.saveReconciliation(rec);
+    if (saved) { setNewRec(null); setPendingImport(parsed || null); setOpenId(saved.id); }
   };
   const del = async r => {
     if (!confirm(`Delete the ${fmtDate(r.statementDate)} reconciliation? Everything it marked cleared goes back to outstanding.`)) return;
     if (await actions.deleteReconciliation(r.id)) { if (openId === r.id) setOpenId(null); toast("Reconciliation deleted"); }
   };
 
-  if (open) return <ReconcileScreen db={db} actions={actions} toast={toast} readOnly={readOnly} recon={open} onBack={() => setOpenId(null)} />;
+  if (open) return <ReconcileScreen db={db} actions={actions} toast={toast} readOnly={readOnly} recon={open} onBack={() => setOpenId(null)}
+    initialImport={pendingImport} onImportTaken={() => setPendingImport(null)} />;
 
   return <div>
     <div className="toolbar">
@@ -74,7 +94,14 @@ export default function BankReconciliationView({ db, actions, toast, readOnly })
     </div>
     {newRec && <Modal title="New Reconciliation" onClose={() => setNewRec(null)}
       foot={<><button className="btn" onClick={() => setNewRec(null)}>Cancel</button>
-        <button className="btn primary" disabled={!newRec.account || !newRec.statementDate || newRec.statementBalance === ""} onClick={create}>Start Reconciling</button></>}>
+        <button className="btn primary" disabled={!newRec.account || !newRec.statementDate || newRec.statementBalance === ""} onClick={create}>{newRec.parsed ? "Start & Match Statement" : "Start Reconciling"}</button></>}>
+      <Field label="Bank statement" hint="The PDF from the bank or a .csv export — fills in the ending date and balance, and its lines are matched as soon as you start">
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <input ref={newFileRef} type="file" accept=".pdf,.csv,.txt" style={{ display: "none" }} onChange={e => readNewFile(e.target.files?.[0])} />
+          <button className="btn" disabled={reading} onClick={() => newFileRef.current?.click()}><Ico d={ICONS.clip} size={15} />{reading ? "Reading…" : newRec.parsed ? "Choose a Different File" : "Import Statement"}</button>
+          {newRec.parsed && <span className="subtle">{newRec.fileName} · {newRec.parsed.lines.length} transactions{newRec.parsed.period ? ` · ${fmtDate(newRec.parsed.period.from)} – ${fmtDate(newRec.parsed.period.to)}` : ""}
+            {newRec.parsed.endingBalance == null && <span style={{ color: "var(--warn)" }}> · no ending balance on it — type it below</span>}</span>}
+        </div></Field>
       <div className="row">
         <Field label="Bank account"><AccountSelect db={db} value={newRec.account} onChange={v => setNewRec({ ...newRec, account: v })} types={["Cash"]} blank="— pick the account —" /></Field>
         <Field label="Statement ending date"><input className="input" type="date" value={newRec.statementDate} onChange={e => setNewRec({ ...newRec, statementDate: e.target.value })} /></Field>
@@ -86,11 +113,13 @@ export default function BankReconciliationView({ db, actions, toast, readOnly })
 }
 
 /* ---------- one statement ---------- */
-export function ReconcileScreen({ db, actions, toast, readOnly, recon, onBack }) {
+export function ReconcileScreen({ db, actions, toast, readOnly, recon, onBack, initialImport, onImportTaken }) {
   const s = reconcileState(db, recon);
   const done = recon.status === "done";
   const locked = readOnly || done;
-  const [importing, setImporting] = useState(false);
+  // A statement read on the New screen opens straight into its review.
+  const [importing, setImporting] = useState(!!initialImport && !locked);
+  const [preParsed] = useState(initialImport || null);
   const [bookDiff, setBookDiff] = useState(null);
   const [edit, setEdit] = useState(null);   // header edits: { statementDate, statementBalance }
   const toggle = async (it) => { if (locked) return; await actions.setCleared(recon, [it], !it.cleared); };
@@ -163,7 +192,8 @@ export function ReconcileScreen({ db, actions, toast, readOnly, recon, onBack })
         <Field label="Statement ending balance"><input className="input mono" type="number" step="0.01" value={edit.statementBalance} onChange={e => setEdit({ ...edit, statementBalance: e.target.value })} /></Field>
       </div>
     </Modal>}
-    {importing && <ImportStatementModal db={db} actions={actions} toast={toast} recon={recon} state={s} onClose={() => setImporting(false)} />}
+    {importing && <ImportStatementModal db={db} actions={actions} toast={toast} recon={recon} state={s} preParsed={preParsed}
+      onClose={() => { setImporting(false); onImportTaken?.(); }} />}
     {bookDiff && <JournalEntryModal db={db} entry={bookDiff} onClose={() => setBookDiff(null)} onSave={onBooked} />}
   </div>;
 }
@@ -201,7 +231,7 @@ function ItemTable({ title, items, locked, onToggle, onAll }) {
 // ask what the money was: post it as an expense entry (money out to an expense
 // account) or a journal entry (a distribution, a loan payment, interest, a
 // transfer — any account), or leave it.
-export function ImportStatementModal({ db, actions, toast, recon, state, onClose }) {
+export function ImportStatementModal({ db, actions, toast, recon, state, onClose, preParsed }) {
   const fileRef = useRef();
   const [busy, setBusy] = useState(false);
   const [parsed, setParsed] = useState(null);      // { period, endingBalance, lines }
@@ -248,6 +278,8 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
         vendorId: vp ? vp.vendorId : "", billId: vp ? vp.billId : "", billRef: yymmdd(m.line.date), billAccount: "" };
     }));
   };
+  // Read on the New Reconciliation screen: go straight to the review.
+  useEffect(() => { if (preParsed) load(preParsed); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
   const onFile = async (f) => {
     if (!f) return;
     setBusy(true);
@@ -261,6 +293,16 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
   const toClear = rows.filter(r => r.take && r.item);
   const toPost = rows.filter(r => r.take && !r.item && r.action === "post");
   const toVendor = rows.filter(r => r.take && !r.item && r.action === "vendor");
+  // Written before Ledger started, cleared now: a December check (or deposit)
+  // whose expense (or income) is already in last year's books. It is booked on
+  // the opening date against Retained Earnings — so the opening balance becomes
+  // the true book balance — and ticked cleared on this statement.
+  const toPre = rows.filter(r => r.take && !r.item && r.action === "pre");
+  const openingDate = (() => {
+    const ds = (db.journalEntries || []).filter(j => (j.lines || []).some(l => String(l.account) === String(state.account))).map(j => j.date).filter(Boolean).sort();
+    return ds[0] || "";
+  })();
+  const preDate = (line) => openingDate && openingDate < line.date ? openingDate : `${Number(line.date.slice(0, 4)) - 1}-12-31`;
   // What's wrong with a vendor row, if anything — Apply waits until none are.
   const vendorProblem = (r) => {
     if (!r.vendorId) return "Pick the vendor";
@@ -294,6 +336,10 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
     try {
       let cleared = 0, posted = 0, failed = 0;
       if (toClear.length && await actions.setCleared(recon, toClear.map(r => r.item), true)) cleared = toClear.length;
+      // The account's opening-balance entry is no line on any statement, but the
+      // first reconciliation has to count it cleared — the bank's balance starts there.
+      const opening = state.items.find(it => !it.cleared && it.type === "journal" && /opening balance/i.test(it.memo || ""));
+      if (opening && await actions.setCleared(recon, [opening], true)) cleared++;
       for (const r of toPost) {
         const amt = Math.abs(r.line.amount), out = r.line.amount < 0;
         if (out && r.recordAs === "expense") {
@@ -350,6 +396,17 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
         await actions.setCleared(recon, entries.map(e => ({ key: "receipt:" + e.payment.id, date: e.payment.date, amount: e.payment.amount })), true);
         posted++;
       }
+      for (const r of toPre) {
+        const amt = round2(Math.abs(r.line.amount)), out = r.line.amount < 0, re = String(acct.retainedEarnings || "3910");
+        const what = r.line.checkNo ? "Check " + r.line.checkNo : r.line.desc;
+        const lines = out
+          ? [{ id: uid(), account: state.account, desc: what, debit: "", credit: amt }, { id: uid(), account: re, desc: "Written before Ledger, cleared " + fmtDate(r.line.date), debit: amt, credit: "" }]
+          : [{ id: uid(), account: state.account, desc: what, debit: amt, credit: "" }, { id: uid(), account: re, desc: "Deposited before Ledger, cleared " + fmtDate(r.line.date), debit: "", credit: amt }];
+        const j = await actions.saveJournalEntry({ id: uid(), _new: true, date: preDate(r.line), ref: r.line.checkNo || "Before Ledger", memo: (out ? "Outstanding at the start: " : "In transit at the start: ") + r.line.desc, lines });
+        if (!j) { failed++; continue; }
+        await actions.setCleared(recon, [{ key: `journal:${j.id}:0`, date: j.date, amount: out ? -amt : amt }], true);
+        posted++;
+      }
       toast(`${cleared} matched and cleared · ${posted} posted${failed ? " · " + failed + " failed" : ""}`);
       if (!failed) onClose();
     } finally { setBusy(false); }
@@ -358,7 +415,7 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
   const postAccounts = (out) => out ? ["expense", "cos", "equity", "liability", "asset"] : ["income", "equity", "liability", "asset"];
   return <Modal title={"Import Statement — " + fmtDate(recon.statementDate)} onClose={onClose} wide
     foot={<>
-      <span className="subtle" style={{ marginRight: "auto" }}>{rows.length ? `${toClear.length} matched · ${toPost.length + toVendor.length + toCustomer.length} to post · ${rows.filter(r => !r.item && r.action === "skip").length} left alone` : ""}</span>
+      <span className="subtle" style={{ marginRight: "auto" }}>{rows.length ? `${toClear.length} matched · ${toPost.length + toVendor.length + toCustomer.length + toPre.length} to post · ${rows.filter(r => !r.item && r.action === "skip").length} left alone` : ""}</span>
       <button className="btn" onClick={onClose}>Cancel</button>
       <button className="btn primary" disabled={busy || !canApply} onClick={apply}>{busy ? "Working…" : "Apply"}</button></>}>
     {!parsed ? <>
@@ -391,7 +448,10 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
                   <option value="post">{r.line.amount < 0 ? "Post as money out" : "Post as money in"}</option>
                   {r.line.amount < 0 && <option value="vendor">Vendor bill payment (keeps the vendor's account and 1099)</option>}
                   {r.line.amount > 0 && <option value="customer">Customer receipt (keeps the customer's account)</option>}
+                  <option value="pre">{r.line.amount < 0 ? "Written before Ledger — a December check that cleared now" : "Deposited before Ledger — in transit at the start"}</option>
                   <option value="skip">Leave it — I'll enter it myself</option></select>
+                {r.action === "pre" && <span className="subtle" style={{ fontSize: 12 }}>
+                  Books it on {fmtDate(preDate(r.line))} against Retained Earnings — its {r.line.amount < 0 ? "expense" : "income"} is already in last year's books — and ticks it cleared.</span>}
                 {r.action === "vendor" && (() => {
                   const open = db.bills.filter(b => b.vendorId === r.vendorId && billBalance(b) > 0.005).sort((a, b) => (a.date || "").localeCompare(b.date || ""));
                   const problem = vendorProblem(r);

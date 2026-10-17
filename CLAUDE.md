@@ -893,7 +893,9 @@ with one or two dates and carries an amount — the **first** `$` amount after t
 a two-column page (Citi's page 3, the Costco rewards panel beside the transactions) comes out of the PDF with both
 columns on one row; without a `$` on the line, the last amount, as before; Chase's *Opening/Closing Date A - B*
 takes B as the closing date; a page's margin control number (Citi's `276700`) printed ahead of a row's date is
-dropped (`MARGIN_CODE`) — it cost February's Netflix line; a minus sign or a "Payments / Credits" section makes it a credit;
+dropped (`MARGIN_CODE`) — it cost February's Netflix line; a row with nothing between its dates and its amount takes its description from
+the text lines around it (Citi wraps a long merchant name — *POWERHOUSE GENERATOR* above, *01/27 01/28 $275.00*,
+*POWERHOUSEGENMI* below); a minus sign or a "Payments / Credits" section makes it a credit;
 a closing date, previous and new balance are read off the page, and a year is wound back for a January statement
 listing December charges). Payments are skipped (they're the bank side); every other line is marked **Business**
 (with an expense account) or **Personal**, pre-filled from how that merchant went on earlier statements

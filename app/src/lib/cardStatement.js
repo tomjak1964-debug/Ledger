@@ -65,6 +65,9 @@ export function splitRow(ln) {
   if (!m) return null;
   const rest = m[3];
   const toks = [...rest.matchAll(AMOUNT_TOKEN)].map(t => ({ str: t[2], at: t.index + t[1].length }));
+  // Nothing but the dates and the amount: the description was printed around
+  // the row (see wrapped() in parseCardText).
+  if (toks.length === 1 && toks[0].at === 0 && rest.trim() === toks[0].str) return { d1: m[1], d2: m[2], desc: "", amount: toks[0].str.replace(/^\+/, "") };
   const dollar = toks.find(t => t.str.includes("$") && t.at > 0);
   if (dollar) return { d1: m[1], d2: m[2], desc: rest.slice(0, dollar.at).trim(), amount: dollar.str.replace(/^\+/, "") };
   if (strict) return { d1: strict[1], d2: strict[2], desc: strict[3], amount: strict[4] };
@@ -87,11 +90,18 @@ export function parseCardText(lines, { year } = {}) {
   const y = closingDate ? Number(closingDate.slice(0, 4)) : fy;
   const out = [];
   let creditSection = false;
-  for (const raw of lines) {
+  const norm = raw => String(raw || "").replace(/\s+/g, " ").trim();
+  // A line that can carry part of a wrapped description: words, no amount, no
+  // date to start it, not a heading, not a bare margin number.
+  const textOnly = ln => !!ln && /[A-Za-z]/.test(ln) && !/\d\.\d{2}\b/.test(ln) && !DATED.test(ln)
+    && !SECTION_CREDIT.test(ln) && !SECTION_CHARGE.test(ln) && !NOISE.test(ln) && !/^\d+$/.test(ln);
+  const used = new Set();   // lines taken into a wrapped description
+  lines.forEach((raw, i) => {
+    if (used.has(i)) return;
     // A page's margin control number (Citi's "276700") can land on the same row
     // as a transaction, ahead of its date — it isn't part of the transaction.
     const ln = raw.replace(/\s+/g, " ").trim().replace(MARGIN_CODE, "");
-    if (!ln) continue;
+    if (!ln) return;
     const m = splitRow(ln);
     if (!m) {
       // A heading: "Payments and Other Credits" turns what follows into credits,
@@ -100,17 +110,27 @@ export function parseCardText(lines, { year } = {}) {
         if (SECTION_CREDIT.test(ln) && !SECTION_CHARGE.test(ln.replace(SECTION_CREDIT, ""))) creditSection = true;
         else if (SECTION_CHARGE.test(ln)) creditSection = false;
       }
-      continue;
+      return;
     }
-    const desc = m.desc.replace(/\s+/g, " ").trim();
-    if (NOISE.test(desc) && !/interest|fee/i.test(desc)) continue;
+    let desc = m.desc.replace(/\s+/g, " ").trim();
+    // Citi wraps a long merchant name around the row — "POWERHOUSE GENERATOR"
+    // above, "01/27 01/28 $275.00", "POWERHOUSEGENMI" below. With nothing
+    // between the dates and the amount, the text lines either side are it.
+    if (!desc) {
+      const above = norm(lines[i - 1]), below = norm(lines[i + 1]);
+      const parts = [];
+      if (textOnly(above) && !used.has(i - 1)) parts.push(above);
+      if (textOnly(below)) { parts.push(below); used.add(i + 1); }
+      desc = parts.join(" ");
+    }
+    if (NOISE.test(desc) && !/interest|fee/i.test(desc)) return;
     let amount = money(m.amount);
-    if (amount == null || Math.abs(amount) < 0.005) continue;
+    if (amount == null || Math.abs(amount) < 0.005) return;
     if (creditSection && amount > 0) amount = -amount;
     const date = fixYear(parseDate(m.d1.replace(/[.*]/g, ""), y), closingDate);
-    if (!date) continue;
+    if (!date) return;
     out.push({ id: uid(), date, desc, amount, kind: kindOf(desc, amount) });
-  }
+  });
   return { closingDate, periodFrom: period?.from || "", previousBalance, newBalance, lines: out };
 }
 

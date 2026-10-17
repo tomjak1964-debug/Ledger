@@ -847,8 +847,9 @@ and the opening-balance entry are all there to tick, and a correction in the boo
 A reconciliation (`bank_reconciliations`: account, statement ending date and balance, open/done) shows the
 items dated on or before the statement that have not cleared on an earlier one; ticking writes the key to
 `bank_cleared_items` with the reconciliation it cleared in (a key clears once — unique per org). The
-arithmetic carries no "last reconciled balance": **difference = statement balance − Σ every cleared item on
-the account**, and Finish needs it at zero. **Book the Difference** prefills a journal entry between the
+arithmetic carries no "last reconciled balance": **difference = statement balance − Σ the items cleared on
+this statement and the ones before it** (never a later one — otherwise February's clearing moved January's
+difference off zero), and Finish needs it at zero. **Book the Difference** prefills a journal entry between the
 bank account and Other Income / Service Charge for what is left, and clears it. **Import Statement** reads
 the bank's PDF (pdf.js, the lineup reader), a `.csv` export (columns by heading: date, description, amount
 or debit/credit, balance, check number) or pasted rows; `parseStatementText()` is keyword-driven — a line

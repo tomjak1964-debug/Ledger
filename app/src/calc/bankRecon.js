@@ -46,12 +46,18 @@ export function cashRegister(db, account) {
 // date with their cleared flag, the totals, and the difference still to find.
 export function reconcileState(db, recon) {
   const account = String(recon.account || accountSettings(db.settings).cash);
-  const cleared = new Map((db.bankCleared || []).filter(c => String(c.account) === account).map(c => [c.itemKey, c]));
+  // Each statement counts what cleared on it and on the statements before it —
+  // never a later one. Otherwise February's clearing would move January's
+  // difference off zero after January was finished.
+  const dateOf = new Map((db.bankReconciliations || []).map(r => [r.id, r.statementDate]));
+  const upTo = c => c.reconciliationId === recon.id || (dateOf.get(c.reconciliationId) || "") < recon.statementDate;
+  const cleared = new Map((db.bankCleared || []).filter(c => String(c.account) === account && upTo(c)).map(c => [c.itemKey, c]));
   const register = cashRegister(db, account);
   const items = register
     .filter(it => it.date && it.date <= recon.statementDate)
     .map(it => { const c = cleared.get(it.key); return { ...it, cleared: !!c, thisRecon: !!c && c.reconciliationId === recon.id, otherRecon: !!c && c.reconciliationId !== recon.id }; })
     .filter(it => !it.otherRecon);   // cleared on an earlier statement: no longer the bank's business here
+  // (an item a LATER statement cleared shows here as outstanding, as it was at this statement's date)
   const clearedTotal = round2(sum([...cleared.values()], c => Number(c.amount) || 0));
   const thisCleared = items.filter(it => it.thisRecon);
   const outstanding = items.filter(it => !it.cleared);

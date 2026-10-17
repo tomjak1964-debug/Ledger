@@ -39,6 +39,8 @@ function fixYear(date, closing) {
 }
 
 const CLOSING = /(?:statement\s+)?closing\s+date[:\s]*([A-Za-z]{3,9}\.?\s+\d{1,2},?\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4})/i;
+// Chase prints both ends of the period on one line — the closing date is the second.
+const OPEN_CLOSE = /opening\s*\/\s*closing\s+date[:\s]*(\d{1,2}\/\d{1,2}\/\d{2,4})\s*-\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i;
 const NEW_BAL = /new\s+balance[^\d$-]*(-?\$?[\d,]+\.\d{2})/i;
 const PREV_BAL = /previous\s+balance[^\d$-]*(-?\$?[\d,]+\.\d{2})/i;
 const SECTION_CREDIT = /\b(payments?|credits?)\b/i;
@@ -46,6 +48,27 @@ const SECTION_CHARGE = /\b(purchases?|new\s+charges|charges|fees?|interest\s+cha
 const NOISE = /\b(total|subtotal|balance|minimum payment|credit limit|available credit|page \d|account ending|payment due)\b/i;
 const DATE = String.raw`(\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\*?|[A-Za-z]{3}\.?\s+\d{1,2})`;
 const ROW = new RegExp(String.raw`^${DATE}(?:\s+${DATE})?\s+(.*?)\s+(\(?-?\$?[\d,]+\.\d{2}-?\)?)$`);
+// A dated line, whatever follows the amount: "12/29 12/29 OPENAI … $20.00 5% on gas …… +$0.00".
+const DATED = new RegExp(String.raw`^${DATE}(?:\s+${DATE})?\s+(.+)$`);
+const AMOUNT_TOKEN = /(^|\s)(\(?[-+]?\$?[\d,]+\.\d{2}-?\)?)(?=\s|$)/g;
+
+// A statement printed in two columns (Citi's page 3: transactions on the left,
+// the Costco rewards panel on the right) comes out of the PDF with both on one
+// row, so the transaction's amount is not the last on the line. The first
+// dollar amount after the description is the transaction's; anything after it
+// belongs to the other column. A statement that prints amounts without a "$"
+// still reads as before — the last amount on the line.
+export function splitRow(ln) {
+  const strict = ln.match(ROW);
+  const m = ln.match(DATED);
+  if (!m) return null;
+  const rest = m[3];
+  const toks = [...rest.matchAll(AMOUNT_TOKEN)].map(t => ({ str: t[2], at: t.index + t[1].length }));
+  const dollar = toks.find(t => t.str.includes("$") && t.at > 0);
+  if (dollar) return { d1: m[1], d2: m[2], desc: rest.slice(0, dollar.at).trim(), amount: dollar.str.replace(/^\+/, "") };
+  if (strict) return { d1: strict[1], d2: strict[2], desc: strict[3], amount: strict[4] };
+  return null;
+}
 
 // Text rows (PDF or pasted) → statement.
 export function parseCardText(lines, { year } = {}) {
@@ -53,7 +76,8 @@ export function parseCardText(lines, { year } = {}) {
   const fy = year || new Date().getFullYear();
   for (const raw of lines) {
     const ln = raw.replace(/\s+/g, " ").trim();
-    const c = ln.match(CLOSING); if (c && !closingDate) closingDate = parseDate(c[1].replace(/\./, ""), fy);
+    const oc = ln.match(OPEN_CLOSE); if (oc && !closingDate) closingDate = parseDate(oc[2], fy);
+    const c = !oc && ln.match(CLOSING); if (c && !closingDate) closingDate = parseDate(c[1].replace(/\./, ""), fy);
     const nb = ln.match(NEW_BAL); if (nb && newBalance == null) newBalance = money(nb[1]);
     const pb = ln.match(PREV_BAL); if (pb && previousBalance == null) previousBalance = money(pb[1]);
   }
@@ -65,7 +89,7 @@ export function parseCardText(lines, { year } = {}) {
   for (const raw of lines) {
     const ln = raw.replace(/\s+/g, " ").trim();
     if (!ln) continue;
-    const m = ln.match(ROW);
+    const m = splitRow(ln);
     if (!m) {
       // A heading: "Payments and Other Credits" turns what follows into credits,
       // "Purchases" / "New Charges" / "Fees" back into charges.
@@ -75,12 +99,12 @@ export function parseCardText(lines, { year } = {}) {
       }
       continue;
     }
-    const desc = m[3].replace(/\s+/g, " ").trim();
+    const desc = m.desc.replace(/\s+/g, " ").trim();
     if (NOISE.test(desc) && !/interest|fee/i.test(desc)) continue;
-    let amount = money(m[4]);
+    let amount = money(m.amount);
     if (amount == null || Math.abs(amount) < 0.005) continue;
     if (creditSection && amount > 0) amount = -amount;
-    const date = fixYear(parseDate(m[1].replace(/[.*]/g, ""), y), closingDate);
+    const date = fixYear(parseDate(m.d1.replace(/[.*]/g, ""), y), closingDate);
     if (!date) continue;
     out.push({ id: uid(), date, desc, amount, kind: kindOf(desc, amount) });
   }

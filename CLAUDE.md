@@ -884,7 +884,10 @@ account, added to the chart as Other Current Liabilities from 2150 up, and the w
 on a bank statement) with the owner-draws account (`settings.accounts.draws`, default 3940 Distributions). Each
 month **Import Statement** reads the card's .csv download (one signed Amount column, or Debit/Credit — a file
 whose purchases are negative is flipped), a statement PDF, or pasted rows (`parseCardText()`: a line that starts
-with one or two dates and ends in an amount; a minus sign or a "Payments / Credits" section makes it a credit;
+with one or two dates and carries an amount — the **first** `$` amount after the description (`splitRow()`), because
+a two-column page (Citi's page 3, the Costco rewards panel beside the transactions) comes out of the PDF with both
+columns on one row; without a `$` on the line, the last amount, as before; Chase's *Opening/Closing Date A - B*
+takes B as the closing date; a minus sign or a "Payments / Credits" section makes it a credit;
 a closing date, previous and new balance are read off the page, and a year is wound back for a January statement
 listing December charges). Payments are skipped (they're the bank side); every other line is marked **Business**
 (with an expense account) or **Personal**, pre-filled from how that merchant went on earlier statements

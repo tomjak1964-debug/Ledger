@@ -135,6 +135,7 @@ export const DEFAULT_ACCOUNTS = [
   ["6050", "Employee Benefit Programs Exp", "Expenses"],
   ["6060", "401K Employer", "Expenses"],
   ["6100", "Payroll Tax Expense", "Expenses"],
+  ["6110", "Payroll Service Fees", "Expenses"],
   ["6150", "Bad Debt Expense", "Expenses"],
   ["6200", "Income Tax Expense", "Expenses"],
   ["6250", "Other Taxes Expense", "Expenses"],

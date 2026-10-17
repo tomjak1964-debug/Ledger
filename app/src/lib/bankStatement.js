@@ -66,7 +66,7 @@ export function findPeriod(lines) {
   return null;
 }
 
-const SIGN_OUT = /\b(checks?|withdrawals?|debits?|payments?|fees?|charges?|subtractions?|purchases?|electronic\s+withdrawals?|atm)\b/i;
+const SIGN_OUT = /\b(checks?|withdrawals?|debits?|payments?|fees?|charges?|subtractions?|deductions?|purchases?|electronic\s+withdrawals?|atm)\b/i;
 const SIGN_IN = /\b(deposits?|credits?|additions?|interest\s+(paid|earned)|incoming)\b/i;
 const NOISE = /\b(balance|total|subtotal|page \d|statement|account number|beginning|ending)\b/i;
 
@@ -76,13 +76,61 @@ export function parseStatementText(lines, { year } = {}) {
   const y = year || (period ? Number(period.to.slice(0, 4)) : new Date().getFullYear());
   const out = [];
   let sign = -1, prevBal = null, endingBalance = null;
+  // skipBalances: inside a daily-balance table (PNC's "Daily Balance": date,
+  // balance, date, balance…) — balances, not transactions. summaryNext: the row
+  // under a "Beginning … Ending balance" heading carries the two balances.
+  // lastTxn: the transaction just read, which a reference line may continue.
+  let skipBalances = false, summaryNext = 0, lastTxn = null;
   const push = (date, desc, amount, checkNo) => {
     if (!date || amount == null || Math.abs(amount) < 0.005) return;
     out.push({ id: uid(), date, desc: desc.replace(/\s+/g, " ").trim(), amount, checkNo: checkNo || "" });
+    lastTxn = out[out.length - 1];
   };
   for (const raw of lines) {
     const ln = raw.replace(/\s+/g, " ").trim();
-    if (!ln) continue;
+    if (!ln) { lastTxn = null; continue; }
+    const wasTxn = lastTxn; lastTxn = null;
+    // PNC's Balance Summary: "Beginning … Ending" headings, then a row of amounts
+    // only — beginning balance first, ending balance last.
+    if (/\bbeginning\b/i.test(ln) && /\bending\b/i.test(ln) && !/\d\.\d{2}\b/.test(ln)) { summaryNext = 2; continue; }
+    if (summaryNext > 0) {
+      summaryNext--;
+      const amts = ln.split(" ");
+      if (amts.length >= 2 && amts.every(a => money(a) != null)) {
+        prevBal = money(amts[0]); endingBalance = money(amts[amts.length - 1]); summaryNext = 0; continue;
+      }
+    }
+    if (/\bdaily\s+(ledger\s+)?balance/i.test(ln)) { skipBalances = true; continue; }
+    // A row of nothing but dates and amounts is a balance table, wherever it sits.
+    if (/^(\d{1,2}\/\d{1,2}\s+\(?-?[\d,]+\.\d{2}\)?\s*)+$/.test(ln)) continue;
+    if (skipBalances) {
+      if (!/\d\.\d{2}\b/.test(ln) && (SIGN_IN.test(ln) || SIGN_OUT.test(ln) || /activity|transaction/i.test(ln))) skipBalances = false;
+      else continue;
+    }
+    // A description that runs onto a second line — PNC prints the payee's
+    // reference under it ("Public Storage I XXXXXXXXXXX7901", "Citi Autopay
+    // 221915493330202"). Only a line ending in a long reference, right under a
+    // transaction, and not a heading.
+    if (wasTxn && !/\d\.\d{2}\b/.test(ln) && /\b[X\d]{6,}$/.test(ln) && !SIGN_IN.test(ln) && !SIGN_OUT.test(ln) && !NOISE.test(ln)) {
+      wasTxn.desc = (wasTxn.desc + " " + ln).replace(/\s+/g, " ").trim(); continue;
+    }
+    // PNC's checks table: "date check# [*] amount reference", up to three to a line.
+    const PNC_CHECK = /(\d{1,2}\/\d{1,2})\s+(\d{3,7})\s*\*?\s+([\d,]+\.\d{2})(?:\s+\d{5,})?/g;
+    const pncChecks = [...ln.matchAll(PNC_CHECK)];
+    if (pncChecks.length && !ln.replace(PNC_CHECK, "").trim()) {
+      pncChecks.forEach(m => push(parseDate(m[1], y), "Check " + m[2], -Math.abs(money(m[3])), m[2])); continue;
+    }
+    // date  amount  description  (PNC: the amount comes first, a reference last)
+    const af = ln.match(/^(\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?)\s+(\(?-?\$?[\d,]+\.\d{2}\)?)\s+(.*[A-Za-z].*)$/);
+    // A description may say "Period Ending 12/31" — only a balance or total line is noise here.
+    if (af && !/\d\.\d{2}(\s|$)/.test(af[3]) && !/\b(balance|total|subtotal)\b/i.test(af[3])) {
+      const amt = money(af[2]);
+      if (amt != null) {
+        const ck = af[3].match(/^(?:check|chk)\s*#?\s*(\d{3,7})\b/i);
+        push(parseDate(af[1], y), af[3], /^-|\(/.test(af[2]) ? -Math.abs(amt) : Math.abs(amt) * sign, ck ? ck[1] : "");
+        continue;
+      }
+    }
     // Section headings set the sign for what follows.
     if (!/\d\.\d{2}\b/.test(ln) || NOISE.test(ln)) {
       if (SIGN_IN.test(ln) && !SIGN_OUT.test(ln)) sign = 1;

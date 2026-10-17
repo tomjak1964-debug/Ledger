@@ -854,7 +854,12 @@ the bank's PDF (pdf.js, the lineup reader), a `.csv` export (columns by heading:
 or debit/credit, balance, check number) or pasted rows; `parseStatementText()` is keyword-driven — a line
 is a transaction when it starts with a date (or a check number and a date) and ends in an amount, the
 section heading ("Deposits and additions", "Checks paid"…) sets the sign, a running-balance column
-overrides it, and Chase-style check tables with several checks per line are read one check each.
+overrides it, and Chase-style check tables with several checks per line are read one check each. **PNC** (business
+checking) prints the amount straight after the date (`01/20 38,320.00 Corporate ACH …`), its checks as *date check#
+[*] amount reference* up to three to a line, a *Daily Balance* table (skipped — balances, not transactions), the
+beginning and ending balances as a row of amounts under a *Beginning … Ending balance* heading, and a payee
+reference on a second line (joined to the description, so *Citi Autopay* reaches the card-payment match); all
+read, checked against the January 2026 statement (35 items, in/out to the cent).
 `matchStatement()` pairs each line with an outstanding item by amount and side — the same check number
 first, else the nearest date within ten days, else a check number on its own for a slow check — each item
 used once. Matched lines are ticked; the rest are **Not in Ledger** with a *Post to* account: money out to

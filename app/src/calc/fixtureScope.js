@@ -37,7 +37,7 @@ export const DEFAULT_PACKAGES = [
   },
   {
     id: "software", name: "Software & Start-Up", intro: "Controls Software and Start-Up Support", match: "automated solutions",
-    location: "",   // blank: the customer's own site — "Start-up/Debug Support at Automated Solutions"
+    location: "Automated Solutions, Shelby Twp, MI",
     standards: "ASI and {end} Standards",
     endCustomers: ["Adient", "Bridgewater Interiors", "Performance Seats", "JAC Products", "Henniges"],
     plcType: "Allen Bradley CompactLogix", hmiType: "Allen Bradley PanelView Plus",

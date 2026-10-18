@@ -750,7 +750,8 @@ start-up, final programs; Software Support 10 / Start-Up Complete 80 / Final Pro
 an opening line ("…for Controls Software and Start-Up Support for (1) Assembly Machine"), a standards template
 (`ASI and {end} Standards` — `{end}` is the proposal's **End customer**, suggested from the package's list: Adient,
 Bridgewater Interiors, Performance Seats, JAC Products, Henniges / Mayco, JVIS, Nova; the quote chart's End User
-column fills it), default PLC / HMI, a start-up location (blank: the customer's site) and its customers
+column fills it), default PLC / HMI, a start-up location (Venture Global, Imlay City, MI / Automated Solutions, Shelby Twp, MI — start-up
+at the end customer's plant is a sales note: not included, engineering rate plus expenses) and its customers
 (`customerIds`, or a name `match` for the built-in two). A proposal carries `specs.packageId`, `specs.scope` (the
 ticks — the **Scope of Supply** card), `specs.plcType` / `hmiType` / `endCustomer`. The ticks gate the price lines in
 `priceProposal()` (hardware design and per-HMI in Engineering, panel + remote panels, block I/O, field wiring, run-off)

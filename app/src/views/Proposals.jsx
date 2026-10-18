@@ -133,6 +133,8 @@ export function buildProposalContent(p, db) {
     !suppliesDesign && !suppliesHardware ? `The control hardware design, control panels and all control hardware are provided by ${custName}; ${company} provides controls software and start-up support only.` : null,
     "All Field Components (Sensors, Cables, Duct, Cylinders, Valves, Remote E-Stop, Cycle Start, etc.) and Step-Down Transformers are not provided as part of this proposal.",
     !on("fieldWiring") && suppliesHardware ? "Field wiring is not included as part of this proposal." : null,
+    // Start-up is at the customer's shop; the end customer's plant is extra.
+    on("startup") ? `Start-up at the end customer's site${(s.endCustomer || "").trim() ? ` (${s.endCustomer.trim()})` : ""} is not included as part of this proposal and can be provided at the engineering rate of $${engRate}/hour plus expenses.` : null,
     !on("runoff") ? `Run-off support is not included as part of this proposal and can be added at the engineering rate of $${engRate}/hour.` : null,
     `Stand-by and production support is not included as part of this proposal and can be purchased for a rate of $${Number(cfg.supportRate) || 0}/hour U.S. and actual expenses.`,
   ].filter(Boolean);

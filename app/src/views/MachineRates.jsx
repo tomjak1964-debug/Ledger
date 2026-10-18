@@ -150,7 +150,7 @@ function ScopePackages({ db, actions, toast, editable }) {
           <input className="input" value={(P.endCustomers || []).join(", ")} onChange={e => setP({ endCustomers: e.target.value.split(",") })} /></Field>
       </div>
       <div className="row">
-        <Field label="Start-up location" hint="Blank: the customer's own site"><input className="input" value={P.location || ""} onChange={e => setP({ location: e.target.value })} /></Field>
+        <Field label="Start-up location" hint="Where start-up is included — blank uses the customer's name"><input className="input" value={P.location || ""} onChange={e => setP({ location: e.target.value })} /></Field>
         <Field label="Default PLC"><input className="input" value={P.plcType} onChange={e => setP({ plcType: e.target.value })} /></Field>
         <Field label="Default HMI"><input className="input" value={P.hmiType} onChange={e => setP({ hmiType: e.target.value })} /></Field>
       </div>

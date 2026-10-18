@@ -126,6 +126,10 @@ export function priceProposal(mt, specs, cfg) {
   if (!mt) return { baseLines: [], premiumLines: [], lines: [], base: 0, premium: 0, total: 0, blocks: 0, points: 0 };
   const { points, blocks: computed } = ioBlocks(specs, cfg);
   const blocks = specs.ioBlocks === "" || specs.ioBlocks == null ? computed : n(specs.ioBlocks);
+  // A proposal with scope ticks (specs.scope) prices only what it provides; one
+  // saved before scope existed prices everything, as it always did.
+  const sc = specs.scope || null;
+  const has = k => !sc || sc[k] !== false;
   const dn = !!specs.dataNational;
   const cams = n(specs.cameras), torque = n(specs.torque), ioLink = n(specs.ioLink);
   // The Engineering section of Fixture Rates is one line on the proposal: the
@@ -134,8 +138,8 @@ export function priceProposal(mt, specs, cfg) {
   const hmis = n(specs.hmis);
   const engParts = [
     { label: "Engineering / start-up base", amount: n(mt.engBase) },
-    { label: "Hardware design", amount: n(mt.hardwareDesign) },
-    { label: `${hmis} HMI${hmis === 1 ? "" : "s"} × ${n(mt.hmiRate)}`, amount: n(mt.hmiRate) * hmis },
+    { label: "Hardware design", amount: has("hwDesign") ? n(mt.hardwareDesign) : 0 },
+    { label: `${hmis} HMI${hmis === 1 ? "" : "s"} × ${n(mt.hmiRate)}`, amount: has("hmi") ? n(mt.hmiRate) * hmis : 0 },
     { label: `${cams} camera${cams === 1 ? "" : "s"} × ${n(mt.cameraRate)}`, amount: n(mt.cameraRate) * cams },
     { label: `${torque} torque tool${torque === 1 ? "" : "s"} × ${n(mt.torqueRate)}`, amount: n(mt.torqueRate) * torque },
     { label: `${ioLink} IO-Link device${ioLink === 1 ? "" : "s"} × ${n(mt.ioLinkRate)}`, amount: n(mt.ioLinkRate) * ioLink },
@@ -143,14 +147,18 @@ export function priceProposal(mt, specs, cfg) {
   const eng = engParts.reduce((t, p) => t + p.amount, 0);
   const blockio = blocks > 0 ? n(mt.ioFirst) + n(mt.ioAddl) * (blocks - 1) : 0;
   const worked = {
-    eng, panel: n(mt.panelBudget), blockIo: blockio, fieldWiring: n(mt.fieldWiring), remoteHmi: n(mt.remoteHmi), remoteSonic: n(mt.remoteSonic),
-    dnCheckout: dn ? n(mt.dnCheckout) : 0, dnMaterial: dn ? n(mt.dnMaterial) : 0, runoff: n(mt.runoff),
+    eng, panel: has("panel") ? n(mt.panelBudget) : 0, blockIo: has("blockIo") ? blockio : 0, fieldWiring: has("fieldWiring") ? n(mt.fieldWiring) : 0,
+    remoteHmi: has("panel") ? n(mt.remoteHmi) : 0, remoteSonic: has("panel") ? n(mt.remoteSonic) : 0,
+    dnCheckout: dn ? n(mt.dnCheckout) : 0, dnMaterial: dn ? n(mt.dnMaterial) : 0, runoff: has("runoff") ? n(mt.runoff) : 0,
   };
+  // The panel line names the PLC it is built around ("CompactLogix Control Panel …").
+  const plcShort = String(specs.plcType || cfg.plcType || "").trim().split(/\s+/).pop() || "Control";
   const over = specs.priceOverrides || {};
   const lines = FIXTURE_PRICE_LINES.map(l => {
     const o = over[l.key];
     const overridden = o !== "" && o != null;
-    return { ...l, suggested: round2(worked[l.key]), amount: round2(overridden ? n(o) : worked[l.key]), overridden };
+    const label = l.key === "panel" ? `${plcShort} Control Panel /HMI/Bingo Board` : l.label;
+    return { ...l, label, suggested: round2(worked[l.key]), amount: round2(overridden ? n(o) : worked[l.key]), overridden };
   });
   const strip = l => ({ key: l.key, label: l.label, amount: l.amount, ...(l.overridden ? { overridden: true, suggested: l.suggested } : {}) });
   const baseLines = priced(lines.filter(l => l.section === "base")).map(strip);

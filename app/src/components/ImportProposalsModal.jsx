@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from "react";
 import { uid, money, todayISO, pickable } from "../lib/helpers.js";
 import { proposalAttn } from "../lib/people.js";
+import { packageForCustomer, packageDefaults } from "../calc/fixtureScope.js";
 import { proposalConfig, priceProposal, ioBlocks, TMJ_DEFAULT_RATES, defaultProposalCustomer, dateJobNumber } from "../calc/proposals.js";
 import { readChartFile, parseDelimited, mapChart, matchMachineType, typeKey } from "../lib/quoteChart.js";
 import { Ico, ICONS, Modal, Field } from "./ui.jsx";
@@ -58,7 +59,10 @@ export default function ImportProposalsModal({ db, actions, toast, onClose, onDo
     // The chart's own I/O block column is this same formula, so it only rides
     // along as an override when the estimator has overruled it.
     const override = r.rec.ioBlocks === "" || r.rec.ioBlocks === blocks ? "" : r.rec.ioBlocks;
-    const specs = { ...r.rec.specs, ioBlocks: override };
+    // The customer's scope package: its ticks, PLC / HMI; the chart's end user
+    // names the standards. A chart with no HMI column still has the one HMI.
+    const pk = packageForCustomer(db, customerId);
+    const specs = { hmis: 1, ...packageDefaults(pk), ...r.rec.specs, ioBlocks: override, endCustomer: (r.rec.endUser || "").trim() };
     return { mt, blocks, specs, pricing: priceProposal(mt, specs, cfg) };
   };
 
@@ -95,8 +99,8 @@ export default function ImportProposalsModal({ db, actions, toast, onClose, onDo
       const saved = await actions.saveProposal({
         id: uid(), _new: true, customerId, ...proposalAttn(db, db.contacts.find(c => c.id === customerId)),
         date, status: "draft", jobNumber, description: rec.description || "",
-        location: rec.location || cfg.location, machineTypeId: r.machineTypeId,
-        specs, pricing, phases: cfg.phases.map(ph => ({ ...ph })), notes: note,
+        location: rec.location || (packageForCustomer(db, customerId).location ?? cfg.location), machineTypeId: r.machineTypeId,
+        specs, pricing, phases: packageForCustomer(db, customerId).phases.map(ph => ({ ...ph })), notes: note,
       });
       out.push({ rec, saved, total: pricing.total });
     }

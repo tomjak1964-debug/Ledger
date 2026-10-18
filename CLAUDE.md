@@ -742,6 +742,24 @@ list hides it unless *Show inactive* is ticked (the **Inactive** tick is a colum
 `lib/helpers.js` keeps the one a document already names, so an older document still shows who it's for. New
 documents and the proposal default never start on an inactive contact.
 
+**Fixture proposal scope packages** (`calc/fixtureScope.js`, `settings.fixturePackages`; until one is saved
+`DEFAULT_PACKAGES` stand in). A package is what a fixture proposal provides: **Turnkey Controls** (Venture Global —
+hardware design, PLC, HMI, panel, block I/O, field wiring, start-up, run-off, docs; Award 15 / Engineering 25 / Panel 25
+/ Wiring 25 / Docs 10) and **Software & Start-Up** (Automated Solutions — PLC, HMI only when the proposal has HMIs,
+start-up, final programs; Software Support 10 / Start-Up Complete 80 / Final Programs/Documentation 10). Each carries
+an opening line ("…for Controls Software and Start-Up Support for (1) Assembly Machine"), a standards template
+(`ASI and {end} Standards` — `{end}` is the proposal's **End customer**, suggested from the package's list: Adient,
+Bridgewater Interiors, Performance Seats, JAC Products, Henniges / Mayco, JVIS, Nova; the quote chart's End User
+column fills it), default PLC / HMI, a start-up location (blank: the customer's site) and its customers
+(`customerIds`, or a name `match` for the built-in two). A proposal carries `specs.packageId`, `specs.scope` (the
+ticks — the **Scope of Supply** card), `specs.plcType` / `hmiType` / `endCustomer`. The ticks gate the price lines in
+`priceProposal()` (hardware design and per-HMI in Engineering, panel + remote panels, block I/O, field wiring, run-off)
+and drive the bullets, the sales notes (hardware by the customer; run-off not included at the engineering rate; field
+wiring not included) and, through the package, the schedule; the closing terms read the customer's payment terms and
+the validity days. **A proposal with no `packageId` (everything before this) takes the old path untouched** — the
+same bullets, notes and terms, verified identical. Packages are edited under Fixture Rates → *Scope Packages*
+(Settings write); naming a customer on one takes it off the others.
+
 **Fixture Rates** (`views/MachineRates.jsx`, the `machine_types` table — the code and the database keep the
 old name) is the costing table behind a fixture proposal, one row per fixture type. The editor is in three sections (`SECTIONS`):
 **Engineering** — base, **Hardware Design** (`hardware_design`, migration 035), **per HMI** (`hmi_rate`, × the

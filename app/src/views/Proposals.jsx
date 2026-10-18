@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import DocActions from "../components/DocActions.jsx";
 import { pagesToPdf, saveBlob } from "../lib/saveFile.js";
 import { uid, money, fmtDate, todayISO, nameOf, cls, pickable } from "../lib/helpers.js";
+import { packageById, packageForCustomer, packageDefaults, packagesOf, standardsLine, SCOPE_ITEMS } from "../calc/fixtureScope.js";
+import { termsLabelFor } from "../lib/terms.js";
 import { personName, emailFor, proposalAttn, proposalPerson, contactNameFor, remitVendor, peopleOf } from "../lib/people.js";
 import { proposalConfig, priceProposal, ioBlocks, phaseAmount, SPEC_FIELDS, DEFAULT_PHASES, defaultProposalCustomer } from "../calc/proposals.js";
 import { Ico, ICONS, Badge, Empty, Field, MenuItem, ActionMenu, Modal, SortTh, useTableSort, blankZero } from "../components/ui.jsx";
@@ -88,7 +90,55 @@ export function buildProposalContent(p, db) {
   ];
 
   const phases = (p.phases?.length ? p.phases : cfg.phases).map(ph => ({ ...ph, amount: phaseAmount(pricing.total, ph.pct) }));
-  return { cfg, mt, customer, person, pricing, bullets, salesNotes, phases, salutation, custName };
+  const legacy = { cfg, mt, customer, person, pricing, bullets, salesNotes, phases, salutation, custName,
+    intro: "Turnkey Controls", terms: "This offer is firm for 30 days from the date of this proposal. Terms shall be Net 30 Days. Any invoice more than 30 days past due will be assessed interest at the rate of 12% APR accruing monthly." };
+  // A proposal saved before scope packages reads exactly as it always did.
+  if (!s.packageId) return legacy;
+
+  /* ---- scope-driven: the package and the proposal's ticks say what is provided ---- */
+  const pkg = packageById(db.settings, s.packageId) || packageForCustomer(db, p.customerId);
+  const site = (p.location || "").trim() || (pkg?.location || "").trim() || custName;
+  const sc = { ...(pkg?.scope || {}), ...(s.scope || {}) };
+  const on = k => sc[k] !== false && sc[k] != null;
+  const hmiOn = on("hmi") && hmis > 0;
+  const company = db.settings.company || "We";
+  const std = standardsLine(pkg, s.endCustomer);
+  const suppliesDesign = on("hwDesign"), suppliesHardware = on("panel") || on("blockIo");
+  const sBullets = [
+    suppliesDesign ? { t: "Develop Controls Hardware Design." } : null,
+    std ? { t: `System ${suppliesDesign ? "hardware and software" : "software"} design will follow ${std}.` } : null,
+    suppliesDesign ? { t: "Develop the hardware panel designs in AutoCad" } : null,
+    suppliesDesign ? { t: "Develop the hardware design Interconnect drawings to include 480/230 VAC Power, 120 VAC and 24Vdc control signal and networks from the main control enclosure to the control component devices." } : null,
+    on("plc") ? { t: `Software Control Application development for ${plc} PLC.` } : null,
+    s.dataNational ? { t: "Provide TP-Link ER605 Router Module to Communicate with Data National." } : null,
+    hmiOn ? { t: hmis > 1 ? `HMI Software Design for (${hmis}) ${hmi} HMIs` : `HMI Software Design for ${hmi} HMI` } : null,
+    hardware.length ? { t: "Provide the following hardware components per system." } : null,
+    ...hardware,
+    on("fieldWiring") && priced("fieldWiring") ? { t: `Field Wiring at ${site}.` } : null,
+    on("startup") ? { t: `Start-up/Debug Support at ${site}.` } : null,
+    on("docs") ? { t: suppliesDesign ? "Final programs and as-built drawings." : "Final programs and documentation." } : null,
+    { t: suppliesDesign || suppliesHardware
+      ? `${custName} will supply the machine and all on machine components and cabling.`
+      : `${custName} will supply the machine, the control hardware design, the control panel and all on machine components and cabling.` },
+    cams > 0 ? { t: `Installation and Configuration of ${cams} Cameras` } : null,
+    torque > 0 ? { t: `Installation and Configuration of ${torque} Torque Tool${torque === 1 ? "" : "s"}` } : null,
+    ioLink > 0 ? { t: `Configuration of ${ioLink} IO-Link Device${ioLink === 1 ? "" : "s"}` } : null,
+    gens > 0 ? { t: welds > 0 ? `${gens} Sonic Generators, ${welds} Welds` : `${gens} Sonic Generators` } : null,
+  ].filter(Boolean);
+  const material = allLines.some(l => (l.key ? ["panel", "blockIo", "remoteHmi", "remoteSonic", "dnMaterial"].includes(l.key) : false) && (Number(l.amount) || 0) > 0);
+  const engRate = Number(cfg.laborRates?.plc) || 0;
+  const sNotes = [
+    material ? "This is a proposal for Engineering Services and material listed in the deliverables section of this proposal."
+      : "This is a proposal for the Engineering Services listed in the deliverables section of this proposal.",
+    !suppliesDesign && !suppliesHardware ? `The control hardware design, control panels and all control hardware are provided by ${custName}; ${company} provides controls software and start-up support only.` : null,
+    "All Field Components (Sensors, Cables, Duct, Cylinders, Valves, Remote E-Stop, Cycle Start, etc.) and Step-Down Transformers are not provided as part of this proposal.",
+    !on("fieldWiring") && suppliesHardware ? "Field wiring is not included as part of this proposal." : null,
+    !on("runoff") ? `Run-off support is not included as part of this proposal and can be added at the engineering rate of $${engRate}/hour.` : null,
+    `Stand-by and production support is not included as part of this proposal and can be purchased for a rate of $${Number(cfg.supportRate) || 0}/hour U.S. and actual expenses.`,
+  ].filter(Boolean);
+  const validity = Number(cfg.validityDays) || 30;
+  return { ...legacy, bullets: sBullets, salesNotes: sNotes, intro: pkg?.intro || "Turnkey Controls", pkg, scope: sc,
+    terms: `This offer is firm for ${validity} days from the date of this proposal. Terms shall be ${termsLabelFor(db, p.customerId)}. Any invoice more than 30 days past due will be assessed interest at the rate of 12% APR accruing monthly.` };
 }
 
 const emptySpecs = () => Object.fromEntries(SPEC_FIELDS.map(([k]) => [k, 0]));
@@ -133,9 +183,9 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
   const startNew = () => setEdit({
     id: uid(), _new: true, kind: "machine", rev: 0, number: "(assigned at save)", customerId: startCustomer?.id || "",
     ...proposalAttn(db, startCustomer), date: todayISO(), status: "draft", jobNumber: "", description: "",
-    location: cfg.location, machineTypeId: db.machineTypes[0]?.id || "",
-    specs: { ...emptySpecs(), dataNational: true, ioBlocks: "", hmis: 1 },
-    pricing: {}, phases: cfg.phases.map(ph => ({ ...ph })), notes: "",
+    location: packageForCustomer(db, startCustomer?.id).location ?? cfg.location, machineTypeId: db.machineTypes[0]?.id || "",
+    specs: { ...emptySpecs(), dataNational: true, ioBlocks: "", hmis: 1, endCustomer: "", ...packageDefaults(packageForCustomer(db, startCustomer?.id)) },
+    pricing: {}, phases: packageForCustomer(db, startCustomer?.id).phases.map(ph => ({ ...ph })), notes: "",
   });
 
   const save = async (p) => {
@@ -333,6 +383,50 @@ function PropMenu({ p, setStatus, win, del, revise, onPhases }) {
   }}</ActionMenu>;
 }
 
+// What this proposal provides: the scope package, the end customer whose
+// standards apply, the PLC / HMI, and the ticks the bullets, price lines,
+// sales notes and invoicing schedule follow (calc/fixtureScope.js).
+function ScopeCard({ x, setX, db, cfg }) {
+  const sp = x.specs || {};
+  const packages = packagesOf(db.settings);
+  const pkg = packages.find(p => p.id === sp.packageId);
+  const billed = (x.phases || []).some(ph => ph.invoiceId);
+  const setSpecs = patch => setX(prev => ({ ...prev, specs: { ...prev.specs, ...patch } }));
+  const pickPackage = id => {
+    const pk = packages.find(p => p.id === id);
+    if (!id) { setSpecs({ packageId: "" }); return; }
+    setX(prev => {
+      const was = packages.find(q => q.id === prev.specs?.packageId);
+      const location = !prev.location || prev.location === (was?.location ?? "") ? (pk.location ?? prev.location) : prev.location;
+      return { ...prev, location, specs: { ...prev.specs, ...packageDefaults(pk) }, phases: billed ? prev.phases : pk.phases.map(ph => ({ ...ph })) };
+    });
+  };
+  const sc = { ...(pkg?.scope || {}), ...(sp.scope || {}) };
+  return <div className="card" style={{ marginBottom: 16 }}>
+    <div className="card-head"><h3>Scope of Supply</h3>
+      <span className="subtle" style={{ marginLeft: "auto" }}>{pkg ? "what this proposal provides — the bullets, pricing, notes and invoicing schedule follow it" : "a proposal from before scope packages — it reads as it always has"}</span></div>
+    <div className="card-body">
+      <div className="row">
+        <Field label="Scope package" hint={billed ? "Phases already billed — the schedule stays as it is" : "Sets the ticks, PLC / HMI and invoicing schedule"}>
+          <select className="select" value={sp.packageId || ""} onChange={e => pickPackage(e.target.value)}>
+            {!sp.packageId && <option value="">— none (as before) —</option>}
+            {packages.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select></Field>
+        {pkg && <Field label="End customer" hint={standardsLine(pkg, sp.endCustomer) ? "Design will follow " + standardsLine(pkg, sp.endCustomer) : "Whose standards apply"}>
+          <input className="input" list={"endc-" + pkg.id} value={sp.endCustomer || ""} onChange={e => setSpecs({ endCustomer: e.target.value })} placeholder="e.g. Mayco" />
+          <datalist id={"endc-" + pkg.id}>{(pkg.endCustomers || []).map(n => <option key={n} value={n} />)}</datalist></Field>}
+        <Field label="PLC"><input className="input" value={sp.plcType || ""} placeholder={pkg?.plcType || cfg.plcType} onChange={e => setSpecs({ plcType: e.target.value })} /></Field>
+        <Field label="HMI"><input className="input" value={sp.hmiType || ""} placeholder={pkg?.hmiType || cfg.hmiType} onChange={e => setSpecs({ hmiType: e.target.value })} /></Field>
+      </div>
+      {pkg && <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 18px" }}>
+        {SCOPE_ITEMS.map(it => <label key={it.key} style={{ display: "flex", gap: 6, alignItems: "center", cursor: "pointer" }}>
+          <input type="checkbox" checked={!!sc[it.key]} onChange={e => setSpecs({ scope: { ...sc, [it.key]: e.target.checked } })} />
+          {it.label}{it.hint && <span className="subtle" style={{ fontSize: 12 }}>({it.hint})</span>}</label>)}
+      </div>}
+    </div>
+  </div>;
+}
+
 function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
   const [x, setX] = useState(p);
   const [saving, setSaving] = useState(false);
@@ -365,7 +459,15 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
           const cid = e.target.value, attn = proposalAttn(db, db.contacts.find(c => c.id === cid));
           // The contact belongs to the customer: a new customer brings its own
           // contact, or none — never the one picked for the customer before.
-          setX(prev => ({ ...prev, customerId: cid, ...attn }));
+          // A scoped proposal moves to the new customer's package — its ticks,
+          // PLC / HMI and schedule — as long as nothing on it has been billed.
+          setX(prev => {
+            const next = { ...prev, customerId: cid, ...attn };
+            if (!prev.specs?.packageId || (prev.phases || []).some(ph => ph.invoiceId)) return next;
+            const pk = packageForCustomer(db, cid), was = packagesOf(db.settings).find(q => q.id === prev.specs.packageId);
+            const location = !prev.location || prev.location === (was?.location ?? "") ? (pk.location ?? "") : prev.location;
+            return { ...next, location, specs: { ...prev.specs, ...packageDefaults(pk), endCustomer: "" }, phases: pk.phases.map(ph => ({ ...ph })) };
+          });
         }}>
           <option value="">Select customer…</option>{pickable(customers, x.customerId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select></Field>
@@ -388,6 +490,8 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
       </div>
       <Field label="Build / Start-up Location"><input className="input" value={x.location} onChange={e => set("location", e.target.value)} /></Field>
     </div></div>
+
+    <ScopeCard x={x} setX={setX} db={db} cfg={cfg} />
 
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-head"><h3>Fixture Content</h3>
@@ -535,7 +639,7 @@ function ProposalDoc({ p, db, onClose, toast, onEdit, auto }) {
       <p style={{ whiteSpace: "pre-line" }}>{[c.person?.name, c.customer?.name, c.customer?.address].filter(Boolean).join("\n")}</p>
       <p className="mono" style={{ marginTop: 18 }}>Proposal: {p.number}<br />Re: {p.jobNumber}{p.jobNumber && p.description ? " – " : ""}{p.description}</p>
       <p>{c.salutation}</p>
-      <p>Thank you for giving {s.company || "us"} an opportunity to provide a proposal for services and deliverables for Turnkey Controls for (1) Assembly Machine.</p>
+      <p>Thank you for giving {s.company || "us"} an opportunity to provide a proposal for services and deliverables for {c.intro} for (1) Assembly Machine.</p>
       <h4 style={{ margin: "14px 0 4px" }}>Scope</h4>
       <p style={{ marginTop: 0 }}>{s.company || "We"} will provide design services with the following deliverables:</p>
       <ul className="prop-bullets">
@@ -568,7 +672,7 @@ function ProposalDoc({ p, db, onClose, toast, onEdit, auto }) {
           {c.phases.map(ph => <tr key={ph.key}><td>{ph.label}</td><td className="pct">{ph.pct}%</td><td className="amt plain">{money(ph.amount)}</td></tr>)}
         </tbody></table>
       </div>
-      <p style={{ marginTop: 18 }}>This offer is firm for 30 days from the date of this proposal. Terms shall be Net 30 Days. Any invoice more than 30 days past due will be assessed interest at the rate of 12% APR accruing monthly.</p>
+      <p style={{ marginTop: 18 }}>{c.terms}</p>
       <p>I hope you find this offering favorable. If you have any questions, or require additional information, please feel free to contact me.</p>
       <p style={{ marginBottom: 34 }}>Regards,</p>
       <p>{c.cfg.signer || s.company}</p>

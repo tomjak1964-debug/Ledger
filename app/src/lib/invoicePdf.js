@@ -6,6 +6,7 @@
 // to the totals however few lines there are, and lines that don't fit carry
 // onto the next page, framed the same way. Pagination comes from
 // invoiceLayout.js, so the PDF and the printable invoice break in step.
+import { personName } from "./people.js";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { fmtDate } from "./helpers.js";
@@ -111,7 +112,7 @@ function drawFrame(doc, { inv, s, customer, person, W, page, of, isCredit }) {
   });
 
   const boxW = (W - 2 * M - 40) / 2;
-  const addr = [person?.name, customer?.name, ...(customer?.address || "").split("\n")].filter(Boolean);
+  const addr = [personName(person), customer?.name, ...(customer?.address || "").split("\n")].filter(Boolean);
   [["Bill To:", M], ["Ship to:", M + boxW + 40]].forEach(([label, x]) => {
     doc.setFillColor(...GRAY).setDrawColor(0).setLineWidth(0.5).rect(x, BOX_Y, boxW, 16, "FD");
     doc.rect(x, BOX_Y, boxW, BOX_H);

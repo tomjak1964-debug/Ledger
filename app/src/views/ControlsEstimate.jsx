@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { uid, money, fmtDate, addDays, cls, pickable } from "../lib/helpers.js";
-import { emailFor, proposalAttn, proposalPerson } from "../lib/people.js";
+import { personName, emailFor, proposalAttn, proposalPerson } from "../lib/people.js";
 import { termsLabelFor } from "../lib/terms.js";
 import { proposalConfig } from "../calc/proposals.js";
 import { COMPONENTS, IO_FIELDS, DEVICE_FIELDS, STRUCTURE_FIELDS, LINEUP_FIELDS, SAFETY_OPTIONS, STANDARD_ELEMENTS, ROLE_LABELS,
@@ -22,7 +22,7 @@ export function buildControlsContent(p, db) {
   const cfg = proposalConfig(db.settings, db.timeCategories);
   const customer = db.contacts.find(c => c.id === p.customerId);
   const personRec = proposalPerson(db, p, customer);
-  const contactName = (p.contactName || personRec?.name || customer?.contact || "").trim();
+  const contactName = (p.contactName || personName(personRec) || customer?.contact || "").trim();
   const person = contactName ? { name: contactName, email: (personRec?.email || "").trim() || emailFor(db, p.customerId, "proposal") } : null;
   const custName = customer?.name || "Customer";
   const salutation = (() => {
@@ -235,10 +235,10 @@ export default function ControlsEstimateEditor({ p, db, cfg, customers, onCancel
         </select></Field>
         <Field label="Contact / Attn" hint="Type any name, or pick a suggestion">
           <input className="input" list={"attn-" + x.customerId} value={x.contactName || ""} placeholder="e.g. Mr. John Murphy"
-            onChange={e => { const v = e.target.value, hit = people.find(cp => (cp.name || "").trim().toLowerCase() === v.trim().toLowerCase());
+            onChange={e => { const v = e.target.value, hit = people.find(cp => [cp.name, personName(cp)].some(n => (n || "").trim().toLowerCase() === v.trim().toLowerCase()));
               setX(prev => ({ ...prev, contactName: v, contactPersonId: hit?.id || "" })); }} />
           <datalist id={"attn-" + x.customerId}>
-            {[...new Set(people.map(cp => cp.name).filter(Boolean))].map((n, i) => <option key={i} value={n} />)}
+            {[...new Set(people.map(cp => personName(cp)).filter(Boolean))].map((n, i) => <option key={i} value={n} />)}
           </datalist>
         </Field>
         <Field label="Date"><input className="input" type="date" value={x.date} onChange={e => set("date", e.target.value)} /></Field>

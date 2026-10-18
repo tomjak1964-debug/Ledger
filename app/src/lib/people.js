@@ -8,6 +8,11 @@ export const PREF_LABEL = { invoice: "Invoices", proposal: "Proposals", remittan
 // Which preferences a company of each type offers.
 export const PREF_KINDS = { customer: ["invoice", "proposal"], vendor: ["remittance"] };
 
+// A contact as the customer is addressed: the preferred prefix, then the name —
+// "Mr. John Murphy". Every letter, proposal and invoice reads it through here.
+export const PREFIXES = ["", "Mr.", "Ms.", "Mrs."];
+export const personName = p => (p ? [p.prefix, p.name].map(x => (x || "").trim()).filter(Boolean).join(" ") : "");
+
 export const peopleOf = (db, contactId) => (db.contactPeople || []).filter(p => p.contactId === contactId);
 
 export function preferredPerson(db, contactOrId, kind) {
@@ -31,7 +36,7 @@ export function emailFor(db, contactId, kind, docPersonId) {
 // else the first person on file, else the single contact name it used to carry.
 export function contactNameFor(db, c, kind) {
   if (!c) return "";
-  return preferredPerson(db, c, kind)?.name || peopleOf(db, c.id)[0]?.name || (c.contact || "").trim();
+  return personName(preferredPerson(db, c, kind)) || personName(peopleOf(db, c.id)[0]) || (c.contact || "").trim();
 }
 
 // A vendor as the remittance renderers read it: remitName / remitEmail /
@@ -39,14 +44,14 @@ export function contactNameFor(db, c, kind) {
 export function remitVendor(db, vendor) {
   if (!vendor) return vendor;
   const p = preferredPerson(db, vendor, "remittance");
-  return p ? { ...vendor, remitName: p.name, remitEmail: p.email || vendor.remitEmail, remitPhone: p.phone || vendor.remitPhone } : vendor;
+  return p ? { ...vendor, remitName: personName(p), remitEmail: p.email || vendor.remitEmail, remitPhone: p.phone || vendor.remitPhone } : vendor;
 }
 
 // Who a new proposal for this customer is addressed to: the person preferred
 // for proposals, else the single contact name the customer used to carry.
 export function proposalAttn(db, customer) {
   const p = preferredPerson(db, customer, "proposal");
-  return p ? { contactPersonId: p.id, contactName: p.name } : { contactPersonId: "", contactName: (customer?.contact || "").trim() };
+  return p ? { contactPersonId: p.id, contactName: personName(p) } : { contactPersonId: "", contactName: (customer?.contact || "").trim() };
 }
 
 // The person a proposal is addressed to, as a record when there is one: the
@@ -57,6 +62,6 @@ export function proposalPerson(db, p, customer) {
   const byId = p.contactPersonId && (db.contactPeople || []).find(x => x.id === p.contactPersonId);
   if (byId) return byId;
   const typed = (p.contactName || "").trim().toLowerCase();
-  if (typed) return people.find(x => (x.name || "").trim().toLowerCase() === typed) || null;
+  if (typed) return people.find(x => [x.name, personName(x)].some(n => (n || "").trim().toLowerCase() === typed)) || null;
   return preferredPerson(db, customer, "proposal");
 }

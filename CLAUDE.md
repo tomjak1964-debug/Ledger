@@ -574,6 +574,16 @@ is the remittance's Attn. The vendor's remit-to **address** stays on the vendor.
 contact name into a person and, for customers, made them preferred for invoices and proposals (who proposals
 already defaulted to); the old `contact` / `remit_*` columns are kept, unread except as fallbacks.
 
+**Prefix and numbering** (migration 036). A customer contact carries a **Prefix** (Mr. / Ms. / Mrs. / none,
+`contact_people.prefix`); `personName()` in `lib/people.js` puts it before the name wherever the customer is
+addressed — the proposal's Attn and greeting (new proposals start on it; typing either form links the contact), the
+invoice PDF's Bill To, quotes, the contact lists. Migration 036 split "Mr. Steve Stojanovski"-style names into the
+two fields. The customer's **Customer Code** (was "Invoice Code", `contacts.code`) names its documents:
+`INV-<code><YYMMDD>` (`claimInvoiceNumber()`) and `PROP-<code><YYMMDD>` (`saveProposal()`, `settings.proposal.propPrefix`
+now defaults to `PROP-`), a second that day `-02`, `-03`…; no code gives `INV-261018`. Counters are per code and
+day (`next_doc_number('inv:<code>:<ymd>')`, the key the old scheme used), and a number already on file is skipped.
+Venture Global's code was set to VG on 2026-10-18; most other customers have none yet.
+
 **Payment terms live on the contact** (`src/lib/terms.js`, migration 019). Each customer and vendor
 carries `terms` (days), `discountPct` and `discountDays`; `terms` blank means "use the company default"
 in Settings, so nothing changes for a contact nobody has set up. `termsLabel()` renders them the way the

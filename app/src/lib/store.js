@@ -275,16 +275,22 @@ export function useLedger(session, onError) {
   }
   const soLabel = soId => { const so = dbRef.current.salesOrders.find(s => s.id === soId); return so ? [so.number, so.jobNumber].filter(Boolean).join(" · ") : "a job"; };
 
-  // Invoice numbers: customer code + yymmdd + per-day 2-digit index
-  // (VG260728-01), claimed atomically per customer+day. Falls back to the
-  // Settings invoice prefix when the customer has no code.
+  // INV-<customer code><YYMMDD> — "INV-VG261018"; a second the same day for the
+  // same customer takes -02, -03… A customer with no code: INV-261018.
+  const customerCode = (d0, customerId) => String(d0.contacts.find(x => x.id === customerId)?.code || "").toUpperCase().replace(/\s+/g, "");
+  const daySuffix = n => (n > 1 ? "-" + String(n).padStart(2, "0") : "");
   async function claimInvoiceNumber(customerId, date) {
     const d0 = dbRef.current;
-    const c = d0.contacts.find(x => x.id === customerId);
-    const prefix = String(c?.code || d0.settings.invPrefix || "INV").toUpperCase().replace(/\s+/g, "");
+    const code = customerCode(d0, customerId);
     const ymd = (date || todayISO()).slice(2).replace(/-/g, "");
-    const n = await claimNumber(`inv:${prefix}:${ymd}`);
-    return `${prefix}${ymd}-${String(n).padStart(2, "0")}`;
+    const head = `${String(d0.settings.invPrefix || "INV").toUpperCase()}-${code}${ymd}`;
+    // The counter is per customer and day (the key the old scheme used, so a
+    // day already numbered carries on); a number already taken is skipped.
+    for (;;) {
+      const n = await claimNumber(`inv:${code || "INV"}:${ymd}`);
+      const num = head + daySuffix(n);
+      if (!dbRef.current.invoices.some(i => (i.number || "").toLowerCase() === num.toLowerCase())) return num;
+    }
   }
 
   async function replaceLineItems(table, parentKey, parentId, items, toRows) {
@@ -1574,11 +1580,17 @@ export function useLedger(session, onError) {
       try {
         const isNew = !!p._new;
         const prop = { ...p, kind: p.kind || "machine", rev: Number(p.rev) || 0 }; delete prop._new;
+        // PROP-<customer code><YYMMDD> — "PROP-VG261018", -02… for a second that
+        // day. A revision keeps its number, so only a new proposal claims one.
         if (isNew && !prop.number?.startsWith(proposalConfig(dbRef.current.settings).propPrefix)) {
           const cfg = proposalConfig(dbRef.current.settings);
+          const code = customerCode(dbRef.current, prop.customerId);
           const ymd = (prop.date || todayISO()).slice(2).replace(/-/g, "");
-          const n = await claimNumber("prop:" + ymd);
-          prop.number = `${cfg.propPrefix}${ymd}-${String(n).padStart(2, "0")}`;
+          for (;;) {
+            const n = await claimNumber(`prop:${code}:${ymd}`);
+            const num = `${cfg.propPrefix}${code}${ymd}${daySuffix(n)}`;
+            if (!dbRef.current.proposals.some(x => (x.number || "").toLowerCase() === num.toLowerCase())) { prop.number = num; break; }
+          }
         }
         th(await supabase.from("proposals").upsert(A.proposalToRow(prop)));
         setDb(d => ({ ...d, proposals: upsertList(d.proposals, prop) }));

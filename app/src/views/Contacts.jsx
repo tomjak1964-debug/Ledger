@@ -4,7 +4,7 @@ import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort, blankZero } from
 import { termsLabel } from "../lib/terms.js";
 import AccountSelect from "../components/AccountSelect.jsx";
 import { TEN99_TYPES, ten99Label, accountLabel } from "../calc/accounts.js";
-import { PREF_FIELD, PREF_LABEL, PREF_KINDS, contactNameFor } from "../lib/people.js";
+import { PREF_FIELD, PREF_LABEL, PREF_KINDS, PREFIXES, personName, contactNameFor } from "../lib/people.js";
 
 // One page per side of the ledger: Customers (under Customers & Sales) and
 // Vendors (under Vendors & Purchases). Both are contacts rows; `type` picks
@@ -78,7 +78,7 @@ export default function ContactsView({ db, actions, toast, readOnly, type = "cus
       foot={<><button className="btn" onClick={() => setEdit(null)}>Cancel</button><button className="btn primary" onClick={() => save(edit)}>Save</button></>}>
       <div className="row">
         <Field label="Company / Name"><input className="input" value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} /></Field>
-        {edit.type === "customer" && <Field label="Invoice Code" hint="Numbers this customer's invoices, e.g. VG → VG260728-01">
+        {edit.type === "customer" && <Field label="Customer Code" hint="Names this customer's invoices and proposals, e.g. VG → INV-VG261018, PROP-VG261018">
           <input className="input mono" style={{ maxWidth: 110 }} value={edit.code || ""} onChange={e => setEdit({ ...edit, code: e.target.value.toUpperCase() })} /></Field>}
         {edit.type === "vendor" && <Field label="Vendor ID" hint="Short code, as on the Sage vendor list">
           <input className="input mono" style={{ maxWidth: 140 }} value={edit.code || ""} onChange={e => setEdit({ ...edit, code: e.target.value })} /></Field>}
@@ -131,7 +131,7 @@ export default function ContactsView({ db, actions, toast, readOnly, type = "cus
       </>}
       {db.contacts.some(c => c.id === edit.id)
         ? <PeopleEditor contactId={edit.id} db={db} actions={actions} toast={toast} readOnly={readOnly}
-            kinds={PREF_KINDS[edit.type] || []} prefs={edit} onPref={(kind, personId) => setEdit(x => ({ ...x, [PREF_FIELD[kind]]: personId }))} />
+            kinds={PREF_KINDS[edit.type] || []} prefs={edit} withPrefix={edit.type === "customer"} onPref={(kind, personId) => setEdit(x => ({ ...x, [PREF_FIELD[kind]]: personId }))} />
         : <p className="subtle">Save this {edit.type} first, then re-open it to add contacts.</p>}
     </Modal>}
   </div>;
@@ -141,7 +141,7 @@ export default function ContactsView({ db, actions, toast, readOnly, type = "cus
 // invoices, proposals (customers) or remittances (vendors) go to. A preference
 // is a toggle on the person; picking one moves it off whoever had it. It is
 // part of the company record, so it keeps with the dialog's Save.
-function PeopleEditor({ contactId, db, actions, toast, readOnly, kinds, prefs, onPref }) {
+function PeopleEditor({ contactId, db, actions, toast, readOnly, kinds, prefs, onPref, withPrefix }) {
   const [p, setP] = useState(null);
   const people = db.contactPeople.filter(x => x.contactId === contactId);
   const save = async () => {
@@ -153,13 +153,13 @@ function PeopleEditor({ contactId, db, actions, toast, readOnly, kinds, prefs, o
     <div className="divider"></div>
     <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
       <span className="subtle" style={{ fontWeight: 700 }}>Contacts</span>
-      {!readOnly && <button className="btn sm" style={{ marginLeft: "auto" }} onClick={() => setP({ id: uid(), contactId, name: "", title: "", email: "", phone: "" })}><Ico d={ICONS.plus} size={13} />Add Contact</button>}
+      {!readOnly && <button className="btn sm" style={{ marginLeft: "auto" }} onClick={() => setP({ id: uid(), contactId, prefix: "", name: "", title: "", email: "", phone: "" })}><Ico d={ICONS.plus} size={13} />Add Contact</button>}
     </div>
     {people.length === 0 && !p && <p className="subtle" style={{ margin: "4px 0" }}>No contacts yet — add the people documents should be addressed to (e.g. "Mr. John Murphy").</p>}
     {people.length > 0 && kinds.length > 0 && <p className="subtle" style={{ margin: "0 0 6px", fontSize: 12 }}>
       Tick who gets the {kinds.map(k => PREF_LABEL[k].toLowerCase()).join(" and the ")} — the email dialog opens addressed to them. None ticked uses the company email. Save the {prefs.type} to keep it.</p>}
     {people.map(x => <div key={x.id} className="cat-row" style={{ flexWrap: "wrap", gap: 8 }}>
-      <span style={{ fontWeight: 600 }}>{x.name}</span>
+      <span style={{ fontWeight: 600 }}>{personName(x)}</span>
       <span className="subtle">{[x.title, x.email, x.phone].filter(Boolean).join(" · ")}</span>
       <span style={{ marginLeft: "auto", display: "inline-flex", gap: 4, alignItems: "center", whiteSpace: "nowrap" }}>
         {kinds.map(k => <button key={k} type="button" disabled={readOnly} className={"btn sm" + (isPref(k, x.id) ? " primary" : "")}
@@ -172,7 +172,10 @@ function PeopleEditor({ contactId, db, actions, toast, readOnly, kinds, prefs, o
     </div>)}
     {p && <div style={{ background: "var(--canvas)", borderRadius: 9, padding: 12, marginTop: 8 }}>
       <div className="row">
-        <Field label="Name"><input className="input" value={p.name} onChange={e => setP({ ...p, name: e.target.value })} placeholder="Mr. John Murphy" /></Field>
+        {withPrefix && <Field label="Prefix" hint="Printed before the name on proposals and invoices">
+          <select className="select" style={{ maxWidth: 110 }} value={p.prefix || ""} onChange={e => setP({ ...p, prefix: e.target.value })}>
+            {PREFIXES.map(x => <option key={x} value={x}>{x || "— none —"}</option>)}</select></Field>}
+        <Field label="Name"><input className="input" value={p.name} onChange={e => setP({ ...p, name: e.target.value })} placeholder="John Murphy" /></Field>
         <Field label="Title"><input className="input" value={p.title} onChange={e => setP({ ...p, title: e.target.value })} /></Field>
       </div>
       <div className="row">

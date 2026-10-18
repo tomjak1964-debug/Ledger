@@ -47,7 +47,8 @@ export function proposalConfig(settings, timeCategories) {
   const stored = { ...DEFAULT_LABOR_RATES, ...(p.laborRates || {}) };
   const laborRates = Object.fromEntries(Object.keys(stored).map(k => [k, fromCats(k) ?? stored[k]]));
   return {
-    propPrefix: p.propPrefix ?? "PROP-VG",
+    // followed by the customer code and the date: PROP-VG261018
+    propPrefix: p.propPrefix ?? "PROP-",
     pointWeights: { ...DEFAULT_POINT_WEIGHTS, ...(p.pointWeights || {}) },
     blockFactor: p.blockFactor ?? 1.3,
     blockDivisor: p.blockDivisor ?? 16,

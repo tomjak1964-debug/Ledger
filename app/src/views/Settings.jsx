@@ -486,7 +486,7 @@ function ProposalsTab({ db, s, set, readOnly, saveAll, toast }) {
       <div className="card-body">
         <div className="row">
           <Field label="Signer" hint="Prints under Regards,"><input className="input" value={cfg.signer} disabled={readOnly} onChange={e => setP("signer", e.target.value)} /></Field>
-          <Field label="Proposal number prefix"><input className="input mono" value={cfg.propPrefix} disabled={readOnly} onChange={e => setP("propPrefix", e.target.value)} /></Field>
+          <Field label="Proposal number prefix" hint="Followed by the customer's code and the date — PROP-VG261018"><input className="input mono" value={cfg.propPrefix} disabled={readOnly} onChange={e => setP("propPrefix", e.target.value)} /></Field>
         </div>
         <Field label="Standards line" hint="Fixture proposals: “System hardware and software design will follow …”"><input className="input" value={cfg.standards} disabled={readOnly} onChange={e => setP("standards", e.target.value)} /></Field>
         <div className="row">

@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import DocActions from "../components/DocActions.jsx";
 import { pagesToPdf, saveBlob } from "../lib/saveFile.js";
 import { uid, money, fmtDate, todayISO, nameOf, cls, pickable } from "../lib/helpers.js";
-import { emailFor, proposalAttn, proposalPerson, contactNameFor, remitVendor, peopleOf } from "../lib/people.js";
+import { personName, emailFor, proposalAttn, proposalPerson, contactNameFor, remitVendor, peopleOf } from "../lib/people.js";
 import { proposalConfig, priceProposal, ioBlocks, phaseAmount, SPEC_FIELDS, DEFAULT_PHASES, defaultProposalCustomer } from "../calc/proposals.js";
 import { Ico, ICONS, Badge, Empty, Field, MenuItem, ActionMenu, Modal, SortTh, useTableSort, blankZero } from "../components/ui.jsx";
 import { downloadProposalDocx, proposalDocxBlob, proposalFileStem } from "../lib/proposalDocx.js";
@@ -21,7 +21,7 @@ export function buildProposalContent(p, db) {
   // Effective contact: the proposal's free-text name, else a linked contact
   // person, else the customer's contact field.
   const personRec = proposalPerson(db, p, customer);
-  const contactName = (p.contactName || personRec?.name || customer?.contact || "").trim();
+  const contactName = (p.contactName || personName(personRec) || customer?.contact || "").trim();
   // A named person with no email of their own falls back to whoever the
   // customer's proposals go to, then the company email.
   const person = contactName ? { name: contactName, email: (personRec?.email || "").trim() || emailFor(db, p.customerId, "proposal") } : null;
@@ -371,10 +371,10 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
         </select></Field>
         <Field label="Contact / Attn" hint="Type any name, or pick a suggestion">
           <input className="input" list={"attn-" + x.customerId} value={x.contactName || ""} placeholder="e.g. Mr. John Murphy"
-            onChange={e => { const v = e.target.value, hit = people.find(cp => (cp.name || "").trim().toLowerCase() === v.trim().toLowerCase());
+            onChange={e => { const v = e.target.value, hit = people.find(cp => [cp.name, personName(cp)].some(n => (n || "").trim().toLowerCase() === v.trim().toLowerCase()));
               setX(prev => ({ ...prev, contactName: v, contactPersonId: hit?.id || "" })); }} />
           <datalist id={"attn-" + x.customerId}>
-            {[...new Set(people.map(cp => cp.name).filter(Boolean))].map((n, i) => <option key={i} value={n} />)}
+            {[...new Set(people.map(cp => personName(cp)).filter(Boolean))].map((n, i) => <option key={i} value={n} />)}
           </datalist>
         </Field>
         <Field label="Date"><input className="input" type="date" value={x.date} onChange={e => set("date", e.target.value)} /></Field>

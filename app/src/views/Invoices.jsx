@@ -54,7 +54,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
 
   const startNew = () => {
     // Standalone invoice — no quote or SO behind it (time & materials, service
-    // calls). The number defaults to auto (customer code + date + index) but can
+    // calls). The number defaults to auto (INV-, customer code and date) but can
     // be overridden per-invoice in the editor.
     const customerId = pickable(customers)[0]?.id || "";
     setEdit({

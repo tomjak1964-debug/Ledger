@@ -105,8 +105,8 @@ export const invoiceFromRow = (r, items, payments) => ({
 });
 
 /* ---- contact people ---- */
-export const personToRow = p => ({ id: p.id, contact_id: p.contactId, name: p.name ?? "", title: p.title ?? "", email: p.email ?? "", phone: p.phone ?? "" });
-export const personFromRow = r => ({ id: r.id, contactId: r.contact_id, name: r.name, title: r.title, email: r.email, phone: r.phone });
+export const personToRow = p => ({ id: p.id, contact_id: p.contactId, name: p.name ?? "", title: p.title ?? "", email: p.email ?? "", phone: p.phone ?? "", prefix: p.prefix ?? "" });
+export const personFromRow = r => ({ id: r.id, contactId: r.contact_id, name: r.name, title: r.title, email: r.email, phone: r.phone, prefix: r.prefix || "" });
 
 /* ---- machine types (costing rates) ---- */
 export const machineTypeToRow = m => ({

@@ -733,7 +733,14 @@ list hides it unless *Show inactive* is ticked (the **Inactive** tick is a colum
 documents and the proposal default never start on an inactive contact.
 
 **Fixture Rates** (`views/MachineRates.jsx`, the `machine_types` table — the code and the database keep the
-old name) is the costing table behind a fixture proposal, one row per fixture type. Per-unit adders —
+old name) is the costing table behind a fixture proposal, one row per fixture type. The editor is in three sections (`SECTIONS`):
+**Engineering** — base, **Hardware Design** (`hardware_design`, migration 035), **per HMI** (`hmi_rate`, × the
+proposal's `specs.hmis`, which a new proposal starts at 1), per camera / torque tool / IO-Link — all summed into the
+one Engineering/Start-Up line (`priceProposal()`'s `engParts` shows the build-up under it in the editor);
+**Hardware** — control panel, block I/O, remote HMI, remote sonic panel, Data National material — a line each;
+**Field & Support** — field wiring, run off, Data National checkout. A $0 line is left off, and the scope bullets
+follow the price: a hardware bullet (and the "Provide the following hardware" heading) and the field-wiring bullet
+appear only for a line priced on that proposal; the HMI bullet counts the HMIs. Per-unit adders —
 `camera_rate`, `torque_rate`, `io_link_rate` (migration 023) — multiply by the count on the proposal
 (`specs.cameras` / `torque` / `ioLink`) and roll into the Engineering/Start-Up line; `remote_hmi` and
 `remote_sonic` (migration 023) are base-pricing lines of their own with a scope bullet each. The copy button on a row opens a new type with every rate

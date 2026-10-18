@@ -10,7 +10,7 @@ export const SPEC_FIELDS = [
   ["pp", "Pick Points"], ["clamps", "Clamps"], ["clips", "Clips"],
   ["tabs", "Tabs"], ["shuttle", "Shuttles"], ["platen", "Platens"], ["cameras", "Cameras"],
   // priced like cameras: a per-unit adder on the engineering/start-up line
-  ["torque", "Torque Tools"], ["ioLink", "IO-Link Devices"],
+  ["torque", "Torque Tools"], ["ioLink", "IO-Link Devices"], ["hmis", "HMIs"],
 ];
 
 export const DEFAULT_POINT_WEIGHTS = { pp: 1, welds: 2, clamps: 2, clips: 3, tabs: 2, shuttle: 2, platen: 6 };
@@ -105,15 +105,15 @@ const priced = lines => lines.filter(l => n(l.amount) > 0);
 // override is stored under (specs.priceOverrides), so a label can be reworded
 // without losing anyone's numbers.
 export const FIXTURE_PRICE_LINES = [
-  { key: "eng", label: "Engineering/Start/Up", section: "base" },
-  { key: "panel", label: "CompactLogix Control Panel /HMI/Bingo Board", section: "base" },
-  { key: "blockIo", label: "Block I/O", section: "base" },
-  { key: "fieldWiring", label: "Field Wiring", section: "base" },
-  { key: "remoteHmi", label: "Remote HMI", section: "base" },
-  { key: "remoteSonic", label: "Remote Sonic Panel", section: "base" },
-  { key: "dnCheckout", label: "Data National Checkout", section: "premium" },
-  { key: "dnMaterial", label: "Data National Material", section: "premium" },
-  { key: "runoff", label: "Run Off Support", section: "premium" },
+  { key: "eng", label: "Engineering/Start/Up", section: "base", group: "engineering" },
+  { key: "panel", label: "CompactLogix Control Panel /HMI/Bingo Board", section: "base", group: "hardware" },
+  { key: "blockIo", label: "Block I/O", section: "base", group: "hardware" },
+  { key: "fieldWiring", label: "Field Wiring", section: "base", group: "services" },
+  { key: "remoteHmi", label: "Remote HMI", section: "base", group: "hardware" },
+  { key: "remoteSonic", label: "Remote Sonic Panel", section: "base", group: "hardware" },
+  { key: "dnCheckout", label: "Data National Checkout", section: "premium", group: "services" },
+  { key: "dnMaterial", label: "Data National Material", section: "premium", group: "hardware" },
+  { key: "runoff", label: "Run Off Support", section: "premium", group: "services" },
 ];
 
 // Full price build-up matching the proposal document's Base/Premium sections.
@@ -127,8 +127,19 @@ export function priceProposal(mt, specs, cfg) {
   const blocks = specs.ioBlocks === "" || specs.ioBlocks == null ? computed : n(specs.ioBlocks);
   const dn = !!specs.dataNational;
   const cams = n(specs.cameras), torque = n(specs.torque), ioLink = n(specs.ioLink);
-  // per-unit adders — cameras, torque tools and IO-Link devices — roll into engineering
-  const eng = n(mt.engBase) + n(mt.cameraRate) * cams + n(mt.torqueRate) * torque + n(mt.ioLinkRate) * ioLink;
+  // The Engineering section of Fixture Rates is one line on the proposal: the
+  // base, hardware design, and the per-unit adders — HMIs, cameras, torque
+  // tools, IO-Link devices — times the counts on the proposal.
+  const hmis = n(specs.hmis);
+  const engParts = [
+    { label: "Engineering / start-up base", amount: n(mt.engBase) },
+    { label: "Hardware design", amount: n(mt.hardwareDesign) },
+    { label: `${hmis} HMI${hmis === 1 ? "" : "s"} × ${n(mt.hmiRate)}`, amount: n(mt.hmiRate) * hmis },
+    { label: `${cams} camera${cams === 1 ? "" : "s"} × ${n(mt.cameraRate)}`, amount: n(mt.cameraRate) * cams },
+    { label: `${torque} torque tool${torque === 1 ? "" : "s"} × ${n(mt.torqueRate)}`, amount: n(mt.torqueRate) * torque },
+    { label: `${ioLink} IO-Link device${ioLink === 1 ? "" : "s"} × ${n(mt.ioLinkRate)}`, amount: n(mt.ioLinkRate) * ioLink },
+  ].filter(p => p.amount > 0);
+  const eng = engParts.reduce((t, p) => t + p.amount, 0);
   const blockio = blocks > 0 ? n(mt.ioFirst) + n(mt.ioAddl) * (blocks - 1) : 0;
   const worked = {
     eng, panel: n(mt.panelBudget), blockIo: blockio, fieldWiring: n(mt.fieldWiring), remoteHmi: n(mt.remoteHmi), remoteSonic: n(mt.remoteSonic),
@@ -145,7 +156,7 @@ export function priceProposal(mt, specs, cfg) {
   const premiumLines = priced(lines.filter(l => l.section === "premium")).map(strip);
   const base = round2(baseLines.reduce((t, l) => t + l.amount, 0));
   const premium = round2(premiumLines.reduce((t, l) => t + l.amount, 0));
-  return { baseLines, premiumLines, lines, base, premium, total: round2(base + premium), blocks, points };
+  return { baseLines, premiumLines, lines, base, premium, total: round2(base + premium), blocks, points, engParts };
 }
 
 export const phaseAmount = (total, pct) => round2(total * pct / 100);

@@ -6,19 +6,26 @@ import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort, blankZero } from
 // Fixture Rates: the costing table behind fixture proposals, one row per
 // fixture type. (The table and the code still call them machine types.) A
 // rate left at 0 is left off the proposal entirely.
-const RATE_FIELDS = [
-  ["engBase", "Engineering/Start-Up Base"], ["cameraRate", "Per-Camera Adder"],
-  ["torqueRate", "Per-Torque Tool Adder"], ["ioLinkRate", "Per-IO-Link Adder"],
-  ["panelBudget", "Control Panel Budget"], ["ioFirst", "1st I/O Block"], ["ioAddl", "Each Add'l I/O Block"],
-  ["dnCheckout", "Data National Checkout"], ["dnMaterial", "Data National Material"],
-  ["fieldWiring", "Field Wiring"], ["runoff", "Run Off Support"], ["remoteHmi", "Remote HMI"],
-  ["remoteSonic", "Remote Sonic Panel"],
+// The editor's sections. Engineering: everything here adds up into the one
+// Engineering/Start-Up line on the proposal — the per-unit adders multiplied by
+// the counts on the proposal. Hardware: each is a line of its own on the
+// proposal, left off at $0. Field & support: labor priced as lines of their own.
+const SECTIONS = [
+  { key: "engineering", title: "Engineering", note: "All of these add up into the proposal's Engineering/Start-Up line. Per-unit amounts multiply by the counts on the proposal.",
+    fields: [["engBase", "Engineering / Start-Up Base"], ["hardwareDesign", "Hardware Design"], ["hmiRate", "Per HMI"],
+      ["cameraRate", "Per Camera"], ["torqueRate", "Per Torque Tool"], ["ioLinkRate", "Per IO-Link Device"]] },
+  { key: "hardware", title: "Hardware", note: "Each is its own line on the proposal, with a scope bullet. A $0 item is left off. Data National Material only applies when the proposal has Data National ticked.",
+    fields: [["panelBudget", "Control Panel / HMI / Bingo Board"], ["ioFirst", "1st Block I/O"], ["ioAddl", "Each Add'l Block I/O"],
+      ["remoteHmi", "Remote HMI"], ["remoteSonic", "Remote Sonic Panel"], ["dnMaterial", "Data National Material"]] },
+  { key: "services", title: "Field & Support", note: "Labor priced as lines of their own. Data National Checkout only applies with Data National ticked. A $0 item is left off.",
+    fields: [["fieldWiring", "Field Wiring"], ["runoff", "Run Off Support"], ["dnCheckout", "Data National Checkout"]] },
 ];
+const RATE_FIELDS = SECTIONS.flatMap(sec => sec.fields);
 // list columns, in the order the shop reads them
 const COLUMNS = [
-  ["engBase", "Eng Base"], ["cameraRate", "/Camera"], ["torqueRate", "/Torque"], ["ioLinkRate", "/IO Link"],
-  ["panelBudget", "Panel"], ["ioFirst", "I/O 1st"], ["ioAddl", "I/O Add'l"], ["fieldWiring", "Wiring"],
-  ["runoff", "Run Off"], ["remoteHmi", "Remote HMI"], ["remoteSonic", "Remote Sonic"],
+  ["engBase", "Eng Base"], ["hardwareDesign", "Hdw Design"], ["hmiRate", "/HMI"], ["cameraRate", "/Camera"], ["torqueRate", "/Torque"], ["ioLinkRate", "/IO Link"],
+  ["panelBudget", "Panel"], ["ioFirst", "I/O 1st"], ["ioAddl", "I/O Add'l"], ["remoteHmi", "Remote HMI"], ["remoteSonic", "Remote Sonic"],
+  ["fieldWiring", "Wiring"], ["runoff", "Run Off"],
 ];
 
 export default function MachineRatesView({ db, actions, toast, readOnly }) {
@@ -66,15 +73,21 @@ export default function MachineRatesView({ db, actions, toast, readOnly }) {
             </td>
           </tr>)}</tbody></table>}
     </div>
-    {edit && <Modal title={edit.copyOf ? "New Fixture Type from " + edit.copyOf : edit._new ? "New Fixture Type" : "Edit " + edit.name} onClose={() => setEdit(null)}
+    {edit && <Modal wide title={edit.copyOf ? "New Fixture Type from " + edit.copyOf : edit._new ? "New Fixture Type" : "Edit " + edit.name} onClose={() => setEdit(null)}
       foot={<><button className="btn" onClick={() => setEdit(null)}>Cancel</button><button className="btn primary" onClick={() => save(edit)}>Save Rates</button></>}>
       <Field label="Fixture Type Name"><input className="input" value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} placeholder="Big Sonic" /></Field>
-      <div className="row">
-        {RATE_FIELDS.map(([k, label]) => <Field key={k} label={label}>
-          <input className="input mono" type="number" step="any" value={blankZero(edit[k])} placeholder="0" onChange={e => setEdit({ ...edit, [k]: e.target.value })} />
-        </Field>)}
-      </div>
-      <p className="subtle">Per-camera, per-torque tool and per-IO-Link adders multiply by the count on the proposal and roll into the Engineering/Start-Up line. Data National amounts only apply when a proposal has "Data National" checked. Remote HMI and Remote Sonic Panel &gt; 0 each add a Base Pricing line and a scope bullet. Any rate left at 0 is left off the proposal.</p>
+      {SECTIONS.map(sec => <div key={sec.key} style={{ marginTop: 14 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, borderBottom: "1px solid var(--line)", paddingBottom: 4, marginBottom: 8 }}>
+          <b>{sec.title}</b>
+          {sec.key === "engineering" && <span className="subtle mono" style={{ marginLeft: "auto" }}>base + design = {money((Number(edit.engBase) || 0) + (Number(edit.hardwareDesign) || 0))}</span>}
+        </div>
+        <p className="subtle" style={{ margin: "0 0 8px", fontSize: 12.5 }}>{sec.note}</p>
+        <div className="row">
+          {sec.fields.map(([k, label]) => <Field key={k} label={label}>
+            <input className="input mono" type="number" step="any" value={blankZero(edit[k])} placeholder="0" onChange={e => setEdit({ ...edit, [k]: e.target.value })} />
+          </Field>)}
+        </div>
+      </div>)}
     </Modal>}
   </div>;
 }

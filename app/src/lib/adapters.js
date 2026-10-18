@@ -115,6 +115,7 @@ export const machineTypeToRow = m => ({
   dn_checkout: num(m.dnCheckout), dn_material: num(m.dnMaterial), field_wiring: num(m.fieldWiring),
   runoff: num(m.runoff), remote_hmi: num(m.remoteHmi), sort: num(m.sort),
   torque_rate: num(m.torqueRate), io_link_rate: num(m.ioLinkRate), remote_sonic: num(m.remoteSonic),
+  hardware_design: num(m.hardwareDesign), hmi_rate: num(m.hmiRate),
 });
 export const machineTypeFromRow = r => ({
   id: r.id, name: r.name, engBase: num(r.eng_base), cameraRate: num(r.camera_rate),
@@ -122,6 +123,7 @@ export const machineTypeFromRow = r => ({
   dnCheckout: num(r.dn_checkout), dnMaterial: num(r.dn_material), fieldWiring: num(r.field_wiring),
   runoff: num(r.runoff), remoteHmi: num(r.remote_hmi), sort: num(r.sort),
   torqueRate: num(r.torque_rate), ioLinkRate: num(r.io_link_rate), remoteSonic: num(r.remote_sonic),
+  hardwareDesign: num(r.hardware_design), hmiRate: num(r.hmi_rate),
 });
 
 /* ---- proposals ---- */

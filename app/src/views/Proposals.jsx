@@ -26,7 +26,7 @@ export function buildProposalContent(p, db) {
   // customer's proposals go to, then the company email.
   const person = contactName ? { name: contactName, email: (personRec?.email || "").trim() || emailFor(db, p.customerId, "proposal") } : null;
   const s = p.specs || {};
-  const cams = Number(s.cameras) || 0, gens = Number(s.generators) || 0, welds = Number(s.welds) || 0;
+  const cams = Number(s.cameras) || 0, gens = Number(s.generators) || 0, welds = Number(s.welds) || 0, hmis = Number(s.hmis) || 0;
   const torque = Number(s.torque) || 0, ioLink = Number(s.ioLink) || 0;
   const plc = s.plcType || cfg.plcType, hmi = s.hmiType || cfg.hmiType;
   const loc = p.location || cfg.location;
@@ -46,6 +46,21 @@ export function buildProposalContent(p, db) {
     return (title ? title + parts[parts.length - 1] : parts[parts.length - 1]) + ":";
   })();
 
+  // The scope follows the price: a hardware item is promised only when it is a
+  // line on this proposal (Fixture Rates above $0, or an override), so a $0
+  // item drops out of the bullets as it drops out of the pricing. A pricing
+  // snapshot saved before lines carried keys is read by its label.
+  const allLines = [...(pricing.baseLines || []), ...(pricing.premiumLines || [])];
+  const LABEL = { panel: /panel\s*\/?\s*hmi|control panel/i, blockIo: /block\s*i\/?o/i, fieldWiring: /field\s*wir/i, remoteHmi: /remote\s*hmi/i, remoteSonic: /remote\s*sonic/i };
+  const priced = key => allLines.some(l => (l.key ? l.key === key : LABEL[key]?.test(l.label || "")) && (Number(l.amount) || 0) > 0);
+  const blocks = Number(pricing.blocks) || 0;
+  const hardware = [
+    priced("panel") ? { t: `(1) Main control Panel with ${plc} PLC, ${hmi} HMI, and miscellaneous panel components (duct, wire, terminal, power supplies, etc….)`, sub: true } : null,
+    priced("panel") ? { t: "Automation Direct Bingo Board HMI", sub: true } : null,
+    priced("blockIo") ? { t: `(${blocks || 1}) Block I/O module${blocks === 1 ? "" : "s"}`, sub: true } : null,
+    priced("remoteHmi") ? { t: "(1) Remote HMI Panel", sub: true } : null,
+    priced("remoteSonic") ? { t: "(1) Remote Sonic Panel", sub: true } : null,
+  ].filter(Boolean);
   const bullets = [
     { t: "Develop Controls Hardware Design." },
     { t: `System hardware and software design will follow ${cfg.standards}.` },
@@ -53,13 +68,10 @@ export function buildProposalContent(p, db) {
     { t: "Develop the hardware design Interconnect drawings to include 480/230 VAC Power, 120 VAC and 24Vdc control signal and networks from the main control enclosure to the control component devices." },
     { t: `Software Control Application development for ${plc} PLC.` },
     s.dataNational ? { t: "Provide TP-Link ER605 Router Module to Communicate with Data National." } : null,
-    { t: `HMI Software Design for ${hmi} HMI` },
-    { t: "Provide the following hardware components per system." },
-    { t: `(1) Main control Panel with ${plc} PLC, ${hmi} HMI, and miscellaneous panel components (duct, wire, terminal, power supplies, etc….)`, sub: true },
-    { t: "Automation Direct Bingo Board HMI", sub: true },
-    mt && Number(mt.remoteHmi) > 0 ? { t: "(1) Remote HMI Panel", sub: true } : null,
-    mt && Number(mt.remoteSonic) > 0 ? { t: "(1) Remote Sonic Panel", sub: true } : null,
-    { t: `Field Wiring at ${loc}.` },
+    { t: hmis > 1 ? `HMI Software Design for (${hmis}) ${hmi} HMIs` : `HMI Software Design for ${hmi} HMI` },
+    hardware.length ? { t: "Provide the following hardware components per system." } : null,
+    ...hardware,
+    priced("fieldWiring") ? { t: `Field Wiring at ${loc}.` } : null,
     { t: `Start-up/Debug Support at ${loc}.` },
     { t: `${custName} will supply the machine and all on machine components and cabling.` },
     cams > 0 ? { t: `Installation and Configuration of ${cams} Cameras` } : null,
@@ -122,7 +134,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
     id: uid(), _new: true, kind: "machine", rev: 0, number: "(assigned at save)", customerId: startCustomer?.id || "",
     ...proposalAttn(db, startCustomer), date: todayISO(), status: "draft", jobNumber: "", description: "",
     location: cfg.location, machineTypeId: db.machineTypes[0]?.id || "",
-    specs: { ...emptySpecs(), dataNational: true, ioBlocks: "" },
+    specs: { ...emptySpecs(), dataNational: true, ioBlocks: "", hmis: 1 },
     pricing: {}, phases: cfg.phases.map(ph => ({ ...ph })), notes: "",
   });
 
@@ -414,6 +426,7 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
             const off = !(l.amount > 0);
             return <tr key={l.key} style={off ? { opacity: 0.55 } : {}}>
               <td>{l.label}{off && <span className="subtle" style={{ fontSize: 12 }}> · left off the proposal</span>}
+                {l.key === "eng" && pricing.engParts?.length > 0 && <div className="subtle" style={{ fontSize: 12 }}>{pricing.engParts.map(p => `${p.label} ${money(p.amount)}`).join(" + ")}</div>}
                 {l.overridden && <span className="badge blue" style={{ marginLeft: 8 }}><span className="dot"></span>Overridden</span>}</td>
               <td className="num mono subtle">{money(l.suggested)}</td>
               <td className="num"><input className="input mono" type="number" min="0" step="any" style={{ textAlign: "right", ...(l.overridden ? { background: "var(--accent-wash)", borderColor: "var(--accent)" } : {}) }}

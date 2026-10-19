@@ -82,7 +82,7 @@ export default function SalesOrdersView({ db, actions, toast, openDoc, readOnly 
               <td>{nameOf(db, so.customerId)}</td>
               <td className="mono subtle">{so.poNumber || "—"}</td>
               <td className="mono subtle">{q ? q.number : "—"}</td>
-              <td className="subtle">{fmtDate(so.date)}</td>
+              <td className="subtle nowrap">{fmtDate(so.date)}</td>
               <td><Badge status={badge} />{so.status === "open" && billed.length > 0 &&
                 <div className="subtle" style={{ fontSize: 12, marginTop: 2 }}>{money(remaining)} left to invoice</div>}</td>
               <td className="num">{money(total)}</td>

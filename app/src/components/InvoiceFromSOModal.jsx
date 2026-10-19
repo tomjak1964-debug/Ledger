@@ -101,7 +101,7 @@ export default function InvoiceFromSOModal({ so, db, onClose, onGenerate, onlyRe
       <table><thead><tr><th style={{ width: 34 }}></th><th>Date</th><th>Category</th><th>Description</th><th className="num">Hours</th><th className="num">Rate</th><th className="num">Amount</th></tr></thead>
         <tbody>{jobTime.map(t => <tr key={t.id} style={selTime[t.id] ? {} : { opacity: 0.6 }}>
           <td><input type="checkbox" checked={!!selTime[t.id]} onChange={e => setSelTime(p => ({ ...p, [t.id]: e.target.checked }))} /></td>
-          <td className="subtle">{fmtDate(t.date)}</td>
+          <td className="subtle nowrap">{fmtDate(t.date)}</td>
           <td>{catName(t.categoryId)}</td>
           <td className="subtle">{t.description || "—"}</td>
           <td className="num mono">{t.hours}</td>

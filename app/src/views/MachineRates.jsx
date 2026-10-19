@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { uid, money } from "../lib/helpers.js";
-import { TMJ_DEFAULT_RATES } from "../calc/proposals.js";
+import { TMJ_DEFAULT_RATES, FIXTURE_PRICE_LINES } from "../calc/proposals.js";
 import { packagesOf, SCOPE_ITEMS, standardsLine } from "../calc/fixtureScope.js";
 import { canWrite } from "../lib/permissions.js";
 import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort, blankZero } from "../components/ui.jsx";
@@ -16,11 +16,11 @@ const SECTIONS = [
   { key: "engineering", title: "Engineering", note: "All of these add up into the proposal's Engineering/Start-Up line. Per-unit amounts multiply by the counts on the proposal.",
     fields: [["engBase", "Engineering / Start-Up Base"], ["hardwareDesign", "Hardware Design"], ["hmiRate", "Per HMI"],
       ["cameraRate", "Per Camera"], ["torqueRate", "Per Torque Tool"], ["ioLinkRate", "Per IO-Link Device"]] },
-  { key: "hardware", title: "Hardware", note: "Each is its own line on the proposal, with a scope bullet. A $0 item is left off. Data National Material only applies when the proposal has Data National ticked.",
+  { key: "hardware", title: "Hardware", note: "Each is its own line on the proposal, with a scope bullet. A $0 item is left off. MES Material (the MES router and connection hardware) only applies when the proposal's fixture reports to an MES.",
     fields: [["panelBudget", "Control Panel / HMI / Bingo Board"], ["ioFirst", "1st Block I/O"], ["ioAddl", "Each Add'l Block I/O"],
-      ["remoteHmi", "Remote HMI"], ["remoteSonic", "Remote Sonic Panel"], ["dnMaterial", "Data National Material"]] },
-  { key: "services", title: "Field & Support", note: "Labor priced as lines of their own. Data National Checkout only applies with Data National ticked. A $0 item is left off.",
-    fields: [["fieldWiring", "Field Wiring"], ["runoff", "Run Off Support"], ["dnCheckout", "Data National Checkout"]] },
+      ["remoteHmi", "Remote HMI"], ["remoteSonic", "Remote Sonic Panel"], ["dnMaterial", "MES Material"]] },
+  { key: "services", title: "Field & Support", note: "Labor priced as lines of their own. MES Support (integration and checkout with the plant's MES) only applies when the fixture reports to an MES. A $0 item is left off.",
+    fields: [["fieldWiring", "Field Wiring"], ["runoff", "Run Off Support"], ["dnCheckout", "MES Support"]] },
 ];
 const RATE_FIELDS = SECTIONS.flatMap(sec => sec.fields);
 // list columns, in the order the shop reads them
@@ -119,13 +119,13 @@ function ScopePackages({ db, actions, toast, editable }) {
     if (await actions.saveSettings({ ...db.settings, fixturePackages: next })) { setEdit(null); toast("Scope package saved"); }
   };
   const startsOnIds = p => customers.filter(c => p.match && c.name.toLowerCase().includes(p.match)).map(c => c.id);
-  const open = (pk, index) => setEdit({ index, pkg: { ...pk, customerIds: pk.customerIds || startsOnIds(pk), scope: { ...pk.scope }, phases: pk.phases.map(ph => ({ ...ph })), endCustomers: [...(pk.endCustomers || [])] } });
+  const open = (pk, index) => setEdit({ index, pkg: { ...pk, mesFor: { ...(pk.mesFor || {}) }, premium: [...(pk.premium || [])], customerIds: pk.customerIds || startsOnIds(pk), scope: { ...pk.scope }, phases: pk.phases.map(ph => ({ ...ph })), endCustomers: [...(pk.endCustomers || [])] } });
   const P = edit?.pkg;
   const setP = patch => setEdit(e => ({ ...e, pkg: { ...e.pkg, ...patch } }));
   return <div className="card" style={{ marginTop: 16 }}>
     <div className="card-head"><h3>Scope Packages</h3>
       <span className="subtle" style={{ marginLeft: 12 }}>what a fixture proposal provides — each customer's proposals start on one</span>
-      {editable && <button className="btn sm" style={{ marginLeft: "auto" }} onClick={() => open({ id: uid(), name: "", intro: "", standards: "", location: "", endCustomers: [], plcType: "", hmiType: "", scope: Object.fromEntries(SCOPE_ITEMS.map(i => [i.key, false])), phases: [{ key: "ph0", label: "", pct: 100 }], customerIds: [] }, null)}><Ico d={ICONS.plus} size={14} />New Package</button>}
+      {editable && <button className="btn sm" style={{ marginLeft: "auto" }} onClick={() => open({ id: uid(), name: "", intro: "", standards: "", location: "", mes: false, mesName: "", mesFor: {}, premium: [], endCustomers: [], plcType: "", hmiType: "", scope: Object.fromEntries(SCOPE_ITEMS.map(i => [i.key, false])), phases: [{ key: "ph0", label: "", pct: 100 }], customerIds: [] }, null)}><Ico d={ICONS.plus} size={14} />New Package</button>}
     </div>
     <table><thead><tr><th>Package</th><th>Provides</th><th>Invoicing schedule</th><th>Customers</th><th></th></tr></thead>
       <tbody>{packages.map((pk, i) => <tr key={pk.id}>
@@ -153,6 +153,20 @@ function ScopePackages({ db, actions, toast, editable }) {
         <Field label="Start-up location" hint="Where start-up is included — blank uses the customer's name"><input className="input" value={P.location || ""} onChange={e => setP({ location: e.target.value })} /></Field>
         <Field label="Default PLC"><input className="input" value={P.plcType} onChange={e => setP({ plcType: e.target.value })} /></Field>
         <Field label="Default HMI"><input className="input" value={P.hmiType} onChange={e => setP({ hmiType: e.target.value })} /></Field>
+      </div>
+      <div className="row">
+        <Field label="Usual MES" hint="The plant system the fixture reports to"><input className="input" value={P.mesName || ""} onChange={e => setP({ mesName: e.target.value })} placeholder="Data National" /></Field>
+        <Field label="MES by end customer" hint="End customer = MES, comma-separated — e.g. Adient = MIRA, Performance Seats = Mach6">
+          <input className="input" value={Object.entries(P.mesFor || {}).map(([k, v]) => `${k} = ${v}`).join(", ")}
+            onChange={e => setP({ mesFor: Object.fromEntries(e.target.value.split(",").map(x => x.split("=").map(y => y.trim())).filter(([k, v]) => k && v)) })} /></Field>
+      </div>
+      <label style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 10 }}>
+        <input type="checkbox" checked={!!P.mes} onChange={e => setP({ mes: e.target.checked })} />New proposals start with "Fixture reports to MES" ticked</label>
+      <div className="subtle" style={{ fontWeight: 600, margin: "6px 0" }}>Under Premium Pricing <span style={{ fontWeight: 400 }}>— none ticked: the proposal has one price list</span></div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 18px", marginBottom: 12 }}>
+        {FIXTURE_PRICE_LINES.map(l => <label key={l.key} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input type="checkbox" checked={(P.premium || []).includes(l.key)} onChange={e => setP({ premium: e.target.checked ? [...(P.premium || []), l.key] : (P.premium || []).filter(k => k !== l.key) })} />
+          {l.key === "dnCheckout" ? "MES Support" : l.key === "dnMaterial" ? "MES Material" : l.key === "panel" ? "Control Panel" : l.label}</label>)}
       </div>
       <div className="subtle" style={{ fontWeight: 600, margin: "6px 0" }}>Provides</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 18px", marginBottom: 12 }}>

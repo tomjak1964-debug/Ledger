@@ -56,7 +56,7 @@ export default function PurchaseOrdersView({ db, actions, toast, openDoc, readOn
               <td className="doc-id">{po.number}</td>
               <td>{nameOf(db, po.vendorId)}</td>
               <td className="mono subtle">{job ? job.number : "—"}</td>
-              <td className="subtle">{fmtDate(po.date)}</td>
+              <td className="subtle nowrap">{fmtDate(po.date)}</td>
               <td><Badge status={po.status} />{billed && <span className="subtle" style={{ marginLeft: 6, fontSize: 12 }}>billed</span>}</td>
               <td className="num">{money(lineTotals(po.lineItems, po.taxRate).total)}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>

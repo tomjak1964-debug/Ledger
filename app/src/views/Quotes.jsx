@@ -71,8 +71,8 @@ export default function QuotesView({ db, actions, toast, openDoc, readOnly }) {
             return <tr key={q.id}>
               <td className="doc-id">{q.number}</td>
               <td>{nameOf(db, q.customerId)}</td>
-              <td className="subtle">{fmtDate(q.date)}</td>
-              <td className="subtle">{fmtDate(q.expiryDate)}</td>
+              <td className="subtle nowrap">{fmtDate(q.date)}</td>
+              <td className="subtle nowrap">{fmtDate(q.expiryDate)}</td>
               <td><Badge status={q.status} /></td>
               <td className="num">{money(t)}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>

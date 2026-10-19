@@ -90,7 +90,7 @@ export default function BankReconciliationView({ db, actions, toast, readOnly })
           <SortTh label="Status" col="status" sort={sort} onSort={onSort} />
           <th className="num">Difference</th><th></th></tr></thead>
           <tbody>{rows.map(r => { const s = reconcileState(db, r); return <tr key={r.id} style={{ cursor: "pointer" }} onClick={() => setOpenId(r.id)}>
-            <td className="subtle">{fmtDate(r.statementDate)}</td>
+            <td className="subtle nowrap">{fmtDate(r.statementDate)}</td>
             <td>{accountLabel(db, r.account)}</td>
             <td className="num mono">{money(r.statementBalance)}</td>
             <td><span className={"badge " + (r.status === "done" ? "green" : "blue")}><span className="dot"></span>{r.status === "done" ? "Finished" : "Open"}</span></td>

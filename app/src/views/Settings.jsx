@@ -322,7 +322,8 @@ function MemberRow({ m, self, actions, toast, lastSignIn }) {
       <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
         {m.userId && <button className="btn ghost sm" title="Set a new password for this user" onClick={openReset}>Reset password</button>}
         {owner ? <span className="badge green"><span className="dot"></span>Owner</span>
-          : <select className="select" value={role} onChange={e => setRole(e.target.value)} disabled={self}>
+          : <select className="select" title="Role — an Admin has every permission; a Member only the areas ticked below"
+              style={{ width: 120, flex: "none" }} value={role} onChange={e => setRole(e.target.value)} disabled={self}>
             <option value="member">Member</option><option value="admin">Admin</option>
           </select>}
         {!owner && !self && <button className="btn ghost icon" title="Remove user" onClick={remove}><Ico d={ICONS.trash} size={14} /></button>}

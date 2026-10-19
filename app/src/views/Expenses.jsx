@@ -50,7 +50,7 @@ export default function ExpensesView({ db, actions, toast, readOnly }) {
           <SortTh label="Amount" col="amount" sort={sort} onSort={onSort} num /><th></th></tr></thead>
           <tbody>{expRows.map(e => (
             <tr key={e.id}>
-              <td className="subtle">{fmtDate(e.date)}</td><td>{e.category}</td><td>{e.vendor || "—"}</td>
+              <td className="subtle nowrap">{fmtDate(e.date)}</td><td>{e.category}</td><td>{e.vendor || "—"}</td>
               <td className="subtle">{e.method}</td><td className="subtle" style={{ maxWidth: 220 }}>{e.notes || "—"}</td>
               <td className="num" style={{ fontWeight: 600 }}>{money(Number(e.amount) || 0)}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>

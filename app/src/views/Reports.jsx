@@ -183,7 +183,7 @@ function RegisterReport({ db, from, to, partyId, rangeLabel: label, kind }) {
                   onClick={e => { e.stopPropagation(); toggle(); }}><Ico d={ICONS.arrow} size={15} /></button></td>}
                 <td className="mono doc-id">{g.ref ? "#" + g.ref : "—"}</td>
                 <td style={{ fontWeight: 600 }}>{nameOf(db, g.partyId)}</td>
-                <td className="subtle">{fmtDate(g.date)}</td>
+                <td className="subtle nowrap">{fmtDate(g.date)}</td>
                 <td className="subtle">{g.method || "—"}</td>
                 <td className="num subtle">{g.count}</td>
                 <td className="num" style={{ fontWeight: 600 }}>{money(g.amount)}</td>
@@ -192,7 +192,7 @@ function RegisterReport({ db, from, to, partyId, rangeLabel: label, kind }) {
                 {!detail && <td></td>}
                 <td className="subtle" style={{ paddingLeft: 8 }}>applied to</td>
                 <td className="doc-id">{l.number}</td>
-                <td className="subtle">{fmtDate(l.docDate)}</td>
+                <td className="subtle nowrap">{fmtDate(l.docDate)}</td>
                 <td colSpan={2}></td>
                 <td className="num">{money(l.amount)}</td>
               </tr>)}
@@ -352,7 +352,7 @@ function SalesTax({ db, from, to, partyId, rangeLabel: label }) {
           <SortTh label="Total" col="total" sort={sort} onSort={onSort} num /></tr></thead>
           <tbody>{taxRows.map(({ inv, sub: s, tax: t, total }) => <tr key={inv.id}>
             <td className="doc-id">{inv.number}</td><td>{nameOf(db, inv.customerId)}</td>
-            <td className="subtle">{fmtDate(inv.date)}</td><td><Badge status={invoiceStatus(inv)} /></td>
+            <td className="subtle nowrap">{fmtDate(inv.date)}</td><td><Badge status={invoiceStatus(inv)} /></td>
             <td className="num">{money(s)}</td><td className="num">{money(t)}</td><td className="num">{money(total)}</td>
           </tr>)}</tbody></table>}
     </ReportCard>
@@ -430,8 +430,8 @@ function Statements({ db, partyId }) {
         const od = daysBetween(inv.dueDate, todayISO());
         return <tr key={inv.id}>
           <td className="doc-id">{inv.number}</td>
-          <td className="subtle">{fmtDate(inv.date)}</td>
-          <td className="subtle">{fmtDate(inv.dueDate)}</td>
+          <td className="subtle nowrap">{fmtDate(inv.date)}</td>
+          <td className="subtle nowrap">{fmtDate(inv.dueDate)}</td>
           <td style={od > 0 ? { color: "var(--neg)", fontWeight: 600 } : {}}>{od > 0 ? od + "d overdue" : "current"}</td>
           <td><Badge status={invoiceStatus(inv)} /></td>
           <td className="num" style={{ fontWeight: 600 }}>{money(balance(inv))}</td>
@@ -474,7 +474,7 @@ function GeneralLedgerReport({ db, from, to, rangeLabel: label }) {
           <tbody>
             <tr><td className="subtle">{from ? fmtDate(from) : "—"}</td><td className="subtle" colSpan={2}>Opening balance</td><td colSpan={2}></td><td className="num subtle">{money(b.opening)}</td></tr>
             {b.rows.map((x, i) => <tr key={i}>
-              <td className="subtle">{fmtDate(x.date)}</td><td>{x.memo}</td><td className="subtle">{x.party || "—"}</td>
+              <td className="subtle nowrap">{fmtDate(x.date)}</td><td>{x.memo}</td><td className="subtle">{x.party || "—"}</td>
               <td className="num">{x.debit ? money(x.debit) : ""}</td><td className="num">{x.credit ? money(x.credit) : ""}</td>
               <td className="num" style={{ fontWeight: 600 }}>{money(x.balance)}</td>
             </tr>)}
@@ -637,7 +637,7 @@ function ReconciliationSummary({ db, from, to }) {
         <SortTh label="Outstanding" col="outstanding" sort={sort} onSort={onSort} num />
         <SortTh label="Book Balance" col="book" sort={sort} onSort={onSort} num /></tr></thead>
         <tbody>{rows.map(({ r, s }) => <tr key={r.id}>
-          <td className="subtle">{fmtDate(r.statementDate)}</td><td>{accountLabel(db, r.account)}</td>
+          <td className="subtle nowrap">{fmtDate(r.statementDate)}</td><td>{accountLabel(db, r.account)}</td>
           <td><span className={"badge " + (r.status === "done" ? "green" : "blue")}><span className="dot"></span>{r.status === "done" ? "Finished" : "Open"}</span></td>
           <td className="num">{money(r.statementBalance)}</td><td className="num">{money(s.clearedTotal)}</td>
           <td className="num" style={{ color: Math.abs(s.difference) > 0.005 ? "var(--neg)" : undefined, fontWeight: 600 }}>{money(s.difference)}</td>
@@ -699,7 +699,7 @@ function Vendor1099Report({ db, to, partyId }) {
               <td style={{ verticalAlign: "top", fontWeight: 600, color: x.limitMet ? "var(--pos)" : "var(--muted)" }}>{x.limitMet ? "Yes" : "No"}</td></tr>;
             return x.lines.map((l, i) => <tr key={v.id + i} className={i ? "sub-row" : ""}>
               {i === 0 ? head : <td colSpan={5}></td>}
-              <td className="subtle">{fmtDate(l.date)}</td><td className="mono">{l.ref || "—"}</td><td className="num">{money(l.amount)}</td>
+              <td className="subtle nowrap">{fmtDate(l.date)}</td><td className="mono">{l.ref || "—"}</td><td className="num">{money(l.amount)}</td>
               {i === 0 ? <><td className="num" style={{ fontWeight: 700, verticalAlign: "top" }}>{money(x.total)}</td>
                 <td style={{ verticalAlign: "top", fontWeight: 600, color: x.limitMet ? "var(--pos)" : "var(--muted)" }}>{x.limitMet ? "Yes" : "No"}</td></> : <td colSpan={2}></td>}
             </tr>);

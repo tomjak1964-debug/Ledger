@@ -59,7 +59,7 @@ export default function JournalEntriesView({ db, actions, toast, readOnly }) {
             <th></th></tr></thead>
             <tbody>{rows.map(j => <tr key={j.id}>
               <td className="mono" style={{ fontWeight: 600 }}>{j.number || "—"}</td>
-              <td className="subtle">{fmtDate(j.date)}</td>
+              <td className="subtle nowrap">{fmtDate(j.date)}</td>
               <td>{j.memo || <span className="subtle">—</span>}
                 <div className="subtle" style={{ fontSize: 12 }}>{(j.lines || []).map(l => accountLabel(db, l.account)).join(" · ")}</div></td>
               <td className="mono subtle">{j.ref || "—"}</td>

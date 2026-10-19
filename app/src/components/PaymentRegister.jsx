@@ -194,7 +194,7 @@ function Register({ db, actions, toast, readOnly, kind, from, to, partyId, needl
                 onClick={e => { e.stopPropagation(); toggle(); }}><Ico d={ICONS.arrow} size={15} /></button></td>
               <td className="mono doc-id">{g.ref ? "#" + g.ref : "—"}</td>
               <td style={{ fontWeight: 600 }}>{nameOf(db, g.partyId)}</td>
-              <td className="subtle">{fmtDate(g.date)}</td>
+              <td className="subtle nowrap">{fmtDate(g.date)}</td>
               <td className="subtle">{g.method || "—"}</td>
               <td className="num subtle">{g.count}</td>
               <td className="num" style={{ fontWeight: 600 }}>{money(g.amount)}</td>
@@ -218,7 +218,7 @@ function Register({ db, actions, toast, readOnly, kind, from, to, partyId, needl
             {isOpen && g.lines.map(l => <tr key={l.paymentId} className="sub-row">
               <td></td><td className="subtle" style={{ paddingLeft: 8 }}>applied to</td>
               <td className="doc-id">{l.number}</td>
-              <td className="subtle">{fmtDate(l.docDate)}</td>
+              <td className="subtle nowrap">{fmtDate(l.docDate)}</td>
               <td colSpan={2}>{isBill && vendorRef(l) ? <span><span className="subtle">Vendor inv # </span><span className="mono">{vendorRef(l)}</span></span> : null}</td>
               <td className="num">{money(l.amount)}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>

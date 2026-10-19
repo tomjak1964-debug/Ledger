@@ -113,7 +113,7 @@ export default function Dashboard({ db, go, member }) {
           action={canQ && <button className="btn primary" onClick={() => go("quotes")}><Ico d={ICONS.plus} size={15} />New Quote</button>} />
         : <table><thead><tr><th>Document</th><th>Customer</th><th>Date</th><th>Status</th><th className="num">Amount</th></tr></thead>
           <tbody>{recent.map((r, i) => <tr key={i} className="clickable" onClick={() => go(r.k === "quote" ? "quotes" : "invoices")}>
-            <td className="doc-id">{r.label}</td><td>{r.who}</td><td className="subtle">{fmtDate(r.t)}</td>
+            <td className="doc-id">{r.label}</td><td>{r.who}</td><td className="subtle nowrap">{fmtDate(r.t)}</td>
             <td><Badge status={r.status} /></td><td className="num">{money(r.amt)}</td>
           </tr>)}</tbody></table>}
     </div>

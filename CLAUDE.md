@@ -759,7 +759,16 @@ and drive the bullets, the sales notes (hardware by the customer; run-off not in
 wiring not included) and, through the package, the schedule; the closing terms read the customer's payment terms and
 the validity days. **A proposal with no `packageId` (everything before this) takes the old path untouched** — the
 same bullets, notes and terms, verified identical. Packages are edited under Fixture Rates → *Scope Packages*
-(Settings write); naming a customer on one takes it off the others.
+(Settings write); naming a customer on one takes it off the others. **MES:** the tick is *Fixture reports to MES* (still `specs.dataNational`);
+the MES is named per proposal (`specs.mesName` — the package's `mesName`, or `mesFor[endCustomer]`: Data National at
+VG, MIRA for Adient / Bridgewater, Mach6 for Performance Seats; Turnkey starts ticked, Software & Start-Up not). Fixture
+Rates' Data National fields read **MES Support** / **MES Material** (same `dnCheckout` / `dnMaterial` columns); priced
+lines read "Mach6 MES Support"; the scope says "{MES} MES integration and checkout" when support is priced (else "PLC
+software interface to {MES} MES"), and the router is a hardware bullet only when MES material is priced.
+**Premium Pricing is chosen** (`specs.premium`, keys; the package's `premium` sets it — Turnkey: MES support, MES
+material, run-off; Software & Start-Up: none): a Premium tick per line in the editor's pricing table, and a scoped
+proposal with nothing under Premium prints one *Pricing* list ending in the total, no sub-totals, on screen and in
+Word. Job budgets read a priced line's `key` before its label (`proposalBudget`).
 
 **Fixture Rates** (`views/MachineRates.jsx`, the `machine_types` table — the code and the database keep the
 old name) is the costing table behind a fixture proposal, one row per fixture type. The editor is in three sections (`SECTIONS`):
@@ -1068,6 +1077,10 @@ change updates that task's detail rather than adding another. It never fails the
 shows them as **Team Activity** (Open → the page it's about, `reviewTarget()` in `lib/taskKinds.js`; Done; Mark
 All Done) above **Ready to Invoice**, and the dashboard leads with an **Open Tasks** card (team activity plus
 jobs ready to invoice) for anyone with the Tasks page.
+
+**List tables don't reflow:** document numbers (`td.doc-id`), amounts (`td.num`), status badges and dates (`.nowrap`
+on the date cells) never break across lines, so a long number like INV-VG261018 can't push the columns after it about;
+names and descriptions wrap instead.
 
 **Sortable lists:** every list view — Quotes, Sales Orders, Invoices, Receivables, Payables,
 Purchase Orders, Expenses, Customers, Vendors, Catalog, Jobs, Tasks, Proposals, Fixture Rates, Job Costing,

@@ -157,8 +157,14 @@ export function priceProposal(mt, specs, cfg) {
   const lines = FIXTURE_PRICE_LINES.map(l => {
     const o = over[l.key];
     const overridden = o !== "" && o != null;
-    const label = l.key === "panel" ? `${plcShort} Control Panel /HMI/Bingo Board` : l.label;
-    return { ...l, label, suggested: round2(worked[l.key]), amount: round2(overridden ? n(o) : worked[l.key]), overridden };
+    // A proposal that names its MES prices "MIRA MES Support"; one from before
+    // keeps "Data National Checkout". Premium is the lines the proposal picks
+    // (specs.premium), else where each line has always sat.
+    const mes = String(specs.mesName || "").trim();
+    const label = l.key === "panel" ? `${plcShort} Control Panel /HMI/Bingo Board`
+      : mes && l.key === "dnCheckout" ? `${mes} MES Support` : mes && l.key === "dnMaterial" ? `${mes} MES Material` : l.label;
+    const section = Array.isArray(specs.premium) ? (specs.premium.includes(l.key) ? "premium" : "base") : l.section;
+    return { ...l, label, section, suggested: round2(worked[l.key]), amount: round2(overridden ? n(o) : worked[l.key]), overridden };
   });
   const strip = l => ({ key: l.key, label: l.label, amount: l.amount, ...(l.overridden ? { overridden: true, suggested: l.suggested } : {}) });
   const baseLines = priced(lines.filter(l => l.section === "base")).map(strip);

@@ -83,21 +83,30 @@ export async function proposalDocxBlob(p, db) {
         P("Sales Notes and Clarifications", { bold: true, ul: true, after: 40 }),
         ...notes,
         P("", { after: 60 }),
-        P("Base Pricing", { bold: true, ul: true, after: 40 }),
-        priceTable([
-          ...c.pricing.baseLines.map(l => priceRow(l.label, l.amount)),
-          priceRow("Base Price Sub Total", c.pricing.base, { bold: true }),
-        ]),
-        P("", { after: 20 }),
-        ...(c.pricing.premiumLines.length ? [
-          P("Premium Pricing", { bold: true, ul: true, after: 40 }),
+        // Nothing under Premium (a scoped proposal): one list and its total.
+        ...(c.pkg && !c.pricing.premiumLines.length ? [
+          P("Pricing", { bold: true, ul: true, after: 40 }),
           priceTable([
-            ...c.pricing.premiumLines.map(l => priceRow(l.label, l.amount)),
-            priceRow("Premium Price Sub Total", c.pricing.premium, { bold: true }),
+            ...c.pricing.baseLines.map(l => priceRow(l.label, l.amount)),
+            priceRow("Total Price for this proposal is:", c.pricing.total, { bold: true }),
+          ]),
+        ] : [
+          P("Base Pricing", { bold: true, ul: true, after: 40 }),
+          priceTable([
+            ...c.pricing.baseLines.map(l => priceRow(l.label, l.amount)),
+            priceRow("Base Price Sub Total", c.pricing.base, { bold: true }),
           ]),
           P("", { after: 20 }),
-        ] : []),
-        priceTable([priceRow("Total Price for this proposal is:", c.pricing.total, { bold: true })]),
+          ...(c.pricing.premiumLines.length ? [
+            P("Premium Pricing", { bold: true, ul: true, after: 40 }),
+            priceTable([
+              ...c.pricing.premiumLines.map(l => priceRow(l.label, l.amount)),
+              priceRow("Premium Price Sub Total", c.pricing.premium, { bold: true }),
+            ]),
+            P("", { after: 20 }),
+          ] : []),
+          priceTable([priceRow("Total Price for this proposal is:", c.pricing.total, { bold: true })]),
+        ]),
         P("", { after: 20 }),
         P("Invoicing Schedule", { bold: true, ul: true, after: 40 }),
         P("Project will be invoiced according to the following invoicing schedule", { after: 40 }),

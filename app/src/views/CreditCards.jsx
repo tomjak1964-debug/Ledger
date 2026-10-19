@@ -91,7 +91,7 @@ export default function CreditCardsView({ db, actions, toast, readOnly }) {
         <button className="btn primary" onClick={() => setView(null)}>Close</button></>}>
       <table><thead><tr><th>Date</th><th>Description</th><th>Treated as</th><th>Account</th><th className="num">Amount</th></tr></thead>
         <tbody>{(view.lines || []).map(l => <tr key={l.id}>
-          <td className="subtle">{fmtDate(l.date)}</td><td>{l.desc}</td>
+          <td className="subtle nowrap">{fmtDate(l.date)}</td><td>{l.desc}</td>
           <td>{l.kind === "payment" ? <span className="subtle">Payment</span> : l.use === "business" ? "Business" : l.use === "personal" ? "Personal" : "—"}</td>
           <td className="subtle">{l.use !== "business" ? "" : l.vendorId
             ? <>Bill paid · {db.contacts.find(c => c.id === l.vendorId)?.name || "vendor"}{db.bills.find(b => b.id === l.billId)?.ref ? " · inv " + db.bills.find(b => b.id === l.billId).ref : ""}</>
@@ -242,7 +242,7 @@ function ImportStatement({ db, actions, toast, cardAccount, onClose }) {
       </div>
       <table className="li-table"><thead><tr><th style={{ width: 100 }}>Date</th><th>Description</th><th className="num" style={{ width: 110 }}>Amount</th><th style={{ width: 200 }}>Business / Personal</th><th style={{ minWidth: 240 }}>Vendor / expense account</th></tr></thead>
         <tbody>{sorted.map(l => <tr key={l.id} style={l.kind === "payment" ? { opacity: 0.55 } : {}}>
-          <td className="subtle">{fmtDate(l.date)}</td>
+          <td className="subtle nowrap">{fmtDate(l.date)}</td>
           <td>{l.desc}{l.kind === "credit" && <span className="subtle"> · credit</span>}</td>
           <td className="num mono">{money(l.amount)}</td>
           <td>{l.kind === "payment" ? <span className="subtle">Payment — reconciled on the bank side</span>

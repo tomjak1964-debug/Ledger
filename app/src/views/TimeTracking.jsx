@@ -100,7 +100,7 @@ export default function TimeTrackingView({ db, actions, toast, readOnly, session
             <SortTh label="Amount" col="amount" sort={pSort} onSort={pOnSort} num />
             <th></th></tr></thead>
             <tbody>{pendingRows.map(t => <tr key={t.id}>
-              <td className="subtle">{fmtDate(t.date)}</td>
+              <td className="subtle nowrap">{fmtDate(t.date)}</td>
               <td className="subtle">{t.userEmail}</td>
               <td className="doc-id">{jobNo(t.salesOrderId)}</td>
               <td>{catName(t.categoryId)}</td>
@@ -125,7 +125,7 @@ export default function TimeTrackingView({ db, actions, toast, readOnly, session
           <SortTh label="Status" col="status" sort={mSort} onSort={mOnSort} />
           <th></th></tr></thead>
           <tbody>{mineRows.map(t => <tr key={t.id}>
-            <td className="subtle">{fmtDate(t.date)}</td>
+            <td className="subtle nowrap">{fmtDate(t.date)}</td>
             <td className="doc-id">{jobNo(t.salesOrderId)}</td>
             <td>{catName(t.categoryId)}</td>
             <td className="subtle">{t.description || "—"}</td>

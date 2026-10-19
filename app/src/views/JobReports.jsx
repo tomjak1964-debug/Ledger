@@ -221,7 +221,7 @@ export function ProposalsReport({ db, from, to, partyId, rangeLabel }) {
           <td>{x.customer}</td>
           <td>{x.description || dash}</td>
           <td className="subtle">{x.type || "—"}</td>
-          <td className="subtle">{fmtDate(x.date)}</td>
+          <td className="subtle nowrap">{fmtDate(x.date)}</td>
           <td><Badge status={x.status} /></td>
           <td className="num mono" style={{ fontWeight: 600 }}>{money(x.total)}</td>
         </tr>)}
@@ -384,7 +384,7 @@ function JobCostDetail({ x }) {
           <tr><td style={{ fontWeight: 700 }}>Total</td><td className="num mono" style={{ fontWeight: 700 }}>{money(x.totalCost)}</td></tr></tbody></table></div>
     </div>
     {x.items.length > 0 && <table><thead><tr><th>Date</th><th>Source</th><th>Category</th><th>Description</th><th className="num">Hours</th><th className="num">Amount</th></tr></thead>
-      <tbody>{x.items.map(i => <tr key={i.source + i.id}><td className="subtle">{fmtDate(i.date)}</td><td className="subtle">{i.source}</td><td>{costLabel(i.category)}</td>
+      <tbody>{x.items.map(i => <tr key={i.source + i.id}><td className="subtle nowrap">{fmtDate(i.date)}</td><td className="subtle">{i.source}</td><td>{costLabel(i.category)}</td>
         <td>{i.desc || dash}</td><td className="num mono">{i.hours || ""}</td><td className="num mono">{money(i.amount)}</td></tr>)}</tbody></table>}
   </div>;
 }

@@ -15,10 +15,10 @@ const inRange = (d, from, to) => (!from || (d || "") >= from) && (!to || (d || "
 // the pattern that recognises it; a line nothing recognises is "other".
 export const BUDGET_LINES = [
   { key: "eng", label: "Engineering / Start-Up", match: /engineering|start.?up/i },
-  { key: "dnCheckout", label: "Data National Checkout", match: /data.?national.*check/i },
+  { key: "dnCheckout", label: "MES Support", match: /data.?national.*check|\bmes\b.*support/i },
   { key: "panel", label: "Control Panel", match: /panel|hmi|bingo|hardware/i },
   { key: "blockIo", label: "Block I/O", match: /block.?i\/?o|i\/?o.?block/i },
-  { key: "dnMaterial", label: "Data National Material", match: /data.?national.*material/i },
+  { key: "dnMaterial", label: "MES Material", match: /data.?national.*material|\bmes\b.*material/i },
   { key: "fieldWiring", label: "Field Wiring", match: /field.?wir/i },
   { key: "runoff", label: "Run Off Support", match: /run.?off|field services/i },
   { key: "remotePanels", label: "Remote Panels", match: /remote.*(sonic|panel)/i },
@@ -80,8 +80,10 @@ export function proposalBudget(p) {
     { key: "runoff", label: "Field Services", amount: n(pr.fieldTotal) },
     { key: "other", label: "Contingency", amount: n(pr.contingency) },
   ].filter(b => b.amount);
+  // A line that carries its key needs no reading of its label ("MIRA MES Support").
+  const BY_KEY = { eng: "eng", panel: "panel", blockIo: "blockIo", fieldWiring: "fieldWiring", runoff: "runoff", remoteHmi: "remoteHmi", remoteSonic: "remotePanels", dnCheckout: "dnCheckout", dnMaterial: "dnMaterial" };
   return [...(pr.baseLines || []), ...(pr.premiumLines || [])]
-    .filter(l => n(l.amount)).map(l => ({ key: budgetKeyOf(l.label), label: l.label, amount: n(l.amount) }));
+    .filter(l => n(l.amount)).map(l => ({ key: BY_KEY[l.key] || budgetKeyOf(l.label), label: l.label, amount: n(l.amount) }));
 }
 export const budgetByKey = lines => Object.fromEntries(BUDGET_LINES.map(b => [b.key, round2(sum(lines.filter(l => l.key === b.key), l => l.amount))]));
 

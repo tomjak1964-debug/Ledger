@@ -21,7 +21,11 @@ export const SCOPE_ITEMS = [
   { key: "runoff", label: "Run-off support" },
   { key: "docs", label: "Final programs & documentation" },
 ];
-// Data National stays the proposal's own tick (specs.dataNational), as before.
+// Reporting to the plant's MES stays the proposal's own tick (specs.dataNational
+// — the name it always had); the MES itself is named per proposal (specs.mesName):
+// Data National at Venture Global, MIRA at Adient and Bridgewater, Mach6 at
+// Performance Seats. A package names its usual MES and the MES each end customer
+// uses (mesFor).
 
 const allOn = () => Object.fromEntries(SCOPE_ITEMS.map(i => [i.key, true]));
 
@@ -32,6 +36,8 @@ export const DEFAULT_PACKAGES = [
     standards: "Venture Global Engineering and {end} Revised Standards",
     endCustomers: ["Mayco", "JVIS", "Nova"],
     plcType: "Allen Bradley CompactLogix", hmiType: "Allen Bradley PanelView Plus",
+    mes: true, mesName: "Data National", mesFor: {},
+    premium: ["dnCheckout", "dnMaterial", "runoff"],
     scope: allOn(),
     phases: DEFAULT_PHASES,
   },
@@ -41,6 +47,8 @@ export const DEFAULT_PACKAGES = [
     standards: "ASI and {end} Standards",
     endCustomers: ["Adient", "Bridgewater Interiors", "Performance Seats", "JAC Products", "Henniges"],
     plcType: "Allen Bradley CompactLogix", hmiType: "Allen Bradley PanelView Plus",
+    mes: false, mesName: "MIRA", mesFor: { "Adient": "MIRA", "Bridgewater Interiors": "MIRA", "Performance Seats": "Mach6" },
+    premium: [],
     scope: { ...Object.fromEntries(SCOPE_ITEMS.map(i => [i.key, false])), plc: true, hmi: true, startup: true, docs: true },
     phases: [
       { key: "software", label: "Software Support", pct: 10 },
@@ -67,7 +75,15 @@ export function packageForCustomer(db, customerId) {
 // The proposal fields a package sets: its ticks, PLC / HMI and schedule.
 export const packageDefaults = pkg => ({
   packageId: pkg.id, scope: { ...pkg.scope }, plcType: pkg.plcType || "", hmiType: pkg.hmiType || "",
+  dataNational: !!pkg.mes, mesName: pkg.mesName || "", premium: [...(pkg.premium || [])],
 });
+
+// The MES an end customer's plant runs, else the package's usual one.
+export function mesFor(pkg, endCustomer) {
+  const end = String(endCustomer || "").trim().toLowerCase();
+  const hit = Object.entries(pkg?.mesFor || {}).find(([k]) => k.trim().toLowerCase() === end);
+  return hit ? hit[1] : (pkg?.mesName || "");
+}
 
 // "Venture Global Engineering and {end} Revised Standards" with the end customer
 // filled in — or, with none, the clause dropped ("Venture Global Engineering

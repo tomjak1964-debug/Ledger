@@ -47,7 +47,7 @@ export default function ServiceReports({ db, actions, toast, readOnly, session, 
           const so = soOf(r);
           return <tr key={r.id} className="clickable" onClick={() => setEdit({ report: r })}>
             <td className="doc-id">{r.number}</td>
-            <td className="subtle">{fmtDate(r.date)}</td>
+            <td className="subtle nowrap">{fmtDate(r.date)}</td>
             {isAdmin && <td className="subtle">{r.userEmail}</td>}
             <td className="mono">{so ? (jobNumberOf(db, so) || so.number) : "—"}</td>
             <td>{so ? nameOf(db, so.customerId) : "—"}</td>

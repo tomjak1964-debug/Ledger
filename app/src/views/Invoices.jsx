@@ -193,8 +193,8 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
                 onChange={e => setPicked(s => ({ ...s, [inv.id]: e.target.checked }))} /></td>}
               <td className="doc-id">{inv.number}</td>
               <td>{nameOf(db, inv.customerId)}</td>
-              <td className="subtle">{fmtDate(inv.date)}</td>
-              <td className="subtle">{fmtDate(inv.dueDate)}</td>
+              <td className="subtle nowrap">{fmtDate(inv.date)}</td>
+              <td className="subtle nowrap">{fmtDate(inv.dueDate)}</td>
               <td><Badge status={st} /></td>
               <td onClick={e => e.stopPropagation()}><label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: readOnly ? "default" : "pointer" }}
                 title={inv.printed ? "Printed — untick to mark it unprinted" : "Not printed yet — tick to mark it printed without printing"}>

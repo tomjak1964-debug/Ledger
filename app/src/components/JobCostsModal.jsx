@@ -57,7 +57,7 @@ export default function JobCostsModal({ db, actions, toast, so, readOnly, onClos
         msg="Add a cost here, tag a vendor bill or an expense to the job, log time to it, or name it on a journal entry line." />
       : <table><thead><tr><th>Date</th><th>Source</th><th>Category</th><th>Description</th><th className="num">Hours</th><th className="num">Amount</th><th></th></tr></thead>
         <tbody>{items.map(i => <tr key={i.source + i.id}>
-          <td className="subtle">{fmtDate(i.date)}</td>
+          <td className="subtle nowrap">{fmtDate(i.date)}</td>
           <td className="subtle">{i.source}</td>
           <td>{costLabel(i.category)}</td>
           <td>{i.desc || <span className="subtle">—</span>}</td>

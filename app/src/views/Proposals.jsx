@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import DocActions from "../components/DocActions.jsx";
 import { pagesToPdf, saveBlob } from "../lib/saveFile.js";
 import { uid, money, fmtDate, todayISO, nameOf, cls, pickable } from "../lib/helpers.js";
-import { packageById, packageForCustomer, packageDefaults, packagesOf, standardsLine, SCOPE_ITEMS } from "../calc/fixtureScope.js";
+import { packageById, packageForCustomer, packageDefaults, packagesOf, standardsLine, mesFor, SCOPE_ITEMS } from "../calc/fixtureScope.js";
 import { termsLabelFor } from "../lib/terms.js";
 import { personName, emailFor, proposalAttn, proposalPerson, contactNameFor, remitVendor, peopleOf } from "../lib/people.js";
 import { proposalConfig, priceProposal, ioBlocks, phaseAmount, SPEC_FIELDS, DEFAULT_PHASES, defaultProposalCustomer } from "../calc/proposals.js";
@@ -104,16 +104,20 @@ export function buildProposalContent(p, db) {
   const company = db.settings.company || "We";
   const std = standardsLine(pkg, s.endCustomer);
   const suppliesDesign = on("hwDesign"), suppliesHardware = on("panel") || on("blockIo");
+  const mes = (s.mesName || "").trim() || pkg?.mesName || "MES";
+  // The MES router is hardware: promised only when MES material is priced.
+  const sHardware = [...hardware, ...(s.dataNational && priced("dnMaterial") ? [{ t: `TP-Link ER605 Router Module to communicate with ${mes}`, sub: true }] : [])];
   const sBullets = [
     suppliesDesign ? { t: "Develop Controls Hardware Design." } : null,
     std ? { t: `System ${suppliesDesign ? "hardware and software" : "software"} design will follow ${std}.` } : null,
     suppliesDesign ? { t: "Develop the hardware panel designs in AutoCad" } : null,
     suppliesDesign ? { t: "Develop the hardware design Interconnect drawings to include 480/230 VAC Power, 120 VAC and 24Vdc control signal and networks from the main control enclosure to the control component devices." } : null,
     on("plc") ? { t: `Software Control Application development for ${plc} PLC.` } : null,
-    s.dataNational ? { t: "Provide TP-Link ER605 Router Module to Communicate with Data National." } : null,
+    // MES: support priced → integration and checkout; otherwise the PLC side of the interface.
+    s.dataNational ? { t: priced("dnCheckout") ? `${mes} MES integration and checkout.` : `PLC software interface to ${mes} MES.` } : null,
     hmiOn ? { t: hmis > 1 ? `HMI Software Design for (${hmis}) ${hmi} HMIs` : `HMI Software Design for ${hmi} HMI` } : null,
-    hardware.length ? { t: "Provide the following hardware components per system." } : null,
-    ...hardware,
+    sHardware.length ? { t: "Provide the following hardware components per system." } : null,
+    ...sHardware,
     on("fieldWiring") && priced("fieldWiring") ? { t: `Field Wiring at ${site}.` } : null,
     on("startup") ? { t: `Start-up/Debug Support at ${site}.` } : null,
     on("docs") ? { t: suppliesDesign ? "Final programs and as-built drawings." : "Final programs and documentation." } : null,
@@ -330,7 +334,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
               <td>{nameOf(db, p.customerId)}</td>
               <td>{p.description || "—"}</td>
               <td className="subtle">{p.kind === "controls" ? "System Proposal" : (mt?.name || "—")}</td>
-              <td className="subtle">{fmtDate(p.date)}</td>
+              <td className="subtle nowrap">{fmtDate(p.date)}</td>
               <td><Badge status={p.status} />{p.status === "won" && billed > 0 && <span className="subtle" style={{ marginLeft: 6 }}>{billed}/{p.phases.length} billed</span>}</td>
               <td className="num" style={{ fontWeight: 600 }}>{money(Number(p.pricing?.total) || 0)}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }} onClick={e => e.stopPropagation()}>
@@ -415,10 +419,14 @@ function ScopeCard({ x, setX, db, cfg }) {
             {packages.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select></Field>
         {pkg && <Field label="End customer" hint={standardsLine(pkg, sp.endCustomer) ? "Design will follow " + standardsLine(pkg, sp.endCustomer) : "Whose standards apply"}>
-          <input className="input" list={"endc-" + pkg.id} value={sp.endCustomer || ""} onChange={e => setSpecs({ endCustomer: e.target.value })} placeholder="e.g. Mayco" />
+          <input className="input" list={"endc-" + pkg.id} value={sp.endCustomer || ""} placeholder="e.g. Mayco"
+            onChange={e => { const end = e.target.value, was = mesFor(pkg, sp.endCustomer);
+              // The end customer's MES comes with it, unless one was typed by hand.
+              setSpecs({ endCustomer: end, ...(!sp.mesName || sp.mesName === was ? { mesName: mesFor(pkg, end) } : {}) }); }} />
           <datalist id={"endc-" + pkg.id}>{(pkg.endCustomers || []).map(n => <option key={n} value={n} />)}</datalist></Field>}
         <Field label="PLC"><input className="input" value={sp.plcType || ""} placeholder={pkg?.plcType || cfg.plcType} onChange={e => setSpecs({ plcType: e.target.value })} /></Field>
         <Field label="HMI"><input className="input" value={sp.hmiType || ""} placeholder={pkg?.hmiType || cfg.hmiType} onChange={e => setSpecs({ hmiType: e.target.value })} /></Field>
+        <Field label="MES" hint="Named in the scope and the pricing"><input className="input" value={sp.mesName || ""} placeholder={pkg?.mesName || "Data National"} onChange={e => setSpecs({ mesName: e.target.value })} /></Field>
       </div>
       {pkg && <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 18px" }}>
         {SCOPE_ITEMS.map(it => <label key={it.key} style={{ display: "flex", gap: 6, alignItems: "center", cursor: "pointer" }}>
@@ -508,10 +516,10 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
           <Field label="I/O Blocks" hint="Computed from content — override if needed">
             <input className="input mono" type="number" min="0" placeholder={String(blocks)} value={x.specs.ioBlocks ?? ""} onChange={e => setSpec("ioBlocks", e.target.value)} />
           </Field>
-          <Field label="Data National">
+          <Field label="MES">
             <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 0" }}>
               <input type="checkbox" checked={!!x.specs.dataNational} onChange={e => setSpec("dataNational", e.target.checked)} />
-              Fixture reports to Data National
+              Fixture reports to {x.specs.mesName ? x.specs.mesName + " (MES)" : "MES"}
             </label>
           </Field>
         </div>
@@ -523,10 +531,10 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
         {overrideCount > 0 && <button className="btn sm" style={{ marginLeft: 12 }} onClick={() => setSpec("priceOverrides", {})}>
           <Ico d={ICONS.refresh} size={13} />Use Fixture Rates for all ({overrideCount} overridden)</button>}
         <span className="mono" style={{ marginLeft: "auto", fontWeight: 700, fontSize: 17 }}>{money(pricing.total)}</span></div>
-      <table className="li-table"><thead><tr><th>Line</th><th className="num">From Fixture Rates</th><th className="num" style={{ width: 170 }}>Price on proposal</th><th style={{ width: 40 }}></th></tr></thead>
-        <tbody>{["base", "premium"].map(sec => [
-          <tr key={sec} className="group-row"><td colSpan={4} style={{ background: "var(--canvas)", fontWeight: 700 }}>
-            {sec === "base" ? "Base Pricing" : "Premium Pricing"}
+      <table className="li-table"><thead><tr><th>Line</th><th style={{ width: 80 }} title="Shown under Premium Pricing on the proposal">Premium</th><th className="num">From Fixture Rates</th><th className="num" style={{ width: 170 }}>Price on proposal</th><th style={{ width: 40 }}></th></tr></thead>
+        <tbody>{["base", "premium"].filter(sec => sec === "base" || pricing.lines.some(l => l.section === "premium")).map(sec => [
+          <tr key={sec} className="group-row"><td colSpan={5} style={{ background: "var(--canvas)", fontWeight: 700 }}>
+            {sec === "base" ? (pricing.lines.some(l => l.section === "premium") ? "Base Pricing" : "Pricing") : "Premium Pricing"}
             <span className="mono" style={{ float: "right" }}>{money(sec === "base" ? pricing.base : pricing.premium)}</span></td></tr>,
           ...pricing.lines.filter(l => l.section === sec).map(l => {
             const off = !(l.amount > 0);
@@ -534,6 +542,9 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
               <td>{l.label}{off && <span className="subtle" style={{ fontSize: 12 }}> · left off the proposal</span>}
                 {l.key === "eng" && pricing.engParts?.length > 0 && <div className="subtle" style={{ fontSize: 12 }}>{pricing.engParts.map(p => `${p.label} ${money(p.amount)}`).join(" + ")}</div>}
                 {l.overridden && <span className="badge blue" style={{ marginLeft: 8 }}><span className="dot"></span>Overridden</span>}</td>
+              <td><input type="checkbox" checked={l.section === "premium"} title="List this line under Premium Pricing"
+                onChange={e => { const cur = pricing.lines.filter(q => q.section === "premium").map(q => q.key);
+                  setSpec("premium", e.target.checked ? [...cur, l.key] : cur.filter(k => k !== l.key)); }} /></td>
               <td className="num mono subtle">{money(l.suggested)}</td>
               <td className="num"><input className="input mono" type="number" min="0" step="any" style={{ textAlign: "right", ...(l.overridden ? { background: "var(--accent-wash)", borderColor: "var(--accent)" } : {}) }}
                 value={x.specs.priceOverrides?.[l.key] ?? ""} placeholder={String(l.suggested)}
@@ -653,7 +664,13 @@ function ProposalDoc({ p, db, onClose, toast, onEdit, auto }) {
       <h4 style={{ margin: "0 0 4px" }}>Sales Notes and Clarifications</h4>
       <ol className="prop-bullets">{c.salesNotes.map((t, i) => <li key={i}>{t}</li>)}</ol>
       <div className="prop-price">
-        <h4>Base Pricing</h4>
+        {c.pkg && !c.pricing.premiumLines.length
+          // Nothing under Premium: one list and its total, no sub-totals.
+          ? <><h4>Pricing</h4><table><tbody>
+            {c.pricing.baseLines.map(l => <tr key={l.label}><td>{l.label}</td><td className="amt">{money(l.amount)}</td></tr>)}
+            <tr className="tot"><td>Total Price for this proposal is:</td><td className="amt">{money(c.pricing.total)}</td></tr>
+          </tbody></table></>
+          : <><h4>Base Pricing</h4>
         <table><tbody>
           {c.pricing.baseLines.map(l => <tr key={l.label}><td>{l.label}</td><td className="amt">{money(l.amount)}</td></tr>)}
           <tr className="tot"><td>Base Price Sub Total</td><td className="amt">{money(c.pricing.base)}</td></tr>
@@ -667,7 +684,7 @@ function ProposalDoc({ p, db, onClose, toast, onEdit, auto }) {
         </>}
         <table style={{ marginTop: 10 }}><tbody>
           <tr className="tot"><td>Total Price for this proposal is:</td><td className="amt">{money(c.pricing.total)}</td></tr>
-        </tbody></table>
+        </tbody></table></>}
         <h4>Invoicing Schedule</h4>
         <p style={{ margin: "2px 0 6px" }}>Project will be invoiced according to the following invoicing schedule</p>
         <table className="sched"><tbody>

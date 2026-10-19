@@ -174,8 +174,8 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
               return <tr key={d.id} style={a.checked ? {} : { opacity: 0.5 }}>
                 <td><input type="checkbox" checked={a.checked} onChange={e => setLine(d, { checked: e.target.checked })} /></td>
                 <td className="doc-id">{isBill ? (d.ref || d.number) : d.number}</td>
-                <td className="subtle">{fmtDate(d.date)}</td>
-                <td className="subtle">{fmtDate(d.dueDate)}</td>
+                <td className="subtle nowrap">{fmtDate(d.date)}</td>
+                <td className="subtle nowrap">{fmtDate(d.dueDate)}</td>
                 <td>{isCredit ? <Badge status="credit" />
                   : onGroup[d.id] ? <span className="subtle" style={{ fontSize: 12 }}>
                     on this {L.one}{onGroup[d.id].paymentIds.length > 1 ? ` · ${onGroup[d.id].paymentIds.length} lines combined` : ""}</span>

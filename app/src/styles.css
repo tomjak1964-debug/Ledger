@@ -475,3 +475,9 @@ tr.sub-row td{background:var(--canvas);font-size:12.5px}
 /* System Rates: the hour-model grid, grouped by kind of item. */
 .rate-grid tr.group-row td{background:var(--canvas);padding-top:10px;padding-bottom:6px;font-size:12.5px}
 .rate-grid td .input{padding:6px 8px}
+
+/* List tables: a number, a date, an amount or a status never breaks across two
+   lines — "INV-VG261018" split at its hyphen pushed every column after it about.
+   Names and descriptions still wrap, and take up the slack. */
+.nowrap{white-space:nowrap}
+td.doc-id,td.num,td .badge,th.num{white-space:nowrap}

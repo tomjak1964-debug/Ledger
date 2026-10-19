@@ -101,7 +101,7 @@ export default function ReceivablesView({ db, actions, toast, openDoc, readOnly 
             const late = od > 0 && !credit && !done;
             return <tr key={inv.id}>
               <td className="doc-id">{inv.number}</td><td>{nameOf(db, inv.customerId)}</td>
-              <td className="subtle">{fmtDate(inv.dueDate)}</td>
+              <td className="subtle nowrap">{fmtDate(inv.dueDate)}</td>
               <td className={late ? "" : "subtle"} style={late ? { color: "var(--neg)", fontWeight: 600 } : {}}>{credit || done ? "—" : od > 0 ? od + "d late" : "current"}</td>
               <td><Badge status={credit && !done ? "credit" : invoiceStatus(inv)} /></td>
               <td className="subtle">{done && paidDate(inv) ? fmtDate(paidDate(inv)) : "—"}</td>

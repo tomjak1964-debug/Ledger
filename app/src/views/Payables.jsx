@@ -108,7 +108,7 @@ export default function PayablesView({ db, actions, toast, readOnly, go }) {
             const done = billStatus(b) === "paid";
             return <tr key={b.id}>
               <td className="doc-id">{b.number}</td><td>{nameOf(db, b.vendorId)}</td><td className="mono subtle">{b.ref || "—"}</td>
-              <td className="subtle">{fmtDate(b.date)}</td><td className="subtle">{fmtDate(b.dueDate)}</td>
+              <td className="subtle nowrap">{fmtDate(b.date)}</td><td className="subtle nowrap">{fmtDate(b.dueDate)}</td>
               <td><Badge status={billStatus(b)} /></td>
               <td className="subtle">{done && paidDate(b) ? fmtDate(paidDate(b)) : "—"}</td>
               <td className="num">{money(Number(b.amount) || 0)}</td>
@@ -401,7 +401,7 @@ function PayBillsModal({ db, actions, toast, onClose }) {
           <td><input type="checkbox" checked={r.sel} onChange={e => upd(i, { sel: e.target.checked })} /></td>
           <td style={{ fontWeight: 600 }}>{nameOf(db, r.bill.vendorId)}</td>
           <td className="mono subtle">{r.bill.ref || r.bill.number}</td>
-          <td className="subtle">{fmtDate(r.bill.dueDate)}</td>
+          <td className="subtle nowrap">{fmtDate(r.bill.dueDate)}</td>
           <td className="num">{money(bal)}</td>
           <td className="num">
             <input className="input mono" style={{ maxWidth: 100, textAlign: "right" }} type="number" step="any" value={r.discount}

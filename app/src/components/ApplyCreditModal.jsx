@@ -69,7 +69,7 @@ export default function ApplyCreditModal({ db, customerId, creditId, focusInvoic
         <table><thead><tr><th>Invoice</th><th>Due</th><th className="num">Owed</th><th className="num">Apply</th></tr></thead>
           <tbody>{invoices.map(i => <tr key={i.id}>
             <td className="doc-id">{i.number}</td>
-            <td className="subtle">{fmtDate(i.dueDate)}</td>
+            <td className="subtle nowrap">{fmtDate(i.dueDate)}</td>
             <td className="num mono">{money(balance(i))}</td>
             <td className="num"><input className="input mono" style={{ maxWidth: 120, textAlign: "right" }} type="number" step="any"
               value={amounts[i.id] ?? ""} placeholder="0.00" onChange={e => set(i.id, e.target.value)} /></td>

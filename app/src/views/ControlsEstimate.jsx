@@ -241,6 +241,7 @@ export default function ControlsEstimateEditor({ p, db, cfg, customers, onCancel
             {[...new Set(people.map(cp => personName(cp)).filter(Boolean))].map((n, i) => <option key={i} value={n} />)}
           </datalist>
         </Field>
+        {!x._new && <Field label="Proposal #" hint="Editable — revisions keep it together"><input className="input mono" value={x.number || ""} onChange={e => set("number", e.target.value)} /></Field>}
         <Field label="Date"><input className="input" type="date" value={x.date} onChange={e => set("date", e.target.value)} /></Field>
       </div>
       <div className="row">

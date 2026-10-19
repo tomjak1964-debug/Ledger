@@ -1581,19 +1581,33 @@ export function useLedger(session, onError) {
         const isNew = !!p._new;
         const prop = { ...p, kind: p.kind || "machine", rev: Number(p.rev) || 0 }; delete prop._new;
         // PROP-<customer code><YYMMDD> — "PROP-VG261018", -02… for a second that
-        // day. A revision keeps its number, so only a new proposal claims one.
+        // day: the lowest one not on file, so a deleted proposal's number comes
+        // back. A revision keeps its number, so only a new proposal takes one.
+        const taken = (num, except = []) => dbRef.current.proposals.some(x => !except.includes(x.id) && (x.number || "").trim().toLowerCase() === num.trim().toLowerCase());
         if (isNew && !prop.number?.startsWith(proposalConfig(dbRef.current.settings).propPrefix)) {
           const cfg = proposalConfig(dbRef.current.settings);
           const code = customerCode(dbRef.current, prop.customerId);
           const ymd = (prop.date || todayISO()).slice(2).replace(/-/g, "");
-          for (;;) {
-            const n = await claimNumber(`prop:${code}:${ymd}`);
+          for (let n = 1; ; n++) {
             const num = `${cfg.propPrefix}${code}${ymd}${daySuffix(n)}`;
-            if (!dbRef.current.proposals.some(x => (x.number || "").toLowerCase() === num.toLowerCase())) { prop.number = num; break; }
+            if (!taken(num)) { prop.number = num; break; }
           }
         }
+        // A number edited by hand renames the proposal and its revisions together
+        // (they share it); it can't be blank or another proposal's.
+        const prev = !isNew && dbRef.current.proposals.find(x => x.id === prop.id);
+        let family = [];
+        if (prev && (prev.number || "") !== (prop.number || "")) {
+          const num = (prop.number || "").trim();
+          if (!num) throw new Error("A proposal number is required.");
+          family = dbRef.current.proposals.filter(x => x.id !== prop.id && x.number === prev.number);
+          if (taken(num, [prop.id, ...family.map(x => x.id)])) throw new Error(`Proposal number "${num}" is already used.`);
+          prop.number = num;
+          for (const f of family) th(await supabase.from("proposals").update({ number: num }).eq("id", f.id));
+        }
         th(await supabase.from("proposals").upsert(A.proposalToRow(prop)));
-        setDb(d => ({ ...d, proposals: upsertList(d.proposals, prop) }));
+        const famIds = family.map(f => f.id);
+        setDb(d => ({ ...d, proposals: upsertList(d.proposals, prop).map(x => famIds.includes(x.id) ? { ...x, number: prop.number } : x) }));
         if (isNew) await noteActivity({ title: `New proposal ${prop.number}`, detail: [prop.jobNumber, prop.description, money(Number(prop.pricing?.total) || 0)].filter(Boolean).join(" · ") });
         return prop;
       } catch (e) { return fail(e); }

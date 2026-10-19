@@ -275,10 +275,10 @@ export function useLedger(session, onError) {
   }
   const soLabel = soId => { const so = dbRef.current.salesOrders.find(s => s.id === soId); return so ? [so.number, so.jobNumber].filter(Boolean).join(" · ") : "a job"; };
 
-  // INV-<customer code><YYMMDD> — "INV-VG261018"; a second the same day for the
-  // same customer takes -02, -03… A customer with no code: INV-261018.
+  // INV-<customer code><YYMMDD>-NN — "INV-VG261018-01", then -02, -03… for the
+  // same customer that day. A customer with no code: INV-261018-01.
   const customerCode = (d0, customerId) => String(d0.contacts.find(x => x.id === customerId)?.code || "").toUpperCase().replace(/\s+/g, "");
-  const daySuffix = n => (n > 1 ? "-" + String(n).padStart(2, "0") : "");
+  const daySuffix = n => "-" + String(n).padStart(2, "0");
   async function claimInvoiceNumber(customerId, date) {
     const d0 = dbRef.current;
     const code = customerCode(d0, customerId);
@@ -1580,8 +1580,8 @@ export function useLedger(session, onError) {
       try {
         const isNew = !!p._new;
         const prop = { ...p, kind: p.kind || "machine", rev: Number(p.rev) || 0 }; delete prop._new;
-        // PROP-<customer code><YYMMDD> — "PROP-VG261018", -02… for a second that
-        // day: the lowest one not on file, so a deleted proposal's number comes
+        // PROP-<customer code><YYMMDD>-NN — "PROP-VG261018-01", -02… that day:
+        // the lowest one not on file, so a deleted proposal's number comes
         // back. A revision keeps its number, so only a new proposal takes one.
         const taken = (num, except = []) => dbRef.current.proposals.some(x => !except.includes(x.id) && (x.number || "").trim().toLowerCase() === num.trim().toLowerCase());
         if (isNew && !prop.number?.startsWith(proposalConfig(dbRef.current.settings).propPrefix)) {

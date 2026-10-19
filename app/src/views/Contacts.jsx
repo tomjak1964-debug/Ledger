@@ -78,7 +78,7 @@ export default function ContactsView({ db, actions, toast, readOnly, type = "cus
       foot={<><button className="btn" onClick={() => setEdit(null)}>Cancel</button><button className="btn primary" onClick={() => save(edit)}>Save</button></>}>
       <div className="row">
         <Field label="Company / Name"><input className="input" value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} /></Field>
-        {edit.type === "customer" && <Field label="Customer Code" hint="Names this customer's invoices and proposals, e.g. VG → INV-VG261018, PROP-VG261018">
+        {edit.type === "customer" && <Field label="Customer Code" hint="Names this customer's invoices and proposals, e.g. VG → INV-VG261018-01, PROP-VG261018-01">
           <input className="input mono" style={{ maxWidth: 110 }} value={edit.code || ""} onChange={e => setEdit({ ...edit, code: e.target.value.toUpperCase() })} /></Field>}
         {edit.type === "vendor" && <Field label="Vendor ID" hint="Short code, as on the Sage vendor list">
           <input className="input mono" style={{ maxWidth: 140 }} value={edit.code || ""} onChange={e => setEdit({ ...edit, code: e.target.value })} /></Field>}

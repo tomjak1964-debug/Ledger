@@ -579,11 +579,11 @@ already defaulted to); the old `contact` / `remit_*` columns are kept, unread ex
 addressed — the proposal's Attn and greeting (new proposals start on it; typing either form links the contact), the
 invoice PDF's Bill To, quotes, the contact lists. Migration 036 split "Mr. Steve Stojanovski"-style names into the
 two fields. The customer's **Customer Code** (was "Invoice Code", `contacts.code`) names its documents:
-`INV-<code><YYMMDD>` (`claimInvoiceNumber()`) and `PROP-<code><YYMMDD>` (`saveProposal()`, `settings.proposal.propPrefix`
-now defaults to `PROP-`), a second that day `-02`, `-03`… — a proposal takes the **lowest number not on file** for
+`INV-<code><YYMMDD>-NN` (`claimInvoiceNumber()`) and `PROP-<code><YYMMDD>-NN` (`saveProposal()`, `settings.proposal.propPrefix`
+now defaults to `PROP-`), always with the day's number — `-01`, `-02`… — a proposal takes the **lowest number not on file** for
 that code and day (no counter, so a deleted one's number comes back), and its **number is editable** in both
 proposal editors: renaming carries its revisions (they share the number), and a blank or another proposal's number
-is refused; no code gives `INV-261018`. Counters are per code and
+is refused; no code gives `INV-261018-01`. Counters are per code and
 day (`next_doc_number('inv:<code>:<ymd>')`, the key the old scheme used), and a number already on file is skipped.
 Venture Global's code was set to VG on 2026-10-18; most other customers have none yet.
 

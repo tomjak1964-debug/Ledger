@@ -30,6 +30,24 @@ const COLUMNS = [
   ["fieldWiring", "Wiring"], ["runoff", "Run Off"],
 ];
 
+// The rate boxes, section by section, on a fixed three-column grid: every box
+// the same width, and a label that runs to two lines doesn't push its box out
+// of line (.field-grid in styles.css).
+export function FixtureRateFields({ edit, setEdit }) {
+  return SECTIONS.map(sec => <div key={sec.key} className="rate-section">
+    <div className="rate-section-head">
+      <b>{sec.title}</b>
+      {sec.key === "engineering" && <span className="subtle mono" style={{ marginLeft: "auto" }}>base + design = {money((Number(edit.engBase) || 0) + (Number(edit.hardwareDesign) || 0))}</span>}
+    </div>
+    <p className="subtle" style={{ margin: "0 0 10px", fontSize: 12.5 }}>{sec.note}</p>
+    <div className="field-grid">
+      {sec.fields.map(([k, label]) => <Field key={k} label={label}>
+        <input className="input mono" type="number" step="any" value={blankZero(edit[k])} placeholder="0" onChange={e => setEdit({ ...edit, [k]: e.target.value })} />
+      </Field>)}
+    </div>
+  </div>);
+}
+
 export default function MachineRatesView({ db, actions, toast, readOnly, member }) {
   const [edit, setEdit] = useState(null);
   const save = async (m) => {
@@ -79,18 +97,7 @@ export default function MachineRatesView({ db, actions, toast, readOnly, member 
     {edit && <Modal wide title={edit.copyOf ? "New Fixture Type from " + edit.copyOf : edit._new ? "New Fixture Type" : "Edit " + edit.name} onClose={() => setEdit(null)}
       foot={<><button className="btn" onClick={() => setEdit(null)}>Cancel</button><button className="btn primary" onClick={() => save(edit)}>Save Rates</button></>}>
       <Field label="Fixture Type Name"><input className="input" value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} placeholder="Big Sonic" /></Field>
-      {SECTIONS.map(sec => <div key={sec.key} style={{ marginTop: 14 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 10, borderBottom: "1px solid var(--line)", paddingBottom: 4, marginBottom: 8 }}>
-          <b>{sec.title}</b>
-          {sec.key === "engineering" && <span className="subtle mono" style={{ marginLeft: "auto" }}>base + design = {money((Number(edit.engBase) || 0) + (Number(edit.hardwareDesign) || 0))}</span>}
-        </div>
-        <p className="subtle" style={{ margin: "0 0 8px", fontSize: 12.5 }}>{sec.note}</p>
-        <div className="row">
-          {sec.fields.map(([k, label]) => <Field key={k} label={label}>
-            <input className="input mono" type="number" step="any" value={blankZero(edit[k])} placeholder="0" onChange={e => setEdit({ ...edit, [k]: e.target.value })} />
-          </Field>)}
-        </div>
-      </div>)}
+      <FixtureRateFields edit={edit} setEdit={setEdit} />
     </Modal>}
   </div>;
 }

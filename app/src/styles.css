@@ -481,3 +481,12 @@ tr.sub-row td{background:var(--canvas);font-size:12.5px}
    Names and descriptions still wrap, and take up the slack. */
 .nowrap{white-space:nowrap}
 td.doc-id,td.num,td .badge,th.num{white-space:nowrap}
+
+/* A grid of equal boxes (Fixture Rates): three to a line, each the same width,
+   and room for a two-line label so a long name never pushes its box down. */
+.field-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px 16px}
+.field-grid>.field{margin-bottom:12px}
+.field-grid>.field>label{min-height:2.6em;display:flex;align-items:flex-end;line-height:1.3}
+.rate-section{margin-top:16px}
+.rate-section-head{display:flex;align-items:baseline;gap:10px;border-bottom:1px solid var(--line);padding-bottom:4px;margin-bottom:8px}
+@media (max-width:640px){ .field-grid{grid-template-columns:repeat(2,minmax(0,1fr))} }

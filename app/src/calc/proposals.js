@@ -169,10 +169,24 @@ export function priceProposal(mt, specs, cfg) {
   const strip = l => ({ key: l.key, label: l.label, amount: l.amount, ...(l.overridden ? { overridden: true, suggested: l.suggested } : {}) });
   const baseLines = priced(lines.filter(l => l.section === "base")).map(strip);
   const premiumLines = priced(lines.filter(l => l.section === "premium")).map(strip);
-  const base = round2(baseLines.reduce((t, l) => t + l.amount, 0));
+  let base = round2(baseLines.reduce((t, l) => t + l.amount, 0));
   const premium = round2(premiumLines.reduce((t, l) => t + l.amount, 0));
-  return { baseLines, premiumLines, lines, base, premium, total: round2(base + premium), blocks, points, engParts };
+  // A reduction is a line of its own at the foot of the base pricing.
+  const reduction = reductionOf(specs.reduction, round2(base + premium));
+  if (reduction > 0) { baseLines.push({ key: "reduction", label: reductionLabel(specs.reduction), amount: -reduction }); base = round2(base - reduction); }
+  return { baseLines, premiumLines, lines, base, premium, total: round2(base + premium), blocks, points, engParts, reduction, before: round2(base + premium + reduction) };
 }
+
+// A price reduction taken off a proposal — a duplicate machine, where the
+// engineering is largely done once (specs.reduction: { type: "pct" | "amt",
+// value, label }). A percentage is of the price before it; a dollar amount is
+// capped at the price. Returns the dollars off.
+export function reductionOf(red, before) {
+  const v = n(red?.value);
+  if (!(v > 0) || !(before > 0)) return 0;
+  return round2(Math.min(before, red.type === "pct" ? before * Math.min(v, 100) / 100 : v));
+}
+export const reductionLabel = red => (red?.label || "").trim() || "Duplicate Machine Reduction";
 
 export const phaseAmount = (total, pct) => round2(total * pct / 100);
 

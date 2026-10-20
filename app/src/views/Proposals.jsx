@@ -5,6 +5,7 @@ import { pagesToPdf, saveBlob } from "../lib/saveFile.js";
 import { uid, money, fmtDate, todayISO, nameOf, cls, pickable } from "../lib/helpers.js";
 import { packageById, packageForCustomer, packageDefaults, packagesOf, standardsLine, mesFor, SCOPE_ITEMS } from "../calc/fixtureScope.js";
 import { termsLabelFor } from "../lib/terms.js";
+import ReductionRow from "../components/ReductionRow.jsx";
 import { personName, emailFor, proposalAttn, proposalPerson, contactNameFor, remitVendor, peopleOf } from "../lib/people.js";
 import { proposalConfig, priceProposal, ioBlocks, phaseAmount, SPEC_FIELDS, DEFAULT_PHASES, defaultProposalCustomer } from "../calc/proposals.js";
 import { Ico, ICONS, Badge, Empty, Field, MenuItem, ActionMenu, Modal, SortTh, useTableSort, blankZero } from "../components/ui.jsx";
@@ -153,6 +154,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
   const [edit, setEdit] = useState(null);
   const [doc, setDoc] = useState(null);
   const [phasesFor, setPhasesFor] = useState(null);
+  const [copyOf, setCopyOf] = useState(null);   // the proposal being copied
   const [search, setSearch] = useState("");
   const [importing, setImporting] = useState(false);
   const [importingLineup, setImportingLineup] = useState(false);
@@ -346,7 +348,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
                   <MenuItem onClick={async () => { close(); try { await downloadProposalDocx(p, db); } catch (e) { toast("⚠ Word export failed: " + (e.message || e)); } }}>Save Word</MenuItem>
                 </>}</ActionMenu>
                 {!readOnly && <button className="btn ghost icon" title="Edit" onClick={() => setEdit({ ...p, specs: { ...p.specs } })}><Ico d={ICONS.edit} size={16} /></button>}
-                {!readOnly && <PropMenu p={p} setStatus={setStatus} win={win} del={del} revise={revise} onPhases={() => setPhasesFor(p)} />}
+                {!readOnly && <PropMenu p={p} setStatus={setStatus} win={win} del={del} revise={revise} onPhases={() => setPhasesFor(p)} onCopy={() => setCopyOf(p)} />}
               </td>
             </tr>;
           })}</tbody></table>}
@@ -371,11 +373,77 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
       buildAttachment={() => Promise.all(chosen.map(p => proposalDocxBlob(p, db)))}
       onSent={endSelect}
       onClose={() => setBulkEmail(false)} toast={toast} />}
+    {copyOf && <CopyProposalModal p={copyOf} db={db} cfg={cfg} onClose={() => setCopyOf(null)}
+      onCopy={async (copy) => {
+        // Saved straight away so it claims its number; then it opens in the editor.
+        const mt = db.machineTypes.find(m => m.id === copy.machineTypeId);
+        const { lines: _all, ...pricing } = copy.kind === "controls" ? priceEstimate(copy.specs, cfg) : priceProposal(mt, copy.specs, cfg);
+        const saved = await actions.saveProposal({ ...copy, pricing });
+        if (!saved) return;
+        setCopyOf(null);
+        toast(`${saved.number} copied from ${copyOf.number}`);
+        setEdit({ ...saved, specs: { ...saved.specs } });
+      }} />}
     {phasesFor && <PhasesModal p={db.proposals.find(x => x.id === phasesFor.id) || phasesFor} db={db} actions={actions} toast={toast} onClose={() => setPhasesFor(null)} />}
   </div>;
 }
 
-function PropMenu({ p, setStatus, win, del, revise, onPhases }) {
+// The number a new proposal for this customer would take today — the lowest
+// free one, as saveProposal() claims it.
+function nextProposalNumber(db, cfg, customerId, date) {
+  const code = String(db.contacts.find(c => c.id === customerId)?.code || "").toUpperCase().replace(/\s+/g, "");
+  const ymd = String(date || todayISO()).slice(2).replace(/-/g, "");
+  const used = new Set(db.proposals.map(x => (x.number || "").trim().toLowerCase()));
+  for (let n = 1; ; n++) { const num = `${cfg.propPrefix}${code}${ymd}-${String(n).padStart(2, "0")}`; if (!used.has(num.toLowerCase())) return num; }
+}
+
+// Copy a proposal for another job: a new job number and description, the next
+// proposal number for that customer, and a reduction for a duplicate machine
+// (the engineering is largely done once). The original is left as it is.
+export function CopyProposalModal({ p, db, cfg, onClose, onCopy }) {
+  const [jobNumber, setJobNumber] = useState("");
+  const [description, setDescription] = useState(p.description || "");
+  const [red, setRed] = useState({ type: "amt", value: "" });
+  const [busy, setBusy] = useState(false);
+  const date = todayISO();
+  const copy = useMemo(() => ({
+    ...p, id: uid(), _new: true, number: "(assigned at save)", rev: 0, status: "draft", date,
+    jobNumber: jobNumber.trim(), description: description.trim(), poNumber: "", salesOrderId: "",
+    phases: (p.phases || []).map(({ invoiceId, soLineId, ...ph }) => ph),
+    specs: { ...(p.specs || {}), reduction: Number(red.value) > 0 ? { ...red, value: Number(red.value) } : null },
+  }), [p, jobNumber, description, red, date]);
+  const mt = db.machineTypes.find(m => m.id === p.machineTypeId);
+  const priced = copy.kind === "controls" ? priceEstimate(copy.specs, cfg) : priceProposal(mt, copy.specs, cfg);
+  const original = Number(p.pricing?.total) || 0;
+  const before = Number(priced.before ?? priced.total) || 0;
+  const number = nextProposalNumber(db, cfg, p.customerId, date);
+  const dup = jobNumber.trim() && db.proposals.some(x => (x.jobNumber || "").trim().toLowerCase() === jobNumber.trim().toLowerCase());
+  const go = async () => { setBusy(true); await onCopy(copy); setBusy(false); };
+  return <Modal title={"Copy " + p.number + (revLabel(p) ? " " + revLabel(p) : "")} onClose={onClose}
+    foot={<><button className="btn" onClick={onClose}>Cancel</button>
+      <button className="btn primary" disabled={busy || !jobNumber.trim()} onClick={go}><Ico d={ICONS.copy} size={15} />{busy ? "Copying…" : "Create Copy & Edit"}</button></>}>
+    <p className="subtle" style={{ marginTop: 0 }}>The copy is a new draft, numbered <b className="mono">{number}</b>, with everything else carried over. {p.number} isn't changed.</p>
+    <div className="row">
+      <Field label="Job Number" hint={dup ? "⚠ Another proposal already has this job number" : undefined}>
+        <input className="input mono" autoFocus value={jobNumber} onChange={e => setJobNumber(e.target.value)} placeholder={p.jobNumber || "e.g. 4810-F2"} /></Field>
+      <Field label="Description"><input className="input" value={description} onChange={e => setDescription(e.target.value)} /></Field>
+    </div>
+    <div className="subtle" style={{ fontWeight: 600, margin: "4px 0 6px" }}>Duplicate machine reduction <span style={{ fontWeight: 400 }}>— optional; the engineering is largely done once</span></div>
+    <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 14 }}>
+      <select className="select" style={{ width: 110 }} value={red.type} onChange={e => setRed({ ...red, type: e.target.value })}>
+        <option value="amt">$ off</option><option value="pct">% off</option></select>
+      <input className="input mono" type="number" min="0" step="any" style={{ width: 140, textAlign: "right" }} placeholder="0" value={red.value} onChange={e => setRed({ ...red, value: e.target.value })} />
+    </div>
+    <table><tbody>
+      <tr><td>Original price ({p.number})</td><td className="num mono">{money(original)}</td></tr>
+      {Math.abs(before - original) > 0.005 && <tr><td className="subtle">Copy at today's rates</td><td className="num mono subtle">{money(before)}</td></tr>}
+      <tr><td>Reduction</td><td className="num mono" style={{ color: priced.reduction > 0 ? "var(--pos)" : undefined }}>{priced.reduction > 0 ? "−" + money(priced.reduction) : "—"}</td></tr>
+      <tr style={{ fontWeight: 700 }}><td>New price</td><td className="num mono">{money(priced.total)}</td></tr>
+    </tbody></table>
+  </Modal>;
+}
+
+function PropMenu({ p, setStatus, win, del, revise, onPhases, onCopy }) {
   return <ActionMenu minWidth={200}>{close => {
     const item = (label, fn, opts = {}) => <MenuItem {...opts} onClick={() => { fn(); close(); }}>{label}</MenuItem>;
     return <>
@@ -383,6 +451,7 @@ function PropMenu({ p, setStatus, win, del, revise, onPhases }) {
       {p.status !== "won" && p.status !== "superseded" && item("Won — PO received →", () => win(p), { accent: true })}
       {p.status === "won" && item("Invoice Phases…", onPhases, { accent: true })}
       {p.status !== "superseded" && item("New Revision", () => revise(p))}
+      {item("Copy Proposal…", onCopy)}
       {p.status !== "lost" && p.status !== "won" && p.status !== "superseded" && item("Mark as Lost", () => setStatus(p.id, "lost"))}
       {item("Delete", () => del(p.id), { danger: true })}
     </>;
@@ -554,6 +623,9 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
             </tr>;
           }),
         ])}</tbody></table>
+      <div style={{ padding: "4px 16px 0" }}>
+        <ReductionRow reduction={x.specs.reduction} amount={pricing.reduction} onChange={v => setSpec("reduction", v)} />
+      </div>
       <p className="subtle" style={{ margin: "8px 16px 12px", fontSize: 12 }}>Type a price to override a line for this proposal only — blank uses the Fixture Rates figure, 0 leaves the line off. Changing the content or the fixture type re-works the figures, but a typed price stays until you clear it.</p>
     </div>
   </div>;

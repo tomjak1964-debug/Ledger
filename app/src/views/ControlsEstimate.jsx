@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { uid, money, fmtDate, addDays, cls, pickable } from "../lib/helpers.js";
 import { personName, emailFor, proposalAttn, proposalPerson } from "../lib/people.js";
+import ReductionRow from "../components/ReductionRow.jsx";
 import { termsLabelFor } from "../lib/terms.js";
 import { proposalConfig } from "../calc/proposals.js";
 import { COMPONENTS, IO_FIELDS, DEVICE_FIELDS, STRUCTURE_FIELDS, LINEUP_FIELDS, SAFETY_OPTIONS, STANDARD_ELEMENTS, ROLE_LABELS,
@@ -126,6 +127,7 @@ export function ControlsDocBody({ p, db }) {
       </tbody></table>}
       <table style={{ marginTop: 10 }}><tbody>
         {pr.contingency > 0 && <Row label="Contingency" amount={pr.contingency} />}
+        {pr.reduction > 0 && <Row label={pr.reductionLabel || "Duplicate Machine Reduction"} amount={-pr.reduction} />}
         <Row label="Total Price for this proposal is:" amount={pr.total} bold />
       </tbody></table>
       {c.options.length > 0 && <>
@@ -394,6 +396,7 @@ export default function ControlsEstimateEditor({ p, db, cfg, customers, onCancel
         <div className="cat-row" style={{ alignItems: "center" }}><span>Contingency</span>
           <input className="input mono" type="number" min="0" step="any" style={{ width: 80, marginLeft: 10 }} value={sp.contingencyPct} onChange={e => setSpec("contingencyPct", e.target.value)} /><span className="subtle" style={{ marginLeft: 4 }}>%</span>
           <span className="mono" style={{ marginLeft: "auto" }}>{money(pricing.contingency)}</span></div>
+        <ReductionRow reduction={sp.reduction} amount={pricing.reduction} onChange={v => setSpec("reduction", v)} />
         <div className="cat-row" style={{ fontWeight: 700 }}><span>Total</span><span className="mono" style={{ marginLeft: "auto" }}>{money(pricing.total)}</span></div>
         {pricing.options.length > 0 && <div className="cat-row subtle"><span>Options (separate)</span><span className="mono" style={{ marginLeft: "auto" }}>{money(pricing.optionsTotal)}</span></div>}
         <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>

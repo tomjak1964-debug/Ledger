@@ -79,6 +79,7 @@ export function proposalBudget(p) {
     { key: "panel", label: "Control Hardware", amount: n(pr.hardwareTotal) },
     { key: "runoff", label: "Field Services", amount: n(pr.fieldTotal) },
     { key: "other", label: "Contingency", amount: n(pr.contingency) },
+    { key: "other", label: pr.reductionLabel || "Duplicate Machine Reduction", amount: -n(pr.reduction) },
   ].filter(b => b.amount);
   // A line that carries its key needs no reading of its label ("MIRA MES Support").
   const BY_KEY = { eng: "eng", panel: "panel", blockIo: "blockIo", fieldWiring: "fieldWiring", runoff: "runoff", remoteHmi: "remoteHmi", remoteSonic: "remotePanels", dnCheckout: "dnCheckout", dnMaterial: "dnMaterial" };

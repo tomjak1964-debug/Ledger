@@ -344,9 +344,13 @@ export function priceEstimate(specs, cfg) {
   const fieldTotal = round2(field.reduce((t, f) => t + f.amount, 0));
   const subtotal = round2(engineeringTotal + hardwareTotal + fieldTotal);
   const contingency = round2(subtotal * n(s.contingencyPct) / 100);
-  const total = round2(subtotal + contingency);
+  // A duplicate-machine reduction, off the price with its contingency.
+  const before = round2(subtotal + contingency);
+  const rv = n(s.reduction?.value);
+  const reduction = rv > 0 && before > 0 ? round2(Math.min(before, s.reduction.type === "pct" ? before * Math.min(rv, 100) / 100 : rv)) : 0;
+  const total = round2(before - reduction);
   const options = (s.options || []).filter(o => String(o.desc || "").trim()).map(o => ({ ...o, amount: round2(n(o.amount)) }));
   const hoursTotal = round2(comps.filter(c => c.include).reduce((t, c) => t + c.hours, 0));
   return { components: comps, engineering, engineeringTotal, hardware, hardwareTotal, field, fieldTotal,
-    subtotal, contingency, total, options, optionsTotal: round2(options.reduce((t, o) => t + o.amount, 0)), hoursTotal };
+    subtotal, contingency, before, reduction, reductionLabel: (s.reduction?.label || "").trim() || "Duplicate Machine Reduction", total, options, optionsTotal: round2(options.reduce((t, o) => t + o.amount, 0)), hoursTotal };
 }

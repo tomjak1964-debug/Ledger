@@ -517,6 +517,16 @@ blank uses the figure, a typed amount replaces it (shaded, *Overridden*), 0 leav
 on the rates can be priced in. *Use Fixture Rates for all* clears them. `priceProposal()` returns `lines` (every
 line, both figures) for the editor; the saved snapshot drops it.
 
+**Copy Proposal** (the row menu, `CopyProposalModal` in `views/Proposals.jsx`): asks for a new job number and
+description, shows the number the copy will take (the customer's next free one for today), and offers a
+**duplicate machine reduction** — dollars or a percentage off — with the original price, the reduction and the new
+price before it saves. The copy is a fresh draft (rev 0, today, no PO / sales order / billed phases), saved at once
+to claim its number and opened in the editor; the original is untouched. The reduction is `specs.reduction`
+(`{ type: "amt" | "pct", value, label }`) on either kind: `reductionOf()` takes it off a fixture proposal as a
+"Duplicate Machine Reduction" base line, `priceEstimate()` off a system proposal after contingency; both editors
+show it beside the total (`components/ReductionRow.jsx`), the documents and Word print it, phases bill the reduced
+total, and job budgets carry it as a negative "other".
+
 **Rates have one home: Settings → Time Categories** (bill rate and cost rate per category). Logged time bills
 at a category's rate; a system proposal prices each task (Hardware Design, Drafting, PLC, HMI, Start-Up, PM,
 Documentation) and its support rate from the category picked for it in Settings → Proposals → *Labor Rate

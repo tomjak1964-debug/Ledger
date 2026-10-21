@@ -35,6 +35,7 @@ import JournalEntriesView from "./views/JournalEntries.jsx";
 import BankReconciliationView from "./views/BankReconciliation.jsx";
 import CreditCardsView from "./views/CreditCards.jsx";
 import RateSheetDoc from "./components/RateSheetDoc.jsx";
+import BankingSheetDoc from "./components/BankingSheetDoc.jsx";
 
 const NAV = [
   {
@@ -48,6 +49,7 @@ const NAV = [
       { k: "customers", label: "Customers", icon: ICONS.contacts },
       { k: "proposals", label: "Proposals", icon: ICONS.so },
       { k: "rateSheet", label: "Rate Sheet", icon: ICONS.print },
+      { k: "bankingSheet", label: "Banking Info", icon: ICONS.money },
       { k: "quotes", label: "Quotes", icon: ICONS.quote },
       { k: "salesOrders", label: "Sales Orders", icon: ICONS.so },
       { k: "invoices", label: "Invoices", icon: ICONS.inv },
@@ -102,6 +104,7 @@ const TITLES = {
   cards: ["Credit Cards", "Import each card's statement, split business from personal, and post it"],
   reports: ["Reports", "P&L, sales tax, customers, and statements"],
   proposals: ["Proposals", "Fixture and system proposals — priced, tracked, and documented"],
+  bankingSheet: ["Banking Info", "How customers pay you — ACH, wire and check — on your letterhead: email, print or save"],
   rateSheet: ["Rate Sheet", "The standard hourly rates, overtime and travel terms — email, print or save"],
   machineRates: ["Fixture Rates", "The costing table behind fixture proposal pricing"],
   systemRates: ["System Rates", "The hours each item adds to each task on a system proposal"],
@@ -152,7 +155,7 @@ export default function App({ session }) {
   const back = () => {
     setMenuOut(true);
     // The rate sheet is a full-screen document, so closing it always leaves it.
-    if (!history.length) { if (view === "rateSheet") setView("dashboard"); return; }
+    if (!history.length) { if (view === "rateSheet" || view === "bankingSheet") setView("dashboard"); return; }
     setView(history[history.length - 1]);
     setHistory(history.slice(0, -1));
     document.querySelector(".main")?.scrollTo(0, 0);
@@ -231,6 +234,7 @@ export default function App({ session }) {
         {activeView === "reports" && <ReportsView {...props} />}
         {activeView === "proposals" && <ProposalsView {...props} />}
         {activeView === "rateSheet" && <RateSheetDoc settings={db.settings} timeCategories={db.timeCategories} toast={toast} onClose={back} />}
+        {activeView === "bankingSheet" && <BankingSheetDoc settings={db.settings} toast={toast} onClose={back} />}
         {activeView === "machineRates" && <MachineRatesView {...props} />}
         {activeView === "systemRates" && <SystemRatesView {...props} />}
         {activeView === "quotes" && <QuotesView {...props} />}

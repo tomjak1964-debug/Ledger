@@ -74,6 +74,7 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
         </div>
       </div>
     </div>
+    <BankingCard s={s} set={set} readOnly={readOnly} saveAll={saveAll} />
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-head"><h3>Defaults</h3></div>
       <div className="card-body">
@@ -580,5 +581,34 @@ function RateSheetCard({ db, s, set, readOnly, toast }) {
       <p className="subtle" style={{ margin: 0 }}>Blank effective date prints today's. Save Settings to keep changes; the sheet is also under Proposals → Rate Sheet.</p>
     </div>
     {open && <RateSheetDoc settings={s} timeCategories={db.timeCategories} toast={toast} onClose={() => setOpen(false)} />}
+  </div>;
+}
+
+// Settings → Company → Banking Information: what the customer-facing banking
+// sheet prints (components/BankingSheetDoc.jsx). Blank fields are left off it;
+// the payee, remit-to address and A/R email default to the company's own.
+function BankingCard({ s, set, readOnly, saveAll }) {
+  const b = s.banking || {};
+  const setB = (k, v) => set("banking", { ...b, [k]: v });
+  const f = (k, label, opts = {}) => <Field label={label} hint={opts.hint}>
+    {opts.area ? <textarea className="input" value={b[k] || ""} placeholder={opts.ph || ""} disabled={readOnly} onChange={e => setB(k, e.target.value)} />
+      : <input className={"input" + (opts.mono ? " mono" : "")} type={opts.type || "text"} value={b[k] || ""} placeholder={opts.ph || ""} disabled={readOnly} onChange={e => setB(k, e.target.value)} />}
+  </Field>;
+  return <div className="card" style={{ marginBottom: 16 }}>
+    <div className="card-head"><h3>Banking Information</h3>
+      <span className="subtle" style={{ marginLeft: "auto" }}>printed on the banking sheet you send customers — Customers &amp; Sales → Banking Info</span></div>
+    <div className="card-body">
+      <div className="row">{f("bankName", "Bank", { ph: "PNC Bank, N.A." })}{f("bankPhone", "Bank phone")}{f("effectiveDate", "Effective date", { type: "date" })}</div>
+      {f("bankAddress", "Bank address", { area: true })}
+      <div className="row">{f("accountName", "Account name", { ph: s.company })}{f("accountType", "Account type", { ph: "Business Checking" })}</div>
+      <div className="row">{f("achRouting", "Routing number (ACH)", { mono: true })}{f("accountNumber", "Account number", { mono: true })}</div>
+      <div className="row">{f("wireRouting", "Routing number (wire)", { mono: true, hint: "If the bank uses a different one for wires" })}{f("swift", "SWIFT / BIC", { mono: true, hint: "International wires only" })}</div>
+      <div className="row">{f("payableTo", "Checks payable to", { ph: s.company })}{f("taxId", "Federal tax ID (EIN)", { mono: true, hint: "Optional" })}</div>
+      {f("remitAddress", "Mail checks to", { area: true, ph: s.companyAddress })}
+      <div className="row">{f("arName", "A/R contact")}{f("arEmail", "Remittance email", { ph: s.companyEmail })}{f("arPhone", "A/R phone", { ph: s.companyPhone })}</div>
+      {f("notes", "Other instructions", { area: true, hint: "Optional — printed under Remittance Advice" })}
+      <p className="subtle" style={{ margin: "0 0 10px", fontSize: 12 }}>These numbers are visible to everyone who can open Settings. The sheet always carries a warning that you never change banking instructions by email alone.</p>
+      <button className="btn primary" disabled={readOnly} onClick={saveAll}><Ico d={ICONS.check} size={15} />Save Settings</button>
+    </div>
   </div>;
 }

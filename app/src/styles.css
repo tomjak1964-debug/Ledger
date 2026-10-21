@@ -490,3 +490,10 @@ td.doc-id,td.num,td .badge,th.num{white-space:nowrap}
 .rate-section{margin-top:16px}
 .rate-section-head{display:flex;align-items:baseline;gap:10px;border-bottom:1px solid var(--line);padding-bottom:4px;margin-bottom:8px}
 @media (max-width:640px){ .field-grid{grid-template-columns:repeat(2,minmax(0,1fr))} }
+
+/* Banking information sheet (components/BankingSheetDoc.jsx) — the rate sheet's page, with key/value tables. */
+.banking-sheet .bk-table{width:100%;border-collapse:collapse}
+.banking-sheet .bk-table td{padding:6px 10px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-size:13px}
+.banking-sheet .bk-table td.bk-k{width:38%;color:#4b5563;font-weight:600}
+.banking-sheet .bk-table td.mono{font-family:"IBM Plex Mono";font-size:14px;letter-spacing:.02em}
+.banking-sheet .bk-warn{margin-top:24px;padding:12px 14px;border:1.5px solid #13233B;border-radius:6px;font-size:12px;line-height:1.5;break-inside:avoid}

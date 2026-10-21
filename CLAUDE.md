@@ -544,6 +544,15 @@ mileage rate, meals at the GSA per diem for the location). **Rate Sheet** in the
 Settings → Proposals → *Rate Sheet* holds the effective date, thresholds, multipliers, local area, holidays and a
 closing note (`settings.rateSheet`). Print / Save PDF; the file is named `<Company> Rate Sheet <year>`.
 
+**Banking information sheet** (`components/BankingSheetDoc.jsx`, Customers & Sales → **Banking Info**, gated by
+`invoices`): how customers pay — ACH (bank, account name / type, ACH routing, account number), wire (wire routing,
+SWIFT, only when one is set), check (payable to, mail to), remittance advice (A/R contact and email, EIN, other
+instructions) — on the letterhead, one Letter page like the rate sheet: Print, Save PDF (`<Company> Banking
+Information.pdf`), Email (`docType: "invoice"`, so from invoices@). Filled in at Settings → Company → **Banking
+Information** (`settings.banking`, via `bankingConfig()`; payee, remit-to and A/R email default to the company's); a
+blank field is left off, and the sheet always closes with a "we never change banking instructions by email alone —
+call to verify" box. The numbers live in the settings jsonb, readable by every member.
+
 **Estimating from a lineup** (`src/lib/lineup.js`, `src/components/ImportLineupModal.jsx`): an integrator's
 *Electrical Engineering Line-up* — one document per fixture with a header (job #, end user, fixture, PLC, HMI,
 runoff), the sequence of operations, the components on the machine with `(xN)` quantities, the valve manifold

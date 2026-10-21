@@ -34,6 +34,7 @@ export const NAV_AREA = {
   machineRates: "proposals",
   systemRates: "proposals",
   rateSheet: "proposals",
+  bankingSheet: "invoices",
   quotes: "quotes",
   salesOrders: "salesOrders",
   jobs: "jobs",

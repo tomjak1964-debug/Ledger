@@ -297,6 +297,7 @@ function MemberRow({ m, self, actions, toast, lastSignIn }) {
   const owner = m.role === "owner";
   const [role, setRole] = useState(m.role);
   const [name, setName] = useState(m.name || "");
+  const [sendAs, setSendAs] = useState(m.sendAs || "");
   const [perms, setPerms] = useState(m.permissions || {});
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -304,8 +305,8 @@ function MemberRow({ m, self, actions, toast, lastSignIn }) {
   const [rBusy, setRBusy] = useState(false);
   const [shown, setShown] = useState("");
   const isAdmin = isAdminRole(role);
-  const dirty = role !== m.role || name.trim() !== (m.name || "") || JSON.stringify(perms) !== JSON.stringify(m.permissions || {});
-  const save = async () => { setSaving(true); if (await actions.updateMember(m.email, { role, name, permissions: isAdmin ? {} : perms })) toast("Saved " + (name.trim() || m.email)); setSaving(false); };
+  const dirty = role !== m.role || name.trim() !== (m.name || "") || sendAs.trim() !== (m.sendAs || "") || JSON.stringify(perms) !== JSON.stringify(m.permissions || {});
+  const save = async () => { setSaving(true); if (await actions.updateMember(m.email, { role, name, sendAs, permissions: isAdmin ? {} : perms })) toast("Saved " + (name.trim() || m.email)); setSaving(false); };
   const remove = async () => { if (confirm("Remove " + m.email + "? Their access is revoked (the login itself stays in Supabase).") && await actions.removeMember(m.email)) toast("Removed " + m.email); };
   const openReset = () => { setNewPw(genPassword()); setShown(""); setResetting(true); };
   const doReset = async () => {
@@ -318,6 +319,8 @@ function MemberRow({ m, self, actions, toast, lastSignIn }) {
   return <div style={{ padding: "10px 0", borderBottom: "1px solid var(--line, #e6e9ef)" }}>
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       <input className="input" style={{ maxWidth: 200, fontWeight: 600 }} value={name} placeholder="Name" onChange={e => setName(e.target.value)} />
+      <input className="input" style={{ maxWidth: 250 }} value={sendAs} placeholder="Business email (sends as me)" title="Their own business email — what an email they send “as me” comes from, with replies to it. Must be on the company's mail domain."
+        onChange={e => setSendAs(e.target.value)} />
       <span className="subtle">{m.email}{self ? " · you" : ""}</span>
       <SignInPill at={lastSignIn} hasLogin={!!m.userId} />
       <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>

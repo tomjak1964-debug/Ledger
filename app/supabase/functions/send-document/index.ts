@@ -85,16 +85,22 @@ Deno.serve(async (req) => {
     const key = Deno.env.get("RESEND_API_KEY");
     if (!key) throw new Error("RESEND_API_KEY secret is not set");
     let from = senderFor(docType);
-    // "Send as me": the same company address under the caller's name, with
-    // replies to their own email — the mail service only sends from the
-    // company's verified domain.
+    // "Send as me": from the caller's own business email (org_members.send_as,
+    // set in Users & Access) under their name, replies to it. It must be on the
+    // same mail domain as the company sender — the only domain the mail service
+    // can send from. With none set: the company address under their name, with
+    // replies to their sign-in email.
     let replyTo: string | undefined;
     if (body.fromMe) {
-      const { data: me } = await admin.from("org_members").select("name").eq("user_id", user.id).limit(1).maybeSingle();
-      const addr = (from.match(/<([^>]+)>/)?.[1] || from).trim();
+      const { data: me } = await admin.from("org_members").select("name, send_as").eq("user_id", user.id).limit(1).maybeSingle();
+      const companyAddr = (from.match(/<([^>]+)>/)?.[1] || from).trim();
+      const domain = companyAddr.split("@")[1]?.toLowerCase() || "";
+      const own = String(me?.send_as || "").trim();
+      const ownOk = /^[^@\s<>"]+@[^@\s<>"]+$/.test(own) && own.split("@")[1].toLowerCase() === domain;
       const name = String(me?.name || user.email || "").replace(/[<>"]/g, "").trim();
+      const addr = ownOk ? own : companyAddr;
       from = name ? `${name} <${addr}>` : addr;
-      replyTo = user.email || undefined;
+      replyTo = ownOk ? own : (user.email || undefined);
     }
 
     const r = await fetch("https://api.resend.com/emails", {

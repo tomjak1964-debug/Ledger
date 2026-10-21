@@ -125,7 +125,7 @@ function assemble(raw) {
     machineTypes: raw.machineTypes.map(A.machineTypeFromRow),
     proposals: raw.proposals.map(A.proposalFromRow),
     org: raw.orgs[0] ? { id: raw.orgs[0].id, name: raw.orgs[0].name, ownerId: raw.orgs[0].owner_id } : null,
-    members: raw.members.map(m => ({ orgId: m.org_id, userId: m.user_id, email: m.email, name: m.name || "", role: m.role, permissions: m.permissions || {} })),
+    members: raw.members.map(m => ({ orgId: m.org_id, userId: m.user_id, email: m.email, name: m.name || "", sendAs: m.send_as || "", role: m.role, permissions: m.permissions || {} })),
     auditLog: (raw.audit || []).map(A.auditFromRow),
     tasks: (raw.tasks || []).map(A.taskFromRow),
     timeCategories: (raw.timeCats || []).map(A.timeCategoryFromRow),
@@ -1281,6 +1281,7 @@ export function useLedger(session, onError) {
         if (patch.role !== undefined) upd.role = patch.role;
         if (patch.permissions !== undefined) upd.permissions = patch.permissions;
         if (patch.name !== undefined) upd.name = String(patch.name).trim();
+        if (patch.sendAs !== undefined) upd.send_as = String(patch.sendAs).trim();
         th(await supabase.from("org_members").update(upd).eq("org_id", dbRef.current.org.id).eq("email", email));
         setDb(d => ({ ...d, members: d.members.map(m => m.email === email ? { ...m, ...patch } : m) }));
         return true;

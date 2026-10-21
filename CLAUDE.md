@@ -41,8 +41,11 @@ reach the database, by design.
   `docType` (`invoice` — invoices, credit memos, reminders; `remittance`; `proposal`; `ratesheet`), never an
   address, and the function maps it to `EMAIL_FROM_INVOICE` (invoices@tmjengineering.com) /
   `EMAIL_FROM_REMITTANCE` (remittances@) / `EMAIL_FROM_SALES` (sales@ — proposals and the rate sheet) /
-  `EMAIL_FROM_RECEIVABLES` (receivables@ — the banking sheet, `docType: "banking"`). A `fromMe` flag sends under the
-  caller's name with replies to their own email. All three are
+  `EMAIL_FROM_RECEIVABLES` (receivables@ — the banking sheet, `docType: "banking"`). A `fromMe` flag ("Send as me", on the
+  banking sheet) sends from the caller's own **business email** — `org_members.send_as` (migration 038), set next to
+  their name in Users & Access, e.g. jakuszanek@tmjengineering.com for the owner login — under their name with replies
+  to it; it must be on the company sender's domain (the only one Resend sends from), else the company address under
+  their name with replies to their sign-in email. All three are
   aliases in the TMJ Engineering mailbox at Turbify, so replies arrive. An unknown type is refused; no type, or a per-type setting not set yet, uses
   `EMAIL_FROM`. Every `<EmailModal>` passes its `docType`.
   **Several recipients and CC:** the dialog's To and CC each take any number of addresses separated by commas

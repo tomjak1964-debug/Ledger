@@ -66,7 +66,7 @@ export default function EmailModal({ title, defaultTo, defaultSubject, defaultBo
     {fromChoice && <Field label="From">
       <select className="select" value={fromMe ? "me" : "company"} onChange={e => setFromMe(e.target.value === "me")}>
         <option value="company">Receivables — receivables@tmjengineering.com</option>
-        <option value="me">Me — sent under my name, replies come to my email</option>
+        <option value="me">Me — from my business email (Settings → Users &amp; Access)</option>
       </select></Field>}
     <Field label="To" hint="Separate several addresses with commas">
       <input className="input" value={to} onChange={e => setTo(e.target.value)} placeholder="name@company.com, other@company.com" /></Field>

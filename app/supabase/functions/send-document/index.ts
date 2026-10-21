@@ -5,6 +5,7 @@
 //   EMAIL_FROM_INVOICE      — e.g. "TMJ Engineering <invoices@tmjengineering.com>"
 //   EMAIL_FROM_REMITTANCE   — e.g. "TMJ Engineering <remittances@tmjengineering.com>"
 //   EMAIL_FROM_SALES        — e.g. "TMJ Engineering <sales@tmjengineering.com>"
+//   EMAIL_FROM_RECEIVABLES  — e.g. "TMJ Engineering <receivables@tmjengineering.com>"
 //                             (proposals and the rate sheet)
 //   EMAIL_FROM              — the sender for anything else, and the fallback
 //                             while a per-type setting isn't there yet
@@ -27,6 +28,7 @@ const FROM_BY_TYPE: Record<string, string> = {
   remittance: "EMAIL_FROM_REMITTANCE", // remittance advice for vendor payments
   proposal: "EMAIL_FROM_SALES",        // proposals and quotes
   ratesheet: "EMAIL_FROM_SALES",       // the customer rate sheet
+  banking: "EMAIL_FROM_RECEIVABLES",   // the customer banking information sheet
 };
 function senderFor(docType: unknown): string {
   const general = Deno.env.get("EMAIL_FROM") || "onboarding@resend.dev";
@@ -82,13 +84,24 @@ Deno.serve(async (req) => {
     if (to.length + cc.length > MAX_RECIPIENTS) throw new Error(`At most ${MAX_RECIPIENTS} recipients per email`);
     const key = Deno.env.get("RESEND_API_KEY");
     if (!key) throw new Error("RESEND_API_KEY secret is not set");
-    const from = senderFor(docType);
+    let from = senderFor(docType);
+    // "Send as me": the same company address under the caller's name, with
+    // replies to their own email — the mail service only sends from the
+    // company's verified domain.
+    let replyTo: string | undefined;
+    if (body.fromMe) {
+      const { data: me } = await admin.from("org_members").select("name").eq("user_id", user.id).limit(1).maybeSingle();
+      const addr = (from.match(/<([^>]+)>/)?.[1] || from).trim();
+      const name = String(me?.name || user.email || "").replace(/[<>"]/g, "").trim();
+      from = name ? `${name} <${addr}>` : addr;
+      replyTo = user.email || undefined;
+    }
 
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from, to, ...(cc.length ? { cc } : {}), subject, html,
+        from, to, ...(cc.length ? { cc } : {}), ...(replyTo ? { reply_to: replyTo } : {}), subject, html,
         attachments: (attachments ?? []).map((a: { filename: string; content: string }) =>
           ({ filename: a.filename, content: a.content })),
       }),

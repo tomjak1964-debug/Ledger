@@ -21,6 +21,7 @@ export const AREAS = [
   { key: "field", label: "Field (mobile)" },
   { key: "contacts", label: "Customers & Vendors" },
   { key: "catalog", label: "Item Catalog" },
+  { key: "banking", label: "Banking Information" },
   { key: "settings", label: "Settings & Users" },
 ];
 
@@ -34,7 +35,7 @@ export const NAV_AREA = {
   machineRates: "proposals",
   systemRates: "proposals",
   rateSheet: "proposals",
-  bankingSheet: "invoices",
+  bankingSheet: "banking",
   quotes: "quotes",
   salesOrders: "salesOrders",
   jobs: "jobs",

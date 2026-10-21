@@ -9,8 +9,10 @@ import { pagesToPdf, saveBlob } from "../lib/saveFile.js";
 // the letterhead, from settings.banking (Settings → Company → Banking
 // Information). One Letter page like the rate sheet: Print, Save PDF, Email
 // (from invoices@, as billing). A field left blank is left off the sheet.
-export const bankingConfig = s => {
-  const b = s?.banking || {};
+// `info` is the bank_info row (migration 037) — only there for someone with the
+// Banking permission; without it the sheet has no numbers to print.
+export const bankingConfig = (s, info) => {
+  const b = info || {};
   return {
     effectiveDate: b.effectiveDate || todayISO(),
     bankName: b.bankName || "", bankAddress: b.bankAddress || "", bankPhone: b.bankPhone || "",
@@ -22,9 +24,9 @@ export const bankingConfig = s => {
   };
 };
 
-export default function BankingSheetDoc({ settings, onClose, toast }) {
+export default function BankingSheetDoc({ settings, bankInfo, onClose, toast }) {
   const s = settings || {};
-  const b = bankingConfig(s);
+  const b = bankingConfig(s, bankInfo);
   const stem = `${s.company || "Company"} Banking Information`;
   const page = useRef();
   const [busy, setBusy] = useState(false);
@@ -48,19 +50,19 @@ export default function BankingSheetDoc({ settings, onClose, toast }) {
     <DocActions onClose={onClose} onEmail={() => setEmail(true)} onPrint={() => window.print()} busy={busy}
       saves={[{ label: "Save PDF", hint: stem + ".pdf", run: savePdf }]} />
     {missing && <div className="no-print" style={{ maxWidth: 816, margin: "0 auto 10px", padding: "10px 14px", background: "var(--warn-wash)", borderRadius: 9 }}>
-      The bank name, account number and ACH routing number aren't all filled in yet — add them under <b>Settings → Company → Banking Information</b>.</div>}
-    {email && <EmailModal docType="invoice" title="Email · Banking Information" defaultTo=""
+      The bank name, account number and ACH routing number aren't all filled in yet — add them under <b>Settings → Company → Banking Information</b> (it takes the Banking permission to see or change them).</div>}
+    {email && <EmailModal docType="banking" fromChoice title="Email · Banking Information" defaultTo=""
       defaultSubject={`${s.company || ""} — banking and payment information`}
       defaultBody={`Hello,\n\nPlease find attached our banking information for payments by ACH, wire or check.\n\nFor your security, please confirm any change to these instructions by phone at ${b.arPhone || s.companyPhone || "our office"} before sending a payment — we will never change our banking details by email alone.\n\nRegards,\n${s.company || ""}\n${s.companyPhone || ""}`}
       buildAttachment={pdf} onClose={() => setEmail(false)} toast={toast || (() => {})} />}
-    <BankingSheet settings={s} pageRef={page} />
+    <BankingSheet settings={s} bankInfo={bankInfo} pageRef={page} />
   </div>, document.body);
 }
 
 // The page itself — rendered by BankingSheetDoc, and printable on its own.
-export function BankingSheet({ settings, pageRef }) {
+export function BankingSheet({ settings, bankInfo, pageRef }) {
   const s = settings || {};
-  const b = bankingConfig(s);
+  const b = bankingConfig(s, bankInfo);
   const Row = ({ k, v, mono }) => v ? <tr><td className="bk-k">{k}</td><td className={mono ? "mono" : undefined} style={{ whiteSpace: "pre-line" }}>{v}</td></tr> : null;
   const wire = b.wireRouting || b.swift;
   return (

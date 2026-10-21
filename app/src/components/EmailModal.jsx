@@ -26,7 +26,11 @@ export function parseAddresses(text) {
 // "remittance" | "proposal" | "ratesheet") is all the app says about the sender: the
 // send-document function picks the From address for that type from its own
 // fixed list.
-export default function EmailModal({ title, defaultTo, defaultSubject, defaultBody, buildAttachment, onClose, onSent, toast, docType }) {
+// fromChoice offers "From": the document type's own sender, or "me" — the same
+// company address under the signed-in person's name, with replies to their own
+// email (the mail service can only send from the company's verified domain).
+export default function EmailModal({ title, defaultTo, defaultSubject, defaultBody, buildAttachment, onClose, onSent, toast, docType, fromChoice }) {
+  const [fromMe, setFromMe] = useState(false);
   const [to, setTo] = useState(defaultTo || "");
   const [cc, setCc] = useState("");
   const toList = parseAddresses(to), ccList = parseAddresses(cc);
@@ -43,7 +47,7 @@ export default function EmailModal({ title, defaultTo, defaultSubject, defaultBo
       const attachments = await Promise.all(list.map(async a => ({ filename: a.filename, content: await blobToBase64(a.blob) })));
       const html = body.split("\n").map(l => l.trim() === "" ? "<br/>" : `<p style="margin:0 0 2px">${l.replace(/</g, "&lt;")}</p>`).join("");
       const { data, error } = await supabase.functions.invoke("send-document", {
-        body: { to: toList.ok, cc: ccList.ok, subject, html, attachments, docType },
+        body: { to: toList.ok, cc: ccList.ok, subject, html, attachments, docType, fromMe: !!(fromChoice && fromMe) },
       });
       if (error) throw error;
       if (data && data.ok === false) throw new Error(data.error);
@@ -59,6 +63,11 @@ export default function EmailModal({ title, defaultTo, defaultSubject, defaultBo
   return <Modal title={title} onClose={onClose}
     foot={<><button className="btn" onClick={onClose}>Cancel</button>
       <button className="btn primary" disabled={busy || !toList.ok.length || bad.length > 0} onClick={send}>{busy ? "Sending…" : "Send Email"}</button></>}>
+    {fromChoice && <Field label="From">
+      <select className="select" value={fromMe ? "me" : "company"} onChange={e => setFromMe(e.target.value === "me")}>
+        <option value="company">Receivables — receivables@tmjengineering.com</option>
+        <option value="me">Me — sent under my name, replies come to my email</option>
+      </select></Field>}
     <Field label="To" hint="Separate several addresses with commas">
       <input className="input" value={to} onChange={e => setTo(e.target.value)} placeholder="name@company.com, other@company.com" /></Field>
     <Field label="CC" hint="Optional — copies go to these addresses">

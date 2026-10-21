@@ -36,7 +36,7 @@ const th = (res) => { if (res.error) throw res.error; return res.data; };
 
 async function fetchAll() {
   const [settings, sequences, contacts, catalog, quotes, qli, sos, soli, invoices, invli, payments, bills, expenses,
-    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments, pos, poli, accounts, journal, recons, cleared, jobCosts, serviceReports, cardStatements] = await Promise.all([
+    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments, pos, poli, accounts, journal, recons, cleared, jobCosts, serviceReports, cardStatements, bankInfo] = await Promise.all([
     supabase.from("settings").select("*").maybeSingle(),
     supabase.from("org_sequences").select("*"),
     supabase.from("contacts").select("*").order("created_at"),
@@ -69,6 +69,9 @@ async function fetchAll() {
     supabase.from("job_costs").select("*").order("date"),
     supabase.from("service_reports").select("*").order("date", { ascending: false }),
     supabase.from("card_statements").select("*").order("closing_date", { ascending: false }),
+    // Banking details (migration 037): the database only returns the row to an
+    // admin or a member with the Banking permission — everyone else gets none.
+    supabase.from("bank_info").select("*").maybeSingle(),
   ]);
   return {
     settingsRow: th(settings), sequences: th(sequences),
@@ -94,6 +97,7 @@ async function fetchAll() {
     jobCosts: jobCosts && !jobCosts.error ? (jobCosts.data || []) : [],      // migration 028
     serviceReports: serviceReports && !serviceReports.error ? (serviceReports.data || []) : [],   // migration 029
     cardStatements: cardStatements && !cardStatements.error ? (cardStatements.data || []) : [],   // migration 031
+    bankInfo: bankInfo && !bankInfo.error ? (bankInfo.data?.data || null) : null,                 // migration 037
   };
 }
 
@@ -109,6 +113,7 @@ function assemble(raw) {
   const pm = rows => (rows || []).map(A.paymentFromRow);
   return {
     settings: { ...defaultSettings(), ...(raw.settingsRow?.data || {}), counters },
+    bankInfo: raw.bankInfo,
     contacts: raw.contacts.map(A.contactFromRow),
     catalog: raw.catalog.map(A.catalogFromRow),
     quotes: raw.quotes.map(r => A.quoteFromRow(r, li(qItems[r.id]))),
@@ -1175,6 +1180,15 @@ export function useLedger(session, onError) {
     },
 
     /* ---- settings & data management ---- */
+    // Banking details live in bank_info (migration 037), readable and writable
+    // only with the Banking permission (admins have it).
+    async saveBankInfo(data) {
+      try {
+        th(await supabase.from("bank_info").upsert({ org_id: dbRef.current.org.id, data, updated_at: new Date().toISOString() }, { onConflict: "org_id" }));
+        setDb(d => ({ ...d, bankInfo: data }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
     async saveSettings(s) {
       try {
         const { counters, ...data } = s; // counters live in org_sequences, not jsonb

@@ -234,7 +234,7 @@ export default function App({ session }) {
         {activeView === "reports" && <ReportsView {...props} />}
         {activeView === "proposals" && <ProposalsView {...props} />}
         {activeView === "rateSheet" && <RateSheetDoc settings={db.settings} timeCategories={db.timeCategories} toast={toast} onClose={back} />}
-        {activeView === "bankingSheet" && <BankingSheetDoc settings={db.settings} toast={toast} onClose={back} />}
+        {activeView === "bankingSheet" && <BankingSheetDoc settings={db.settings} bankInfo={db.bankInfo} toast={toast} onClose={back} />}
         {activeView === "machineRates" && <MachineRatesView {...props} />}
         {activeView === "systemRates" && <SystemRatesView {...props} />}
         {activeView === "quotes" && <QuotesView {...props} />}

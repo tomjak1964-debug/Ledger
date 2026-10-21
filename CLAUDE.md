@@ -40,7 +40,9 @@ reach the database, by design.
 - **Email senders are chosen by document type, in `send-document`** (`FROM_BY_TYPE`): the app sends only a
   `docType` (`invoice` — invoices, credit memos, reminders; `remittance`; `proposal`; `ratesheet`), never an
   address, and the function maps it to `EMAIL_FROM_INVOICE` (invoices@tmjengineering.com) /
-  `EMAIL_FROM_REMITTANCE` (remittances@) / `EMAIL_FROM_SALES` (sales@ — proposals and the rate sheet). All three are
+  `EMAIL_FROM_REMITTANCE` (remittances@) / `EMAIL_FROM_SALES` (sales@ — proposals and the rate sheet) /
+  `EMAIL_FROM_RECEIVABLES` (receivables@ — the banking sheet, `docType: "banking"`). A `fromMe` flag sends under the
+  caller's name with replies to their own email. All three are
   aliases in the TMJ Engineering mailbox at Turbify, so replies arrive. An unknown type is refused; no type, or a per-type setting not set yet, uses
   `EMAIL_FROM`. Every `<EmailModal>` passes its `docType`.
   **Several recipients and CC:** the dialog's To and CC each take any number of addresses separated by commas
@@ -48,7 +50,7 @@ reach the database, by design.
   fixed. The function takes `to` / `cc` as a list or a string (an older copy sends one string), re-checks every
   address, drops duplicates (and a CC that's already a To) and caps an email at 20 recipients.
 - **Function secrets** (`RESEND_API_KEY`, `EMAIL_FROM`=`remittances@tmjengineering.com`, `EMAIL_FROM_INVOICE`,
-  `EMAIL_FROM_REMITTANCE`, `EMAIL_FROM_SALES`, `CRON_SECRET`) live in
+  `EMAIL_FROM_REMITTANCE`, `EMAIL_FROM_SALES`, `EMAIL_FROM_RECEIVABLES`, `CRON_SECRET`) live in
   `~/apps/ledger/.env` on the NUC, never in git. A new secret also has to be listed under `functions:` in
   HomeServer's `apps/ledger/docker-compose.homeserver.yml`, then `docker compose up -d functions`.
 - **Storage** (`attachments`, `backups` buckets) is on the NUC's disk (`~/apps/ledger/volumes/storage`); its access
@@ -545,13 +547,17 @@ Settings → Proposals → *Rate Sheet* holds the effective date, thresholds, mu
 closing note (`settings.rateSheet`). Print / Save PDF; the file is named `<Company> Rate Sheet <year>`.
 
 **Banking information sheet** (`components/BankingSheetDoc.jsx`, Customers & Sales → **Banking Info**, gated by
-`invoices`): how customers pay — ACH (bank, account name / type, ACH routing, account number), wire (wire routing,
+the **Banking** permission area): how customers pay — ACH (bank, account name / type, ACH routing, account number), wire (wire routing,
 SWIFT, only when one is set), check (payable to, mail to), remittance advice (A/R contact and email, EIN, other
 instructions) — on the letterhead, one Letter page like the rate sheet: Print, Save PDF (`<Company> Banking
-Information.pdf`), Email (`docType: "invoice"`, so from invoices@). Filled in at Settings → Company → **Banking
-Information** (`settings.banking`, via `bankingConfig()`; payee, remit-to and A/R email default to the company's); a
-blank field is left off, and the sheet always closes with a "we never change banking instructions by email alone —
-call to verify" box. The numbers live in the settings jsonb, readable by every member.
+Information.pdf`), Email (`docType: "banking"` → `EMAIL_FROM_RECEIVABLES`, receivables@; the dialog's **From** offers "Me" too —
+the same address under the sender's name with `reply_to` their own email, since Resend only sends from the verified
+domain). Filled in at Settings → Company → **Banking Information**. The details are **not** in settings: they live in
+`bank_info` (migration 037, one jsonb row per org) whose RLS returns the row only to an owner/admin or a member with
+`banking` read, and writes need `banking` write (`saveBankInfo()`); everyone else loads `bankInfo: null` and sees
+"hidden". The numbers were entered straight into the database on 2026-10-21 — never put them in a file in git. A
+blank field is left off the sheet, and it always closes with a "we never change banking instructions by email alone —
+call to verify" box.
 
 **Estimating from a lineup** (`src/lib/lineup.js`, `src/components/ImportLineupModal.jsx`): an integrator's
 *Electrical Engineering Line-up* — one document per fixture with a header (job #, end user, fixture, PLC, HMI,

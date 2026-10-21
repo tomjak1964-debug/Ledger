@@ -613,6 +613,11 @@ that code and day (no counter, so a deleted one's number comes back), and its **
 proposal editors: renaming carries its revisions (they share the number), and a blank or another proposal's number
 is refused; no code gives `INV-261018-01`. Counters are per code and
 day (`next_doc_number('inv:<code>:<ymd>')`, the key the old scheme used), and a number already on file is skipped.
+**The database enforces the suffix** (migration 039, trigger
+`suffix_doc_number()` on proposals and invoices): a number saved in the `PROP-`/`INV-…YYMMDD` shape without `-NN`
+gets the lowest free one, and an older copy re-saving it with the unsuffixed number keeps the suffixed one; a row
+whose number doesn't change is untouched (three invoices issued unsuffixed before Rev 1.61 stay as issued). A stale
+device saved Barry's first proposal of 2026-10-21 as PROP-VG261021 — hence this, and `updateOnStart()` below.
 Venture Global's code was set to VG on 2026-10-18; most other customers have none yet.
 
 **Payment terms live on the contact** (`src/lib/terms.js`, migration 019). Each customer and vendor
@@ -670,7 +675,9 @@ in `vercel.json` / `netlify.toml`, so a fetch of it always says what the server 
 `src/lib/version.js` — `checkForUpdate()` compares the served build stamp to the running one (a hot-fix
 without a rev bump still counts), `updateNow()` unregisters the worker, clears the caches and reloads,
 and `useUpdateNudge(toast)` runs the check once a few seconds after load and offers **Update now** on
-the toast. **The revision sits at the foot of the menu** (`components/RevisionFoot.jsx`), for every user —
+the toast. **`updateOnStart()`** (`main.jsx`) checks before the app draws and, if the server has a newer build,
+updates at once — nobody has started work yet — trying once per build (sessionStorage) and waiting at most 2.5 s, so a
+device can't keep working on an old copy. **The revision sits at the foot of the menu** (`components/RevisionFoot.jsx`), for every user —
 Settings is admin-only, so it used to be out of reach for the rest. It checks on load, every half hour and when
 the app comes back into view: *Rev 1.26 · ✓ Up to date*, or an **Update to Rev X** button when the server has a
 newer build. Clicking the rev checks again (hover shows the build stamp); *Reload* throws away a copy that seems

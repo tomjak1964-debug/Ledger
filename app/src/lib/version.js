@@ -35,6 +35,25 @@ export async function updateNow() {
   location.reload();
 }
 
+// At start-up, before anything is on screen: if the server has a newer build,
+// update straight away — nobody has started work, so nothing is lost, and a
+// device left on an old copy can't go on saving things the old way (a stale
+// copy numbered a proposal without its -01). Waits at most `ms` for the check,
+// and tries once per newer build, so a slow or odd server can't loop it.
+export async function updateOnStart(ms = 2500) {
+  try {
+    const r = await Promise.race([checkForUpdate(), new Promise(res => setTimeout(() => res(null), ms))]);
+    if (!r?.updateAvailable) return false;
+    const key = "ledger:autoUpdatedTo";
+    let tried = null;
+    try { tried = sessionStorage.getItem(key); } catch { /* storage blocked */ }
+    if (tried === r.latest.build) return false;
+    try { sessionStorage.setItem(key, r.latest.build); } catch { /* storage blocked */ }
+    await updateNow();
+    return true;
+  } catch { return false; }
+}
+
 // Once per load, a few seconds in: if the server has a newer build, say so
 // with an Update now button. A home-screen install has no address bar to
 // refresh from, so this is how it finds out.

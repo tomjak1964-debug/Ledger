@@ -1,4 +1,5 @@
 import { StrictMode, useState, useEffect } from "react";
+import { updateOnStart } from "./lib/version.js";
 import { createRoot } from "react-dom/client";
 import { supabase, isConfigured } from "./lib/supabaseClient.js";
 import SignIn from "./views/SignIn.jsx";
@@ -49,4 +50,7 @@ function Root() {
   return <App key={session.user.id} session={session} />;
 }
 
-createRoot(document.getElementById("root")).render(<StrictMode><Root /></StrictMode>);
+// A newer build on the server is taken before the app draws (lib/version.js).
+updateOnStart().then(updating => {
+  if (!updating) createRoot(document.getElementById("root")).render(<StrictMode><Root /></StrictMode>);
+});

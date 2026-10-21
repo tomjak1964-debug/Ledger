@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback } from "react";
-import { REV, BUILD, checkForUpdate, updateNow } from "../lib/version.js";
+import { REV, BUILD, checkForUpdate, updateNow, safeToUpdate } from "../lib/version.js";
 
 // The app's revision, at the foot of the menu where everyone can see it —
 // not only admins, who are the only ones with Settings. It checks the server
-// on load, every half hour and whenever the app comes back into view, and
-// turns into an Update button when a newer build is out. Clicking the
+// on load, every ten minutes and whenever the app comes back into view. A newer
+// build installs itself as soon as that is safe (safeToUpdate: no dialog,
+// document or editor open, nothing being typed, two minutes idle); until then
+// it is an Update button. Clicking the
 // revision checks again; Reload throws away a copy that seems stuck.
 export default function RevisionFoot() {
   const [state, setState] = useState({ status: "checking" });   // checking · current · update · offline
@@ -12,10 +14,11 @@ export default function RevisionFoot() {
     setState(s => ({ ...s, status: "checking" }));
     const r = await checkForUpdate();
     setState(r.error ? { status: "offline" } : r.updateAvailable ? { status: "update", latest: r.latest } : { status: "current", latest: r.latest });
+    if (r.updateAvailable && safeToUpdate()) updateNow();
   }, []);
   useEffect(() => {
     check();
-    const t = setInterval(check, 30 * 60 * 1000);
+    const t = setInterval(check, 10 * 60 * 1000);
     const onShow = () => { if (document.visibilityState === "visible") check(); };
     document.addEventListener("visibilitychange", onShow);
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", onShow); };

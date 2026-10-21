@@ -677,7 +677,12 @@ without a rev bump still counts), `updateNow()` unregisters the worker, clears t
 and `useUpdateNudge(toast)` runs the check once a few seconds after load and offers **Update now** on
 the toast. **`updateOnStart()`** (`main.jsx`) checks before the app draws and, if the server has a newer build,
 updates at once — nobody has started work yet — trying once per build (sessionStorage) and waiting at most 2.5 s, so a
-device can't keep working on an old copy. **The revision sits at the foot of the menu** (`components/RevisionFoot.jsx`), for every user —
+device can't keep working on an old copy. While running, the menu foot checks every 10 minutes and when the app comes back into
+view, and **installs a newer build by itself when `safeToUpdate()`** — no `.modal` or `.doc-screen` open, no
+`[data-editing]` element (the invoice, quote, fixture and system proposal editors, Settings, System Rates with
+unsaved changes, and the Field / Time Tracking forms once something is typed), no focused input, and two minutes
+without a key or tap; otherwise it shows the Update button and tries again next check. A new inline editor must
+carry `data-editing` or an update can land under it. **The revision sits at the foot of the menu** (`components/RevisionFoot.jsx`), for every user —
 Settings is admin-only, so it used to be out of reach for the rest. It checks on load, every half hour and when
 the app comes back into view: *Rev 1.26 · ✓ Up to date*, or an **Update to Rev X** button when the server has a
 newer build. Clicking the rev checks again (hover shows the build stamp); *Reload* throws away a copy that seems

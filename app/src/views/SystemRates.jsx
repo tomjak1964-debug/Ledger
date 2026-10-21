@@ -71,7 +71,7 @@ export default function SystemRatesView({ db, actions, toast, readOnly, member }
   const changedCount = Object.keys(HOUR_MODEL_LABELS).filter(rowChanged).length
     + ["pmPct", "hoursPerDay"].filter(k => !same(hm[k], DEFAULT_HOUR_MODEL[k])).length;
 
-  return <div>
+  return <div data-editing={dirty ? "1" : undefined}>
     <div className="toolbar">
       <p className="subtle" style={{ margin: 0, maxWidth: 760 }}>The hours each item adds to each task when a system proposal is priced. A proposal multiplies these by its counts to
         suggest hours, priced at each task's rate (Settings → Proposals → Labor Rate Card); any task's hours can still be overridden on the proposal.</p>

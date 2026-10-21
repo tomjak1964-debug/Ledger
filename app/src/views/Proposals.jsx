@@ -523,7 +523,7 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
   const overrideCount = Object.values(x.specs.priceOverrides || {}).filter(v => v !== "" && v != null).length;
   const save = async () => { setSaving(true); await onSave(x); setSaving(false); };
 
-  return <div>
+  return <div data-editing="1">
     <div className="toolbar">
       <button className="btn ghost" onClick={onCancel}><Ico d={ICONS.back} size={16} />Back</button>
       <h2 style={{ fontSize: 18, marginLeft: 4 }}>{x._new ? "New Fixture Proposal" : "Edit " + x.number}</h2>

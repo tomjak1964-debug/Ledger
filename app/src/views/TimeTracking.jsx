@@ -56,7 +56,7 @@ export default function TimeTrackingView({ db, actions, toast, readOnly, session
   if (cats.length === 0) return <div className="card"><Empty icon={ICONS.clock} title="No time categories yet"
     msg="An admin needs to set up time categories and rates first (Settings → Time Categories)." /></div>;
 
-  return <div>
+  return <div data-editing={lines.some(l => String(l.hours || "").trim() || String(l.description || "").trim()) ? "1" : undefined}>
     {!readOnly && <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-head"><h3>Log Time</h3></div>
       <div className="card-body">

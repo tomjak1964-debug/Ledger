@@ -57,7 +57,7 @@ export default function SettingsView({ db, actions, toast, session, readOnly, is
     setBusy(false);
   };
 
-  return <div style={{ maxWidth: 820 }}>
+  return <div style={{ maxWidth: 820 }} data-editing="1">
     <div className="pill-tabs" style={{ marginBottom: 16, flexWrap: "wrap" }}>
       {TABS.map(([k, label]) => <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{label}</button>)}
     </div>

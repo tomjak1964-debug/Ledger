@@ -295,7 +295,7 @@ function InvoiceEditor({ invoice, customers, catalog, onCancel, onSave, db, acti
       : db.invoices.some(x => x.id !== inv.id && (x.number || "").trim().toLowerCase() === numTrim.toLowerCase())
         ? `Invoice number "${numTrim}" is already used.` : "";
   const save = async () => { setSaving(true); await onSave(inv); setSaving(false); };
-  return <div>
+  return <div data-editing="1">
     <div className="toolbar">
       <button className="btn ghost" onClick={onCancel}><Ico d={ICONS.back} size={16} />Back</button>
       <h2 style={{ fontSize: 18, marginLeft: 4 }}>{inv._new ? "New Invoice" : "Edit " + inv.number} <span className="mono subtle" style={{ fontSize: 14 }}>{inv.number}</span></h2>

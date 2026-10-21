@@ -88,7 +88,7 @@ function LogTime({ so, db, actions, toast, session }) {
     setBusy(false);
     if (ok) { setHours(""); setDescription(""); toast("Time logged"); }
   };
-  return <div className="card"><div className="card-body">
+  return <div className="card" data-editing={String(hours).trim() || description.trim() ? "1" : undefined}><div className="card-body">
     <Field label="Category"><select className="select" value={categoryId} onChange={e => setCategoryId(e.target.value)}>{cats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
     <Field label="Hours"><input className="input mono" type="number" step="any" inputMode="decimal" value={hours} onChange={e => setHours(e.target.value)} /></Field>
     <Field label="What you did"><textarea className="input" value={description} onChange={e => setDescription(e.target.value)} /></Field>
@@ -112,7 +112,7 @@ function LogExpense({ so, db, actions, toast }) {
     setBusy(false);
     if (exp) { setAmount(""); setVendor(""); setNotes(""); setFile(null); toast("Expense saved" + (file ? " with photo" : "")); }
   };
-  return <div className="card"><div className="card-body">
+  return <div className="card" data-editing={String(amount).trim() || vendor.trim() || notes.trim() ? "1" : undefined}><div className="card-body">
     <div className="row">
       <Field label="Category"><select className="select" value={category} onChange={e => setCategory(e.target.value)}>{EXPENSE_CATS.map(c => <option key={c}>{c}</option>)}</select></Field>
       <Field label="Amount"><input className="input mono" type="number" step="any" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} /></Field>

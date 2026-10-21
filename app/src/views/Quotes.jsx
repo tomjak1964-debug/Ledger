@@ -102,7 +102,7 @@ function QuoteEditor({ quote, customers, catalog, onCancel, onSave }) {
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setQ(p => ({ ...p, [k]: v }));
   const save = async () => { setSaving(true); await onSave(q); setSaving(false); };
-  return <div>
+  return <div data-editing="1">
     <div className="toolbar">
       <button className="btn ghost" onClick={onCancel}><Ico d={ICONS.back} size={16} />Back</button>
       <h2 style={{ fontSize: 18, marginLeft: 4 }}>{q._new ? "New Quote" : "Edit " + q.number} <span className="mono subtle" style={{ fontSize: 14 }}>{q.number}</span></h2>

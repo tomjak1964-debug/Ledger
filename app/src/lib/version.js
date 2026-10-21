@@ -54,6 +54,21 @@ export async function updateOnStart(ms = 2500) {
   } catch { return false; }
 }
 
+// Whether the app can be updated under someone without losing anything: no
+// dialog or document open, no editor in progress (an editor's root carries
+// data-editing), nothing being typed into, and no touch of the app for two
+// minutes.
+let lastInput = Date.now();
+if (typeof window !== "undefined")
+  ["keydown", "pointerdown", "input"].forEach(ev => window.addEventListener(ev, () => { lastInput = Date.now(); }, { capture: true, passive: true }));
+export function safeToUpdate(idleMs = 2 * 60 * 1000) {
+  if (typeof document === "undefined") return false;
+  if (document.querySelector(".modal, .doc-screen, [data-editing]")) return false;
+  const a = document.activeElement;
+  if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return false;
+  return Date.now() - lastInput >= idleMs;
+}
+
 // Once per load, a few seconds in: if the server has a newer build, say so
 // with an Update now button. A home-screen install has no address bar to
 // refresh from, so this is how it finds out.

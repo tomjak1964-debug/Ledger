@@ -215,7 +215,7 @@ export default function ControlsEstimateEditor({ p, db, cfg, customers, onCancel
   });
   const save = async () => { setSaving(true); await onSave({ ...x, specs: { ...sp, assumptions: sp.assumptions.filter(t => t.trim()), exclusions: sp.exclusions.filter(t => t.trim()) } }); setSaving(false); };
 
-  return <div>
+  return <div data-editing="1">
     <div className="toolbar">
       <button className="btn ghost" onClick={onCancel}><Ico d={ICONS.back} size={16} />Back</button>
       <h2 style={{ fontSize: 18, marginLeft: 4 }}>{x._new ? "New System Proposal" : "Edit " + x.number + (revLabel(x) ? " " + revLabel(x) : "")}</h2>

@@ -16,7 +16,7 @@ export const SPEC_FIELDS = [
 export const DEFAULT_POINT_WEIGHTS = { pp: 1, welds: 2, clamps: 2, clips: 3, tabs: 2, shuttle: 2, platen: 6 };
 
 export const DEFAULT_PHASES = [
-  { key: "award", label: "Contract Award", pct: 15 },
+  { key: "award", label: "Contract Award", pct: 15, onPo: true },
   { key: "engineering", label: "Engineering Complete", pct: 25 },
   { key: "panel", label: "Panel Build Complete", pct: 25 },
   { key: "wiring", label: "Field Wiring Complete", pct: 25 },
@@ -189,6 +189,13 @@ export function reductionOf(red, before) {
 export const reductionLabel = red => (red?.label || "").trim() || "Duplicate Machine Reduction";
 
 export const phaseAmount = (total, pct) => round2(total * pct / 100);
+
+// A milestone billed the moment the customer's PO arrives — a phase marked
+// "Invoice on receipt of PO" (onPo), or a line named for it: Contract Award,
+// Initial PO, on receipt of PO, PO received. A sales order's such lines start
+// out ready, which raises the job's Create Invoice task (store.js).
+export const ON_PO = /\b(contract\s+award|award|initial\s+po|(on|upon)\s+receipt\s+of\s+(the\s+)?(po|purchase\s+order)|po\s+(receipt|received))\b/i;
+export const billsOnPo = (label, phase) => !!(phase?.onPo || ON_PO.test(String(label || "")));
 
 export const proposalTotal = p => n(p.pricing?.total);
 

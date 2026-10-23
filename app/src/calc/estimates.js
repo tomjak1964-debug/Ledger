@@ -232,12 +232,12 @@ export const DEFAULT_SCHEDULE = [
 // one when hardware is included (the machine proposal's split).
 export const CONTROLS_PHASES = {
   engineering: [
-    { key: "award", label: "Contract Award", pct: 30 },
+    { key: "award", label: "Contract Award", pct: 30, onPo: true },
     { key: "design", label: "Design Complete", pct: 40 },
     { key: "startup", label: "Start-Up Complete", pct: 30 },
   ],
   hardware: [
-    { key: "award", label: "Contract Award", pct: 15 },
+    { key: "award", label: "Contract Award", pct: 15, onPo: true },
     { key: "engineering", label: "Engineering Complete", pct: 25 },
     { key: "panel", label: "Panel Build Complete", pct: 25 },
     { key: "wiring", label: "Field Wiring Complete", pct: 25 },

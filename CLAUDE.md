@@ -522,6 +522,13 @@ blank uses the figure, a typed amount replaces it (shaded, *Overridden*), 0 leav
 on the rates can be priced in. *Use Fixture Rates for all* clears them. `priceProposal()` returns `lines` (every
 line, both figures) for the editor; the saved snapshot drops it.
 
+**Milestones billed on receipt of the PO raise their invoice task** (`billsOnPo()` / `ON_PO` in `calc/proposals.js`):
+a phase marked **On receipt of PO** (`phases[].onPo` — Contract Award by default; a tick per phase in Fixture Rates →
+Scope Packages), or any line named Contract Award / Initial PO / on receipt of PO / PO received. When a sales order is
+created — won from a proposal (`winProposal`) or new by hand (`saveSalesOrder`) — those lines start out **ready**, and
+`reconcileJobTask()` raises the job's Create Invoice task at once. (TMJ915–917, won before this, were set ready by
+`data-fixes/2026-10-23_contract_award_ready.sql`.)
+
 **Several proposals on one PO** (a customer PO covering more than one job — Automated Solutions does this): each
 proposal still becomes **its own sales order** (its own job — job number, budget, milestones, costing), all carrying
 the same PO, and invoices go out **one per job**, each showing the PO. Select mode on Proposals has **Mark Won…**

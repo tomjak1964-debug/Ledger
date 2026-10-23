@@ -15,7 +15,7 @@ import { dueDateFor } from "./terms.js";
 import { CREDIT_METHOD } from "./credits.js";
 import { uid, todayISO, addDays, pad4, money, sum } from "./helpers.js";
 import { defaultSettings, sampleData } from "./seed.js";
-import { proposalConfig, phaseAmount } from "../calc/proposals.js";
+import { proposalConfig, phaseAmount, billsOnPo } from "../calc/proposals.js";
 import { proposalSpecs, proposalBudget } from "../calc/jobs.js";
 import { round2, lineTotals, balance, billBalance, applyAgainst } from "../calc/ledger.js";
 import { checkNumberTaken, isCheckPayment, normRef } from "./checks.js";
@@ -491,6 +491,9 @@ export function useLedger(session, onError) {
       try {
         const isNew = !!s._new;
         const so = { ...s }; delete so._new;
+        // A new order's line billed on receipt of the PO ("Contract Award",
+        // "Initial PO"…) starts out ready, raising the Create Invoice task.
+        if (isNew) so.lineItems = (so.lineItems || []).map(li => (!li.invoiced && !li.closed && billsOnPo(li.desc) ? { ...li, ready: true } : li));
         const manual = (so.number || "").trim();
         const dupe = num => dbRef.current.salesOrders.some(x => x.id !== so.id && (x.number || "").toLowerCase() === num.toLowerCase());
         if (isNew && isAutoNumber(manual)) {
@@ -503,6 +506,7 @@ export function useLedger(session, onError) {
         th(await supabase.from("sales_orders").upsert(A.soToRow(so)));
         await replaceLineItems("sales_order_line_items", "sales_order_id", so.id, so.lineItems, A.soLineItemsToRows);
         setDb(d => ({ ...d, salesOrders: upsertList(d.salesOrders, so) }));
+        if (isNew) await reconcileJobTask(so.id);
         await noteActivity(isNew ? { title: `New sales order ${so.number}`, detail: so.jobNumber || "", salesOrderId: so.id }
           : { title: `Job updated ${soLabel(so.id)}`, detail: "Sales order edited", salesOrderId: so.id });
         return so;
@@ -1657,7 +1661,9 @@ export function useLedger(session, onError) {
         const schedule = p.phases?.length ? p.phases : p.kind === "controls" ? [] : proposalConfig(d0.settings).phases;
         const total = Number(pr.total) || 0;
         const job = p.jobNumber || p.number;
-        const milestones = schedule.map(ph => ({ ph, line: { id: uid(), desc: `${job} ${ph.label}`, qty: 1, unit: "", unitPrice: phaseAmount(total, ph.pct) } }));
+        // A milestone billed on receipt of the PO starts out ready — the PO is
+        // here — so the job's Create Invoice task goes up with the order.
+        const milestones = schedule.map(ph => ({ ph, line: { id: uid(), desc: `${job} ${ph.label}`, qty: 1, unit: "", unitPrice: phaseAmount(total, ph.pct), ready: billsOnPo(ph.label, ph) } }));
         const phases = milestones.length ? milestones.map(m => ({ ...m.ph, soLineId: m.line.id })) : p.phases || [];
         const groups = p.kind === "controls" ? [
           ["Controls Engineering", pr.engineeringTotal], ["Control Hardware", pr.hardwareTotal],
@@ -1684,6 +1690,7 @@ export function useLedger(session, onError) {
           salesOrders: [...d.salesOrders, so],
           proposals: d.proposals.map(x => x.id === p.id ? { ...x, status: "won", poNumber: po, salesOrderId: so.id, phases } : x),
         }));
+        await reconcileJobTask(so.id);
         return so;
       } catch (e) { return fail(e); }
     },

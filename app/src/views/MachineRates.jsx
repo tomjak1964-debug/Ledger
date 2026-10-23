@@ -120,7 +120,7 @@ function ScopePackages({ db, actions, toast, editable }) {
     const ids = pk.customerIds || [];
     const list = packages.map((p, i) => (i === edit.index ? null : { ...p, customerIds: (p.customerIds || startsOnIds(p)).filter(id => !ids.includes(id)) }));
     const clean = { ...pk, name: pk.name.trim(), endCustomers: (pk.endCustomers || []).map(x => x.trim()).filter(Boolean),
-      phases: pk.phases.map((ph, i) => ({ key: ph.key || "ph" + i, label: ph.label, pct: Number(ph.pct) || 0 })) };
+      phases: pk.phases.map((ph, i) => ({ key: ph.key || "ph" + i, label: ph.label, pct: Number(ph.pct) || 0, ...(ph.onPo ? { onPo: true } : {}) })) };
     delete clean.match;
     const next = edit.index == null ? [...list.filter(Boolean), clean] : list.map((p, i) => (i === edit.index ? clean : p));
     if (await actions.saveSettings({ ...db.settings, fixturePackages: next })) { setEdit(null); toast("Scope package saved"); }
@@ -184,6 +184,8 @@ function ScopePackages({ db, actions, toast, editable }) {
       {P.phases.map((ph, i) => <div key={i} className="row" style={{ alignItems: "center", marginBottom: 4 }}>
         <input className="input" value={ph.label} onChange={e => setP({ phases: P.phases.map((q, j) => (j === i ? { ...q, label: e.target.value } : q)) })} />
         <input className="input mono" type="number" min="0" style={{ maxWidth: 90 }} value={ph.pct} onChange={e => setP({ phases: P.phases.map((q, j) => (j === i ? { ...q, pct: e.target.value } : q)) })} />
+        <label className="subtle" style={{ display: "flex", gap: 5, alignItems: "center", whiteSpace: "nowrap", fontSize: 12.5 }} title="Billed the moment the PO arrives: the line starts out ready and raises a Create Invoice task">
+          <input type="checkbox" checked={!!ph.onPo} onChange={e => setP({ phases: P.phases.map((q, j) => (j === i ? { ...q, onPo: e.target.checked } : q)) })} />On receipt of PO</label>
         <button className="btn ghost icon" onClick={() => setP({ phases: P.phases.filter((_, j) => j !== i) })}><Ico d={ICONS.trash} size={14} /></button>
       </div>)}
       <button className="btn sm" onClick={() => setP({ phases: [...P.phases, { key: "ph" + P.phases.length + Date.now(), label: "", pct: 0 }] })}><Ico d={ICONS.plus} size={13} />Add phase</button>

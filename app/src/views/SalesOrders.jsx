@@ -19,7 +19,11 @@ export default function SalesOrdersView({ db, actions, toast, openDoc, readOnly 
     if (await actions.deleteSO(id)) toast("Deleted " + (rec?.number || ""), { actionLabel: "Undo", onAction: async () => { if (await actions.restoreRecord("sales_order", rec)) toast(rec.number + " restored"); } });
   };
   const f = useFilters({ partyKind: "customer", contacts: db.contacts });
-  const { sorted: soRows, sort, onSort } = useTableSort(db.salesOrders.filter(s => f.keep(s.date, s.customerId)).reverse(), {
+  // A customer PO can cover several jobs (one sales order each): filter to it to
+  // see them together, with what the PO comes to and what's left to bill on it.
+  const [poQ, setPoQ] = useState("");
+  const poMatch = s => !poQ.trim() || (s.poNumber || "").toLowerCase().includes(poQ.trim().toLowerCase());
+  const { sorted: soRows, sort, onSort } = useTableSort(db.salesOrders.filter(s => f.keep(s.date, s.customerId) && poMatch(s)).reverse(), {
     number: s => s.number, customer: s => nameOf(db, s.customerId), po: s => s.poNumber || "",
     quote: s => db.quotes.find(q => q.id === s.quoteId)?.number || "", date: s => s.date, status: s => s.status,
     total: s => lineTotals(s.lineItems, s.taxRate).total,
@@ -55,6 +59,13 @@ export default function SalesOrdersView({ db, actions, toast, openDoc, readOnly 
       <button className="btn primary" style={{ marginLeft: "auto" }} onClick={() => setEdit(blankSO())}><Ico d={ICONS.plus} size={15} />New Sales Order</button>
     </div>}
     {f.bar()}
+    <div className="toolbar" style={{ marginTop: -4 }}>
+      <input className="input mono" style={{ maxWidth: 220 }} value={poQ} onChange={e => setPoQ(e.target.value)} placeholder="Filter by PO #" />
+      {poQ.trim() && <span className="subtle">{soRows.length} sales order{soRows.length === 1 ? "" : "s"} on PO “{poQ.trim()}” ·
+        <b className="mono"> {money(soRows.reduce((t, so) => t + lineTotals(so.lineItems || [], so.taxRate).total, 0))}</b> ·
+        <span className="mono"> {money(soRows.reduce((t, so) => t + lineTotals((so.lineItems || []).filter(li => !li.invoiced && !li.closed), so.taxRate).total, 0))}</span> left to invoice</span>}
+      {poQ && <button className="btn ghost sm" onClick={() => setPoQ("")}>Clear</button>}
+    </div>
     <div className="card">
       {db.salesOrders.length === 0
         ? <Empty icon={ICONS.so} title="No sales orders" msg="Create one directly, or convert an accepted quote / won proposal. From an SO you pick which line items to invoice, so you can bill in phases."

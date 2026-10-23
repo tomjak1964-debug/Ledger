@@ -205,6 +205,21 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
   };
   const setStatus = async (id, status) => { if (await actions.setProposalStatus(id, status)) toast("Marked " + status); };
   const del = async (id) => { if (!confirm("Delete this proposal?")) return; if (await actions.deleteProposal(id)) toast("Deleted"); };
+  // Several proposals won on one purchase order: a sales order (a job) each,
+  // all carrying the same PO — each still invoiced and tracked as its own job.
+  const winOnPo = async (list, po) => {
+    setBulkBusy(true);
+    let done = 0;
+    for (const p of list) if (await actions.winProposal(p, po)) done++;
+    setBulkBusy(false);
+    toast(`Won ${plural(done)} on PO ${po} — ${done} sales order${done === 1 ? "" : "s"} created`);
+    setWinMany(null); endSelect();
+  };
+  const changePo = async (p) => {
+    const po = prompt(`Customer PO for ${p.number} (its sales order changes with it):`, p.poNumber || "");
+    if (po === null) return;
+    if (await actions.setProposalPo(p, po)) toast(`${p.number} is now on PO ${po.trim() || "—"}`);
+  };
   const win = async (p) => {
     const po = prompt("Customer Purchase Order number:", p.poNumber || "");
     if (po === null) return;
@@ -225,6 +240,8 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
   // left alone and counted, so nothing won or superseded changes status.
   const canSubmit = p => p.status === "draft";
   const canLose = p => p.status !== "lost" && p.status !== "won" && p.status !== "superseded";
+  const canWin = p => p.status !== "won" && p.status !== "superseded";
+  const [winMany, setWinMany] = useState(null);   // proposals being won on one PO
   const bulkStatus = async (status) => {
     const ok = chosen.filter(status === "submitted" ? canSubmit : canLose);
     const skipped = chosen.length - ok.length;
@@ -301,6 +318,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
         {!readOnly && <>
           <button className="btn" disabled={!chosen.length || bulkBusy} onClick={() => bulkStatus("submitted")}>Mark Submitted</button>
           <button className="btn" disabled={!chosen.length || bulkBusy} onClick={() => bulkStatus("lost")}>Mark Lost</button>
+          <button className="btn" disabled={!chosen.length || bulkBusy} onClick={() => setWinMany(chosen)} title="Mark the selected proposals won on one customer purchase order — a sales order each, all carrying that PO">Mark Won…</button>
           <button className="btn danger" disabled={!chosen.length || bulkBusy} onClick={bulkDelete}><Ico d={ICONS.trash} size={15} />Delete</button>
         </>}
         <button className="btn ghost" onClick={endSelect}>Cancel</button>
@@ -348,7 +366,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
                   <MenuItem onClick={async () => { close(); try { await downloadProposalDocx(p, db); } catch (e) { toast("⚠ Word export failed: " + (e.message || e)); } }}>Save Word</MenuItem>
                 </>}</ActionMenu>
                 {!readOnly && <button className="btn ghost icon" title="Edit" onClick={() => setEdit({ ...p, specs: { ...p.specs } })}><Ico d={ICONS.edit} size={16} /></button>}
-                {!readOnly && <PropMenu p={p} setStatus={setStatus} win={win} del={del} revise={revise} onPhases={() => setPhasesFor(p)} onCopy={() => setCopyOf(p)} />}
+                {!readOnly && <PropMenu p={p} setStatus={setStatus} win={win} del={del} revise={revise} onPhases={() => setPhasesFor(p)} onCopy={() => setCopyOf(p)} onChangePo={() => changePo(p)} />}
               </td>
             </tr>;
           })}</tbody></table>}
@@ -373,6 +391,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
       buildAttachment={() => Promise.all(chosen.map(p => proposalDocxBlob(p, db)))}
       onSent={endSelect}
       onClose={() => setBulkEmail(false)} toast={toast} />}
+    {winMany && <WinOnPoModal list={winMany} db={db} canWin={canWin} busy={bulkBusy} onClose={() => setWinMany(null)} onWin={winOnPo} />}
     {copyOf && <CopyProposalModal p={copyOf} db={db} cfg={cfg} onClose={() => setCopyOf(null)}
       onCopy={async (copy) => {
         // Saved straight away so it claims its number; then it opens in the editor.
@@ -386,6 +405,37 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
       }} />}
     {phasesFor && <PhasesModal p={db.proposals.find(x => x.id === phasesFor.id) || phasesFor} db={db} actions={actions} toast={toast} onClose={() => setPhasesFor(null)} />}
   </div>;
+}
+
+// Won on one purchase order: the proposals a customer's PO covers, each to
+// become its own sales order carrying that PO. Only one customer's, and only
+// those that can be won (not already won or superseded) — the rest are listed
+// as skipped.
+export function WinOnPoModal({ list, db, canWin, busy, onClose, onWin }) {
+  const ok = list.filter(canWin), skipped = list.filter(p => !canWin(p));
+  const customers = [...new Set(ok.map(p => p.customerId))];
+  const [po, setPo] = useState(() => ok.find(p => p.poNumber)?.poNumber || "");
+  const total = ok.reduce((t, p) => t + (Number(p.pricing?.total) || 0), 0);
+  const mixed = customers.length > 1;
+  const used = po.trim() && db.salesOrders.some(s => (s.poNumber || "").trim().toLowerCase() === po.trim().toLowerCase());
+  return <Modal title={`Mark ${ok.length} Proposal${ok.length === 1 ? "" : "s"} Won`} onClose={onClose}
+    foot={<><button className="btn" onClick={onClose}>Cancel</button>
+      <button className="btn primary" disabled={busy || !ok.length || mixed || !po.trim()} onClick={() => onWin(ok, po.trim())}>
+        {busy ? "Working…" : `Won — ${ok.length} Sales Order${ok.length === 1 ? "" : "s"} on PO ${po.trim() || "…"}`}</button></>}>
+    <p className="subtle" style={{ marginTop: 0 }}>Each proposal becomes its own sales order (its own job), all carrying this purchase order. They're invoiced and tracked job by job, each invoice showing the PO.</p>
+    <Field label="Customer PO number" hint={used ? "Other sales orders already carry this PO — these join them" : undefined}>
+      <input className="input mono" autoFocus value={po} onChange={e => setPo(e.target.value)} placeholder="e.g. 4500123456" /></Field>
+    {mixed && <p style={{ color: "var(--neg)", margin: "0 0 10px" }}>These are for {customers.length} different customers — a purchase order is one customer's. Select only that customer's proposals.</p>}
+    <table><thead><tr><th>Proposal</th><th>Job</th><th>Description</th><th className="num">Price</th></tr></thead>
+      <tbody>{ok.map(p => <tr key={p.id}>
+        <td className="doc-id">{p.number}{revLabel(p) ? " " + revLabel(p) : ""}</td>
+        <td className="mono">{p.jobNumber || "—"}</td>
+        <td>{p.description || <span className="subtle">—</span>}<div className="subtle" style={{ fontSize: 12 }}>{nameOf(db, p.customerId)}</div></td>
+        <td className="num">{money(Number(p.pricing?.total) || 0)}</td>
+      </tr>)}
+        <tr style={{ fontWeight: 700 }}><td colSpan={3}>PO total</td><td className="num">{money(total)}</td></tr></tbody></table>
+    {skipped.length > 0 && <p className="subtle" style={{ margin: "10px 0 0" }}>Skipped — already won or superseded: {skipped.map(p => p.number).join(", ")}</p>}
+  </Modal>;
 }
 
 // The number a new proposal for this customer would take today — the lowest
@@ -443,13 +493,14 @@ export function CopyProposalModal({ p, db, cfg, onClose, onCopy }) {
   </Modal>;
 }
 
-function PropMenu({ p, setStatus, win, del, revise, onPhases, onCopy }) {
+function PropMenu({ p, setStatus, win, del, revise, onPhases, onCopy, onChangePo }) {
   return <ActionMenu minWidth={200}>{close => {
     const item = (label, fn, opts = {}) => <MenuItem {...opts} onClick={() => { fn(); close(); }}>{label}</MenuItem>;
     return <>
       {p.status === "draft" && item("Mark as Submitted", () => setStatus(p.id, "submitted"))}
       {p.status !== "won" && p.status !== "superseded" && item("Won — PO received →", () => win(p), { accent: true })}
       {p.status === "won" && item("Invoice Phases…", onPhases, { accent: true })}
+      {p.status === "won" && item("Change PO…", onChangePo)}
       {p.status !== "superseded" && item("New Revision", () => revise(p))}
       {item("Copy Proposal…", onCopy)}
       {p.status !== "lost" && p.status !== "won" && p.status !== "superseded" && item("Mark as Lost", () => setStatus(p.id, "lost"))}

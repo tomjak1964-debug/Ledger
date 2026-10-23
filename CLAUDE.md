@@ -522,6 +522,14 @@ blank uses the figure, a typed amount replaces it (shaded, *Overridden*), 0 leav
 on the rates can be priced in. *Use Fixture Rates for all* clears them. `priceProposal()` returns `lines` (every
 line, both figures) for the editor; the saved snapshot drops it.
 
+**Several proposals on one PO** (a customer PO covering more than one job — Automated Solutions does this): each
+proposal still becomes **its own sales order** (its own job — job number, budget, milestones, costing), all carrying
+the same PO, and invoices go out **one per job**, each showing the PO. Select mode on Proposals has **Mark Won…**
+(`WinOnPoModal`): one PO number for the ticked proposals, listed with the PO total; refused across customers, and
+won / superseded ones are skipped. A won proposal's row menu has **Change PO…** (`setProposalPo()` — the proposal and
+its sales order; issued invoices keep theirs). Sales Orders and Jobs have a **PO filter**; on Sales Orders it shows the
+PO's total and what's left to invoice, and on Jobs it includes closed jobs.
+
 **Copy Proposal** (the row menu, `CopyProposalModal` in `views/Proposals.jsx`): asks for a new job number and
 description, shows the number the copy will take (the customer's next free one for today), and offers a
 **duplicate machine reduction** — dollars or a percentage off — with the original price, the reduction and the new

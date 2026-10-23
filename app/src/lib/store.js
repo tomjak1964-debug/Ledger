@@ -1689,6 +1689,20 @@ export function useLedger(session, onError) {
     },
     // A re-quote: the same number at rev + 1 as a fresh draft, and the row it
     // replaces marked superseded with everything it had left intact.
+    // A won proposal's customer PO, changed after the fact (it arrived later, or
+    // was reissued): the proposal and its sales order take the new number.
+    // Invoices already issued keep the PO they were issued with.
+    async setProposalPo(p, po) {
+      try {
+        const num = String(po || "").trim();
+        th(await supabase.from("proposals").update({ po_number: num }).eq("id", p.id));
+        if (p.salesOrderId) th(await supabase.from("sales_orders").update({ po_number: num }).eq("id", p.salesOrderId));
+        setDb(d => ({ ...d,
+          proposals: d.proposals.map(x => x.id === p.id ? { ...x, poNumber: num } : x),
+          salesOrders: d.salesOrders.map(s => s.id === p.salesOrderId ? { ...s, poNumber: num } : s) }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
     async reviseProposal(p) {
       try {
         const next = {

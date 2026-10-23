@@ -12,7 +12,10 @@ export default function JobsView({ db, actions, toast, readOnly }) {
   const [costsFor, setCostsFor] = useState(null);   // SO whose job costs are open
   const [showClosed, setShowClosed] = useState(false);
   const closedCount = db.salesOrders.filter(s => s.status !== "open").length;
-  const jobs = db.salesOrders.filter(s => showClosed || s.status === "open");
+  // A PO filter shows every job on that customer PO, closed ones too.
+  const [poQ, setPoQ] = useState("");
+  const poMatch = s => !poQ.trim() || (s.poNumber || "").toLowerCase().includes(poQ.trim().toLowerCase());
+  const jobs = db.salesOrders.filter(s => (showClosed || poQ.trim() || s.status === "open") && poMatch(s));
   // Available = ready to invoice: marked ready and not yet billed or closed.
   const availableOf = so => (so.lineItems || []).filter(li => li.ready && !li.invoiced && !li.closed).length;
   const invoicedOf = so => (so.lineItems || []).filter(li => li.invoiced).length;
@@ -32,6 +35,7 @@ export default function JobsView({ db, actions, toast, readOnly }) {
   return <div>
     <div className="card">
       <div className="card-head"><h3>{showClosed ? "Jobs" : "Active Jobs"}</h3>
+        <input className="input mono" style={{ maxWidth: 190, marginLeft: 14 }} value={poQ} onChange={e => setPoQ(e.target.value)} placeholder="Filter by PO #" />
         {closedCount > 0 && <label className="subtle" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
           <input type="checkbox" checked={showClosed} onChange={e => setShowClosed(e.target.checked)} />Show closed ({closedCount})</label>}</div>
       {jobs.length === 0

@@ -51,12 +51,34 @@ export const DEFAULT_PACKAGES = [
     premium: [],
     scope: { ...Object.fromEntries(SCOPE_ITEMS.map(i => [i.key, false])), plc: true, hmi: true, startup: true, docs: true },
     phases: [
-      { key: "software", label: "Software Support", pct: 10 },
+      { key: "po", label: "PO Receipt", pct: 10, onPo: true },
       { key: "startup", label: "Start-Up Complete", pct: 80 },
-      { key: "docs", label: "Final Programs/Documentation", pct: 10 },
+      { key: "docs", label: "Final Documentation", pct: 10 },
     ],
   },
 ];
+
+// The schedule for a fixture proposal that supplies no hardware design and no
+// material — software and start-up only, whatever its package: PO Receipt (on
+// receipt of the PO), Start-Up Complete, Final Documentation.
+export const SOFTWARE_ONLY_PHASES = [
+  { key: "po", label: "PO Receipt", pct: 10, onPo: true },
+  { key: "startup", label: "Start-Up Complete", pct: 80 },
+  { key: "docs", label: "Final Documentation", pct: 10 },
+];
+// No hardware design, no panel / remote panels, no block I/O, no field wiring.
+export const softwareOnly = scope => !!scope && ["hwDesign", "panel", "blockIo", "fieldWiring"].every(k => !scope[k]);
+const samePhases = (a, b) => JSON.stringify((a || []).map(p => [p.label, Number(p.pct)])) === JSON.stringify((b || []).map(p => [p.label, Number(p.pct)]));
+// The schedule a proposal should be on for its ticks — the package's, or the
+// software-only one — when it is still on a stock schedule. A schedule edited by
+// hand, or one with a phase already billed, is left as it is (null).
+export function scheduleFor(pkg, scope, phases) {
+  if ((phases || []).some(ph => ph.invoiceId)) return null;
+  const stock = samePhases(phases, pkg?.phases) || samePhases(phases, SOFTWARE_ONLY_PHASES) || !(phases || []).length;
+  if (!stock) return null;
+  const want = softwareOnly(scope) ? SOFTWARE_ONLY_PHASES : (pkg?.phases || []);
+  return samePhases(phases, want) ? null : want.map(ph => ({ ...ph }));
+}
 
 export const packagesOf = settings => (Array.isArray(settings?.fixturePackages) && settings.fixturePackages.length ? settings.fixturePackages : DEFAULT_PACKAGES);
 

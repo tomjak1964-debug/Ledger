@@ -527,7 +527,11 @@ a phase marked **On receipt of PO** (`phases[].onPo` — Contract Award by defau
 Scope Packages), or any line named Contract Award / Initial PO / on receipt of PO / PO received. When a sales order is
 created — won from a proposal (`winProposal`) or new by hand (`saveSalesOrder`) — those lines start out **ready**, and
 `reconcileJobTask()` raises the job's Create Invoice task at once. (TMJ915–917, won before this, were set ready by
-`data-fixes/2026-10-23_contract_award_ready.sql`.)
+`data-fixes/2026-10-23_contract_award_ready.sql`.) **Software-only schedule:** a fixture proposal that supplies no hardware design and no material
+(no panel, block I/O or field wiring) invoices **PO Receipt** 10% (on receipt of the PO) / **Start-Up Complete** 80% /
+**Final Documentation** 10% (`SOFTWARE_ONLY_PHASES`, the Software & Start-Up package's schedule): a new proposal on
+such a package starts on it, and unticking the last hardware item in Scope of Supply swaps a stock schedule to it
+(`scheduleFor()` — and back when hardware is ticked again); a hand-edited or partly billed schedule is left alone.
 
 **Several proposals on one PO** (a customer PO covering more than one job — Automated Solutions does this): each
 proposal still becomes **its own sales order** (its own job — job number, budget, milestones, costing), all carrying

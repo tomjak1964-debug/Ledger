@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import DocActions from "../components/DocActions.jsx";
 import { pagesToPdf, saveBlob } from "../lib/saveFile.js";
 import { uid, money, fmtDate, todayISO, nameOf, cls, pickable } from "../lib/helpers.js";
-import { packageById, packageForCustomer, packageDefaults, packagesOf, standardsLine, mesFor, SCOPE_ITEMS } from "../calc/fixtureScope.js";
+import { packageById, packageForCustomer, packageDefaults, packagesOf, standardsLine, mesFor, SCOPE_ITEMS, scheduleFor, softwareOnly, SOFTWARE_ONLY_PHASES } from "../calc/fixtureScope.js";
 import { termsLabelFor } from "../lib/terms.js";
 import ReductionRow from "../components/ReductionRow.jsx";
 import { personName, emailFor, proposalAttn, proposalPerson, contactNameFor, remitVendor, peopleOf } from "../lib/people.js";
@@ -193,7 +193,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
     ...proposalAttn(db, startCustomer), date: todayISO(), status: "draft", jobNumber: "", description: "",
     location: packageForCustomer(db, startCustomer?.id).location ?? cfg.location, machineTypeId: db.machineTypes[0]?.id || "",
     specs: { ...emptySpecs(), dataNational: true, ioBlocks: "", hmis: 1, endCustomer: "", ...packageDefaults(packageForCustomer(db, startCustomer?.id)) },
-    pricing: {}, phases: packageForCustomer(db, startCustomer?.id).phases.map(ph => ({ ...ph })), notes: "",
+    pricing: {}, phases: (softwareOnly(packageForCustomer(db, startCustomer?.id).scope) ? SOFTWARE_ONLY_PHASES : packageForCustomer(db, startCustomer?.id).phases).map(ph => ({ ...ph })), notes: "",
   });
 
   const save = async (p) => {
@@ -524,7 +524,8 @@ function ScopeCard({ x, setX, db, cfg }) {
     setX(prev => {
       const was = packages.find(q => q.id === prev.specs?.packageId);
       const location = !prev.location || prev.location === (was?.location ?? "") ? (pk.location ?? prev.location) : prev.location;
-      return { ...prev, location, specs: { ...prev.specs, ...packageDefaults(pk) }, phases: billed ? prev.phases : pk.phases.map(ph => ({ ...ph })) };
+      const phases = billed ? prev.phases : (softwareOnly(pk.scope) ? SOFTWARE_ONLY_PHASES : pk.phases).map(ph => ({ ...ph }));
+      return { ...prev, location, specs: { ...prev.specs, ...packageDefaults(pk) }, phases };
     });
   };
   const sc = { ...(pkg?.scope || {}), ...(sp.scope || {}) };
@@ -550,7 +551,12 @@ function ScopeCard({ x, setX, db, cfg }) {
       </div>
       {pkg && <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 18px" }}>
         {SCOPE_ITEMS.map(it => <label key={it.key} style={{ display: "flex", gap: 6, alignItems: "center", cursor: "pointer" }}>
-          <input type="checkbox" checked={!!sc[it.key]} onChange={e => setSpecs({ scope: { ...sc, [it.key]: e.target.checked } })} />
+          <input type="checkbox" checked={!!sc[it.key]} onChange={e => {
+            // Unticking the last of the hardware moves a stock schedule to the
+            // software-only one (PO Receipt / Start-Up / Final Documentation), and back.
+            const scope = { ...sc, [it.key]: e.target.checked };
+            setX(prev => { const ph = scheduleFor(pkg, scope, prev.phases); return { ...prev, specs: { ...prev.specs, scope }, ...(ph ? { phases: ph } : {}) }; });
+          }} />
           {it.label}{it.hint && <span className="subtle" style={{ fontSize: 12 }}>({it.hint})</span>}</label>)}
       </div>}
     </div>
@@ -596,7 +602,7 @@ function ProposalEditor({ p, db, cfg, customers, onCancel, onSave }) {
             if (!prev.specs?.packageId || (prev.phases || []).some(ph => ph.invoiceId)) return next;
             const pk = packageForCustomer(db, cid), was = packagesOf(db.settings).find(q => q.id === prev.specs.packageId);
             const location = !prev.location || prev.location === (was?.location ?? "") ? (pk.location ?? "") : prev.location;
-            return { ...next, location, specs: { ...prev.specs, ...packageDefaults(pk), endCustomer: "" }, phases: pk.phases.map(ph => ({ ...ph })) };
+            return { ...next, location, specs: { ...prev.specs, ...packageDefaults(pk), endCustomer: "" }, phases: (softwareOnly(pk.scope) ? SOFTWARE_ONLY_PHASES : pk.phases).map(ph => ({ ...ph })) };
           });
         }}>
           <option value="">Select customer…</option>{pickable(customers, x.customerId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}

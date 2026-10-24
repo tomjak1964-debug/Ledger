@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef } from "react";
 import { uid, money, todayISO, pickable } from "../lib/helpers.js";
 import { proposalAttn } from "../lib/people.js";
-import { packageForCustomer, packageDefaults } from "../calc/fixtureScope.js";
+import { packageForCustomer, packageDefaults, softwareOnly, SOFTWARE_ONLY_PHASES } from "../calc/fixtureScope.js";
 import { proposalConfig, priceProposal, ioBlocks, TMJ_DEFAULT_RATES, defaultProposalCustomer, dateJobNumber } from "../calc/proposals.js";
 import { readChartFile, parseDelimited, mapChart, matchMachineType, typeKey } from "../lib/quoteChart.js";
 import { Ico, ICONS, Modal, Field } from "./ui.jsx";
@@ -100,7 +100,7 @@ export default function ImportProposalsModal({ db, actions, toast, onClose, onDo
         id: uid(), _new: true, customerId, ...proposalAttn(db, db.contacts.find(c => c.id === customerId)),
         date, status: "draft", jobNumber, description: rec.description || "",
         location: rec.location || (packageForCustomer(db, customerId).location ?? cfg.location), machineTypeId: r.machineTypeId,
-        specs, pricing, phases: packageForCustomer(db, customerId).phases.map(ph => ({ ...ph })), notes: note,
+        specs, pricing, phases: (softwareOnly(packageForCustomer(db, customerId).scope) ? SOFTWARE_ONLY_PHASES : packageForCustomer(db, customerId).phases).map(ph => ({ ...ph })), notes: note,
       });
       out.push({ rec, saved, total: pricing.total });
     }

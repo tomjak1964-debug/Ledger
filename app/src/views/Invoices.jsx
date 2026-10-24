@@ -78,12 +78,12 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
   // The Printed tick is the control: an invoice that went out by email, or one
   // printed before the flag existed, is marked by hand; unticking undoes a slip.
   const setPrinted = async (inv, printed) => {
-    if (await actions.markInvoicePrinted(inv.id, printed)) toast(inv.number + (printed ? " marked printed" : " marked unprinted"));
+    if (await actions.markInvoicePrinted(inv.id, printed)) toast(inv.number + (printed ? " marked sent" : " marked not sent"));
   };
   const markAllShown = async () => {
     const ids = rows.filter(i => !i.printed).map(i => i.id);
-    if (!ids.length || !confirm(`Mark ${ids.length} invoice${ids.length === 1 ? "" : "s"} as printed?`)) return;
-    if (await actions.markInvoicePrinted(ids, true)) toast(`${ids.length} invoice${ids.length === 1 ? "" : "s"} marked printed`);
+    if (!ids.length || !confirm(`Mark ${ids.length} invoice${ids.length === 1 ? "" : "s"} as sent?`)) return;
+    if (await actions.markInvoicePrinted(ids, true)) toast(`${ids.length} invoice${ids.length === 1 ? "" : "s"} marked sent`);
   };
 
   const chosen = rows.filter(i => picked[i.id]);
@@ -92,9 +92,9 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
   const plural = (n, w = "invoice") => `${n} ${w}${n === 1 ? "" : "s"}`;
   const bulkPrinted = async (printed) => {
     const ids = chosen.filter(i => !!i.printed !== printed).map(i => i.id);
-    if (!ids.length) { toast(`All selected are already ${printed ? "printed" : "unprinted"}`); return; }
+    if (!ids.length) { toast(`All selected are already ${printed ? "marked sent" : "not sent"}`); return; }
     setBulkBusy(true);
-    if (await actions.markInvoicePrinted(ids, printed)) toast(`${plural(ids.length)} marked ${printed ? "printed" : "unprinted"}`);
+    if (await actions.markInvoicePrinted(ids, printed)) toast(`${plural(ids.length)} marked ${printed ? "sent" : "not sent"}`);
     setBulkBusy(false);
     endSelect();
   };
@@ -140,10 +140,10 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
   return <div>
     <div className="toolbar">
       <button className={"btn" + (unprintedOnly ? " primary" : "")} onClick={() => setUnprintedOnly(v => !v)}
-        title="Invoices you haven't printed yet">
-        <Ico d={ICONS.print} size={14} />{unprintedOnly ? "Showing unprinted" : `Unprinted${unprintedCount ? " · " + unprintedCount : ""}`}</button>
-      {!readOnly && unprintedOnly && rows.length > 0 && <button className="btn" onClick={markAllShown} title="Mark every invoice shown as printed, without printing">
-        <Ico d={ICONS.check} size={14} />Mark all {rows.length} as printed</button>}
+        title="Invoices not sent to the customer yet">
+        <Ico d={ICONS.mail} size={14} />{unprintedOnly ? "Showing not sent" : `Not sent${unprintedCount ? " · " + unprintedCount : ""}`}</button>
+      {!readOnly && unprintedOnly && rows.length > 0 && <button className="btn" onClick={markAllShown} title="Mark every invoice shown as sent — ones that went out by mail or another way">
+        <Ico d={ICONS.check} size={14} />Mark all {rows.length} as sent</button>}
       {db.invoices.length > 0 && <button className={"btn" + (selecting ? " primary" : "")} style={{ marginLeft: "auto" }}
         onClick={() => selecting ? endSelect() : setSelecting(true)} title="Pick several invoices to email, save, mark or delete together">
         <Ico d={ICONS.check} size={15} />{selecting ? "Done Selecting" : "Select"}</button>}
@@ -163,8 +163,8 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
         <button className="btn" disabled={!chosen.length || bulkBusy} onClick={bulkPrint}><Ico d={ICONS.print} size={15} />Print</button>
         <button className="btn" disabled={!chosen.length || bulkBusy} onClick={bulkSave}><Ico d={ICONS.download} size={15} />Save {chosen.length > 1 ? plural(chosen.length, "PDF") : "PDF"}</button>
         {!readOnly && <>
-          <button className="btn" disabled={!chosen.length || bulkBusy} onClick={() => bulkPrinted(true)}>Mark Printed</button>
-          <button className="btn" disabled={!chosen.length || bulkBusy} onClick={() => bulkPrinted(false)}>Mark Unprinted</button>
+          <button className="btn" disabled={!chosen.length || bulkBusy} onClick={() => bulkPrinted(true)}>Mark Sent</button>
+          <button className="btn" disabled={!chosen.length || bulkBusy} onClick={() => bulkPrinted(false)}>Mark Not Sent</button>
           <button className="btn danger" disabled={!chosen.length || bulkBusy} onClick={bulkDelete}><Ico d={ICONS.trash} size={15} />Delete</button>
         </>}
         <button className="btn ghost" onClick={endSelect}>Cancel</button>
@@ -182,7 +182,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
           <SortTh label="Date" col="date" sort={sort} onSort={onSort} />
           <SortTh label="Due" col="due" sort={sort} onSort={onSort} />
           <SortTh label="Status" col="status" sort={sort} onSort={onSort} />
-          <SortTh label="Printed" col="printed" sort={sort} onSort={onSort} />
+          <SortTh label="Sent" col="printed" sort={sort} onSort={onSort} />
           <SortTh label="Total" col="total" sort={sort} onSort={onSort} num />
           <SortTh label="Balance" col="balance" sort={sort} onSort={onSort} num /><th></th></tr></thead>
           <tbody>{rows.map(inv => {
@@ -197,9 +197,9 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
               <td className="subtle nowrap">{fmtDate(inv.dueDate)}</td>
               <td><Badge status={st} /></td>
               <td onClick={e => e.stopPropagation()}><label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: readOnly ? "default" : "pointer" }}
-                title={inv.printed ? "Printed — untick to mark it unprinted" : "Not printed yet — tick to mark it printed without printing"}>
+                title={inv.printed ? "Sent — ticked when it was emailed, or by hand; untick to mark it not sent" : "Not sent yet — emailing it ticks this; tick it yourself for one mailed or handed over"}>
                 <input type="checkbox" checked={!!inv.printed} disabled={readOnly} onChange={e => setPrinted(inv, e.target.checked)} />
-                {inv.printed ? <span className="subtle">Printed</span> : <span className="badge amber"><span className="dot"></span>Unprinted</span>}
+                {inv.printed ? <span className="subtle">Sent</span> : <span className="badge amber"><span className="dot"></span>Not sent</span>}
               </label></td>
               <td className="num">{money(lineTotals(inv.lineItems, inv.taxRate).total)}</td>
               <td className="num" style={{ fontWeight: 600 }}>{money(balance(inv))}</td>
@@ -240,9 +240,10 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
       defaultSubject={`Invoice ${email.number} — ${db.settings.company}`}
       defaultBody={`Please find attached invoice ${email.number}.\n\nThank you for your business.\n\n${db.settings.company}\n${db.settings.companyPhone || ""}`}
       buildAttachment={() => invoicePdf(email, db)}
+      onSent={readOnly ? undefined : () => actions.markInvoicePrinted(email.id, true)}
       onClose={() => setEmail(null)} toast={toast} />}
     {printSet && <PdfView blob={printSet.blob} filename={printSet.filename} autoPrint
-      onPrinted={readOnly ? undefined : () => actions.markInvoicePrinted(printSet.ids, true)}
+      onPrinted={undefined}
       onClose={() => { setPrintSet(null); endSelect(); }} />}
     {bulkEmail && <EmailModal docType="invoice"
       title={`Email · ${plural(chosen.length)}`}
@@ -250,7 +251,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
       defaultSubject={chosen.length === 1 ? `Invoice ${chosen[0].number} — ${db.settings.company}` : `Invoices ${chosen.map(i => i.number).join(", ")} — ${db.settings.company}`}
       defaultBody={`Please find attached ${chosen.length === 1 ? "invoice " + chosen[0].number : `our ${chosen.length} invoices`}:\n${chosen.map(i => `  • ${i.number} — ${money(lineTotals(i.lineItems, i.taxRate).total)}${i.poNumber ? " · PO " + i.poNumber : ""}`).join("\n")}\n\nThank you for your business.\n\n${db.settings.company}\n${db.settings.companyPhone || ""}`}
       buildAttachment={() => Promise.all(chosen.map(i => invoicePdf(i, db)))}
-      onSent={endSelect}
+      onSent={() => { if (!readOnly) actions.markInvoicePrinted(chosen.map(i => i.id), true); endSelect(); }}
       onClose={() => setBulkEmail(false)} toast={toast} />}
     {pay && <PaymentModal db={db} doc={pay} onClose={() => setPay(null)}
       offerFor={d => discountOffer(db, pay, pay.customerId, d)}

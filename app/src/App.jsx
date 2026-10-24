@@ -266,7 +266,8 @@ export default function App({ session }) {
     </Modal>}
     {doc && <DocumentView kind={doc.kind} doc={doc.doc}
       contact={db.contacts.find(c => c.id === (doc.doc.customerId || doc.doc.vendorId))} settings={db.settings}
-      onPrinted={doc.kind === "invoice" ? () => { actions.markInvoicePrinted(doc.doc.id); doc.onPrinted?.(); } : doc.onPrinted}
+      onPrinted={doc.onPrinted}
+      onEmailed={doc.kind === "invoice" ? () => actions.markInvoicePrinted(doc.doc.id, true) : undefined}
       autoPrint={doc.autoPrint} onClose={() => setDoc(null)} db={db} toast={toast}
       onEdit={doc.kind === "invoice" && canWrite(member, "invoices") ? () => { setEditRequest({ kind: "invoice", id: doc.doc.id }); setDoc(null); go("invoices"); } : undefined} />}
     {toastMsg && <div className="toast"><Ico d={ICONS.check} size={16} />{toastMsg.text}

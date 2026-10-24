@@ -541,7 +541,7 @@ won / superseded ones are skipped. A won proposal's row menu has **Change PO…*
 its sales order; issued invoices keep theirs). Sales Orders and Jobs have a **PO filter**; on Sales Orders it shows the
 PO's total and what's left to invoice, and on Jobs it includes closed jobs.
 
-**Copy Proposal** (the row menu, `CopyProposalModal` in `views/Proposals.jsx`): asks for a new job number and
+**Copy Proposal** (the copy icon on the proposal's row, beside Email / Print / Save / Edit, `CopyProposalModal` in `views/Proposals.jsx`): asks for a new job number and
 description, shows the number the copy will take (the customer's next free one for today), and offers a
 **duplicate machine reduction** — dollars or a percentage off — with the original price, the reduction and the new
 price before it saves. The copy is a fresh draft (rev 0, today, no PO / sales order / billed phases), saved at once
@@ -1058,6 +1058,13 @@ attachment name when one is emailed, and it is also written into the PDF's Title
 what Chrome's viewer offers in the Save / Print dialog for a PDF opened from a blob URL — the URL itself
 has no name to suggest. A pay-run's combined file is named the same way for one vendor and
 `Remittances - <date>` for several.
+
+**Invoices: Sent, not printed (since Rev 1.69).** The `invoices.printed` flag now means **sent to the customer** —
+the list's column, filter ("Not sent"), bulk actions (Mark Sent / Mark Not Sent) and "Mark all as sent" say so.
+**Emailing** an invoice ticks it (the row's Email, Select → Email, and Email on the open invoice — `onSent` /
+`onEmailed`); **printing or saving no longer does** (`App`'s DocumentView, the bulk print PdfView, the Tasks run's
+Save). A mailed or hand-delivered invoice is ticked by hand. The Tasks run's "Show printed / saved" list still tracks
+what was printed or saved in that run, locally. The notes below on "printed" describe the old meaning.
 
 **Marking an invoice printed by hand:** the Invoices list has a **Printed** column — a tick per row
 that is the control, not just the status. Ticking marks an invoice printed without printing it (one that

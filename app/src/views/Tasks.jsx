@@ -65,8 +65,6 @@ export default function TasksView({ db, actions, toast, openDoc, readOnly, go })
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob); a.download = filename; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-      // Saved to send is on its way out, the same as printed.
-      await actions.markInvoicePrinted(inv.id, true);
       markHandled(inv, "saved");
       toast(filename + " saved");
     } catch (e) { toast("Couldn't save the PDF: " + (e.message || e)); }

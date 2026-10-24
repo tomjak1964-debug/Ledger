@@ -11,7 +11,7 @@ import EmailModal from "./EmailModal.jsx";
 import { invoicePdf } from "../lib/invoicePdf.js";
 import { saveBlob } from "../lib/saveFile.js";
 
-export default function DocumentView({ kind, doc, contact, settings, onClose, onPrinted, autoPrint, db, toast, onEdit }) {
+export default function DocumentView({ kind, doc, contact, settings, onClose, onPrinted, onEmailed, autoPrint, db, toast, onEdit }) {
   // While a document overlay is open, flag the body so print hides the app
   // content behind it (otherwise the list page prints along with the document),
   // and make the tab title the document number: Print / Save PDF offers the
@@ -126,7 +126,7 @@ function InvoiceDoc({ inv, contact, settings, onClose, print, db, toast, onEdit 
       defaultTo={emailFor(db, inv.customerId, "invoice", inv.contactPersonId)}
       defaultSubject={`${isCredit ? "Credit Memo" : "Invoice"} ${inv.number} — ${settings.company}`}
       defaultBody={`Please find attached ${isCredit ? "credit memo" : "invoice"} ${inv.number}.\n\nThank you for your business.\n\n${settings.company}\n${settings.companyPhone || ""}`}
-      buildAttachment={() => invoicePdf(inv, db)}
+      buildAttachment={() => invoicePdf(inv, db)} onSent={onEmailed}
       onClose={() => setEmail(false)} toast={toast} />}
     {pages.map((rows, pi) => {
       const last = pi === pages.length - 1;

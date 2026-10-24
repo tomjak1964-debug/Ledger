@@ -365,6 +365,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
                   <MenuItem onClick={() => { close(); setDoc({ p, auto: "pdf" }); }}>Save PDF</MenuItem>
                   <MenuItem onClick={async () => { close(); try { await downloadProposalDocx(p, db); } catch (e) { toast("⚠ Word export failed: " + (e.message || e)); } }}>Save Word</MenuItem>
                 </>}</ActionMenu>
+                {!readOnly && <button className="btn ghost icon" title="Copy proposal — a new job from this one" onClick={() => setCopyOf(p)}><Ico d={ICONS.copy} size={16} /></button>}
                 {!readOnly && <button className="btn ghost icon" title="Edit" onClick={() => setEdit({ ...p, specs: { ...p.specs } })}><Ico d={ICONS.edit} size={16} /></button>}
                 {!readOnly && <PropMenu p={p} setStatus={setStatus} win={win} del={del} revise={revise} onPhases={() => setPhasesFor(p)} onCopy={() => setCopyOf(p)} onChangePo={() => changePo(p)} />}
               </td>
@@ -502,7 +503,6 @@ function PropMenu({ p, setStatus, win, del, revise, onPhases, onCopy, onChangePo
       {p.status === "won" && item("Invoice Phases…", onPhases, { accent: true })}
       {p.status === "won" && item("Change PO…", onChangePo)}
       {p.status !== "superseded" && item("New Revision", () => revise(p))}
-      {item("Copy Proposal…", onCopy)}
       {p.status !== "lost" && p.status !== "won" && p.status !== "superseded" && item("Mark as Lost", () => setStatus(p.id, "lost"))}
       {item("Delete", () => del(p.id), { danger: true })}
     </>;

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabaseClient.js";
-import { Field, PasswordInput } from "../components/ui.jsx";
+import { Field, PasswordInput, BrandMark } from "../components/ui.jsx";
 
 // Sign-in only. Accounts are provisioned by an admin (Settings → Users), who
 // hands new users their initial credentials — there is no public sign-up.
@@ -34,7 +34,7 @@ export default function SignIn() {
   if (forgot) return <div className="auth-wrap">
     <div className="auth-card">
       <div className="brand">
-        <div className="brand-mark">L</div>
+        <BrandMark />
         <div><div className="brand-name" style={{ color: "var(--ink)" }}>Ledger</div><div className="brand-sub">Quote → Cash</div></div>
       </div>
       <h2>Reset your password</h2>
@@ -54,7 +54,7 @@ export default function SignIn() {
   return <div className="auth-wrap">
     <div className="auth-card">
       <div className="brand">
-        <div className="brand-mark">L</div>
+        <BrandMark />
         <div><div className="brand-name" style={{ color: "var(--ink)" }}>Ledger</div><div className="brand-sub">Quote → Cash</div></div>
       </div>
       <h2>Sign in</h2>

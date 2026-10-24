@@ -186,3 +186,14 @@ export function MenuItem({ children, onClick, accent, danger }) {
   }}
     onMouseEnter={e => e.currentTarget.style.background = "#F3F6FA"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>{children}</button>;
 }
+
+// Ledger's mark, "Double Entry": two L's that lock into one square, like debits
+// and credits that balance. On the navy menu the tile is blue (the app icon,
+// public/logo.svg, is navy with a white and a blue L).
+export function BrandMark({ size = 30 }) {
+  return <svg width={size} height={size} viewBox="0 0 64 64" className="brand-mark" role="img" aria-label="Ledger">
+    <rect width="64" height="64" rx="14" fill="#1F6FEB"></rect>
+    <path d="M13 13 H24 V40 H51 V51 H13 Z" fill="#FFFFFF"></path>
+    <path d="M28 13 H51 V36 H40 V24 H28 Z" fill="#13233B"></path>
+  </svg>;
+}

@@ -29,9 +29,7 @@
       .wrap{max-width:960px;margin:0 auto;padding:0 22px}
       header{background:var(--ink);color:#fff}
       .bar{display:flex;align-items:center;gap:12px;padding:16px 0}
-      .mark{width:34px;height:34px;border-radius:9px;flex:none;display:grid;place-items:center;
-        background:linear-gradient(135deg,var(--accent),#5B9BFF);color:#fff;
-        font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:17px}
+      .mark{width:34px;height:34px;flex:none;display:block}
       .name{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:17px;line-height:1.1}
       .sub{font-size:11px;letter-spacing:.10em;text-transform:uppercase;color:#8FA1B8}
       .spacer{margin-left:auto}
@@ -69,7 +67,7 @@
   <body>
     <header>
       <div class="wrap bar">
-        <div class="mark">L</div>
+        <svg class="mark" viewBox="0 0 64 64" role="img" aria-label="Ledger"><rect width="64" height="64" rx="14" fill="#1F6FEB"/><path d="M13 13 H24 V40 H51 V51 H13 Z" fill="#FFFFFF"/><path d="M28 13 H51 V36 H40 V24 H28 Z" fill="#13233B"/></svg>
         <div>
           <div class="name">Ledger</div>
           <div class="sub">TMJ Engineering LLC</div>

@@ -7,7 +7,7 @@ import { useLedger } from "./lib/store.js";
 import { cls } from "./lib/helpers.js";
 import { invoiceStatus, paid, billBalance } from "./calc/ledger.js";
 import { NAV_AREA, currentMember, canRead, canWrite, isAdminRole } from "./lib/permissions.js";
-import { Ico, ICONS, Modal } from "./components/ui.jsx";
+import { Ico, ICONS, Modal, BrandMark } from "./components/ui.jsx";
 import DocumentView from "./components/DocumentView.jsx";
 import GlobalSearch from "./components/GlobalSearch.jsx";
 import Dashboard from "./views/Dashboard.jsx";
@@ -192,7 +192,7 @@ export default function App({ session }) {
     {navOpen && <div className="nav-scrim" onClick={() => setNavOpen(false)} />}
     <div className={cls("sidebar", navOpen && "open")}>
       <div className="brand">
-        <div className="brand-mark">L</div>
+        <BrandMark />
         <div><div className="brand-name">Ledger</div><div className="brand-sub">Quote → Cash</div></div>
       </div>
       <nav className="nav">

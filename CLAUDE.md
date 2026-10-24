@@ -686,6 +686,13 @@ token in the URL) straight to `/app`. The footer carries the shop's real address
 the same details go out as schema.org `Organization` JSON-LD — a contactable business is the single
 strongest signal against a false-positive listing, so keep both in step if they ever change.
 
+**The mark: "Double Entry"** (since Rev 1.71) — two L's locking into one square, like debits and credits that
+balance. `app/public/logo.svg` is the source (navy tile, white and blue L's); `node gen-icons.mjs` (in `app/`) renders
+every icon from it: `pwa-64/192/512`, the maskable and Apple icons (inset on full-bleed navy), `favicon.ico` (a 48px
+PNG in an ICO) and the Capacitor sources. In the navy sidebar and on the sign-in and landing pages the tile is blue
+with a white and a navy L (`BrandMark` in `components/ui.jsx`, inline in `index.html`). Change the mark in all
+three places.
+
 **Revision and updates:** the app carries **Rev X.yy** from `app/version.json` — bump `yy` for each
 shipped change the shop can see, `X` for a big one — and a **build** stamp (`__BUILD__`: build time plus
 the commit sha on Vercel) that vite fills in. `vite.config.js` also writes both to **`/version.json`** in

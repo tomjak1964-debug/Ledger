@@ -179,8 +179,12 @@ textarea.input.grow{min-height:0;resize:none;overflow:hidden;line-height:1.4;whi
 /* A control never runs wider than its field. A date input sizes itself to its own
    contents in Safari and could push past the column into the next one. */
 .field .input,.field .select,.field textarea.input{min-width:0;max-width:100%}
-input[type=date].input,input[type=month].input{min-width:0;display:block}
-@media (hover:hover) and (pointer:fine){ input[type=date].input,input[type=month].input{-webkit-appearance:none;appearance:none} }
+/* On every device, not only with a mouse: an iPad or iPhone otherwise draws the
+   date box at its own width and height, so it ran into the next field (Receive
+   Payment's Date over Method) and stood taller than its neighbours. */
+input[type=date].input,input[type=month].input{min-width:0;display:block;-webkit-appearance:none;appearance:none;
+  min-height:38px;line-height:1.25;text-align:left}
+input[type=date].input::-webkit-date-and-time-value,input[type=month].input::-webkit-date-and-time-value{text-align:left;margin:0}
 input[type=date].input::-webkit-datetime-edit{overflow:hidden;min-width:0}
 
 /* line items editor */

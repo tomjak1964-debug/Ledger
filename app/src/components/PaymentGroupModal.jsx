@@ -132,7 +132,7 @@ export default function PaymentGroupModal({ db, kind = "invoice", preselectParty
         {saving ? "Saving…" : (editing ? "Save " : "Record ") + money(net)}
       </button>
     </>}>
-    <div className="row">
+    <div className="field-grid">
       <Field label={L.party}><select className="select" value={partyId} disabled={editing} onChange={e => pickParty(e.target.value)}>
         <option value="">Select {L.party.toLowerCase()}…</option>{pickable(parties, partyId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
       </select></Field>

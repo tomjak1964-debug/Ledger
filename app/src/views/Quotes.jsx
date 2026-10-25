@@ -76,7 +76,7 @@ export default function QuotesView({ db, actions, toast, openDoc, readOnly }) {
               <td><Badge status={q.status} /></td>
               <td className="num">{money(t)}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                <button className="btn ghost icon" title="Print" onClick={() => openDoc("quote", q)}><Ico d={ICONS.print} size={16} /></button>
+                <button className="btn ghost icon" title="Print" onClick={() => openDoc("quote", q, { autoPrint: true })}><Ico d={ICONS.print} size={16} /></button>
                 {!readOnly && <button className="btn ghost icon" title="Edit" onClick={() => setEdit({ ...q })}><Ico d={ICONS.edit} size={16} /></button>}
                 {!readOnly && <QuoteMenu q={q} setStatus={setStatus} convert={convertToSO} del={del} />}
               </td>

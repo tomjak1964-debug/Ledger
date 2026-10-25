@@ -115,7 +115,7 @@ export default function ReceivablesView({ db, actions, toast, openDoc, readOnly 
                     onClick={() => setApplyTo({ customerId: inv.customerId, focusInvoiceId: inv.id })}>Apply Credit</button>}
                 {!readOnly && !credit && !done && od > 0 && <button className="btn ghost icon" title="Email payment reminder" onClick={() => setRemind(inv)}><Ico d={ICONS.mail} size={16} /></button>}
                 {!readOnly && credit && <button className="btn ghost icon" title="Edit credit note" onClick={() => setCreditNote(inv)}><Ico d={ICONS.edit} size={16} /></button>}
-                <button className="btn ghost icon" title="Print" onClick={() => openDoc("invoice", inv)}><Ico d={ICONS.print} size={16} /></button>
+                <button className="btn ghost icon" title="Print" onClick={() => openDoc("invoice", inv, { autoPrint: true })}><Ico d={ICONS.print} size={16} /></button>
               </td>
             </tr>;
           })}</tbody></table>}

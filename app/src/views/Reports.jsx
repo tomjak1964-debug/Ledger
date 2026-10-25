@@ -1,4 +1,6 @@
-import { Fragment, useState } from "react";
+import { Fragment, useState, useRef } from "react";
+import { printOrShare } from "../lib/printSupport.js";
+import { pagesToPdf } from "../lib/saveFile.js";
 import { money, fmtDate, todayISO, daysBetween, nameOf } from "../lib/helpers.js";
 import { balance, invoiceStatus } from "../calc/ledger.js";
 import { rangeFor, defaultCustom } from "../lib/dateRanges.js";
@@ -60,6 +62,7 @@ const CATEGORIES = [
 
 export default function ReportsView({ db }) {
   const [catKey, setCatKey] = useState("ar");
+  const reportRef = useRef();   // the report as it prints — an iPad's Print makes its PDF from this
   const [rptKey, setRptKey] = useState("");
   const [preset, setPreset] = useState("thisYear");
   const [custom, setCustom] = useState(defaultCustom);
@@ -111,11 +114,11 @@ export default function ReportsView({ db }) {
           <FilterBar
             preset={preset} onPreset={setPreset} custom={custom} onCustom={setCustom}
             partyKind={rpt.party} partyId={partyId} onParty={setPartyId} contacts={db.contacts}
-            right={<button className="btn" onClick={() => window.print()}><Ico d={ICONS.print} size={15} />Print</button>} />
+            right={<button className="btn" onClick={() => printOrShare(() => pagesToPdf([reportRef.current], { filename: `${rpt.label} ${asOf}.pdf`, title: rpt.label, fit: false }))}><Ico d={ICONS.print} size={15} />Print</button>} />
           {rpt.asOf && <p className="subtle no-print" style={{ margin: "-6px 0 14px" }}>
             Aging is calculated as of the end of the selected range ({fmtDate(asOf)}).
           </p>}
-          <rpt.Render db={db} from={from} to={to} asOf={asOf} partyId={partyId} rangeLabel={label} />
+          <div ref={reportRef}><rpt.Render db={db} from={from} to={to} asOf={asOf} partyId={partyId} rangeLabel={label} /></div>
         </>}
     </div>
   </div>;

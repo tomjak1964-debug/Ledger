@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { printOrShare, isIOS } from "../lib/printSupport.js";
 import { createPortal } from "react-dom";
 import DocActions from "../components/DocActions.jsx";
 import { pagesToPdf, saveBlob } from "../lib/saveFile.js";
@@ -745,28 +746,31 @@ function ProposalDoc({ p, db, onClose, toast, onEdit, auto }) {
   // The PDF is the document as it prints: a fixture proposal's two pages each
   // shrunk to fit a page; a system proposal runs on.
   const docRef = useRef();
+  const buildPdf = () => {
+    const pages = [...docRef.current.querySelectorAll(".prop-page")];
+    return pagesToPdf(pages.length ? pages : [docRef.current],
+      { filename: proposalFileStem(p) + ".pdf", title: proposalFileStem(p), fit: pages.length > 0 });
+  };
   const savePdf = async () => {
     setBusy(true);
-    try {
-      const pages = [...docRef.current.querySelectorAll(".prop-page")];
-      const { blob, filename } = await pagesToPdf(pages.length ? pages : [docRef.current],
-        { filename: proposalFileStem(p) + ".pdf", title: proposalFileStem(p), fit: pages.length > 0 });
-      saveBlob(blob, filename);
-    } catch (e) { toast("⚠ Couldn't make the PDF: " + (e.message || e)); }
+    try { const { blob, filename } = await buildPdf(); saveBlob(blob, filename); }
+    catch (e) { toast("⚠ Couldn't make the PDF: " + (e.message || e)); }
     setBusy(false);
   };
+  // On an iPad, Print hands that same PDF to the Share sheet (lib/printSupport.js).
+  const print = () => printOrShare(buildPdf);
   // Opened from a list's Print or Save PDF: once the pages have laid out, do
   // that one thing and close again.
   useEffect(() => {
     if (auto !== "print" && auto !== "pdf") return;
     const t = setTimeout(async () => {
-      if (auto === "print") window.print(); else await savePdf();
+      if (auto === "print") { print(); if (isIOS()) return; } else await savePdf();
       onClose();
     }, 400);
     return () => clearTimeout(t);
   }, []);   // eslint-disable-line react-hooks/exhaustive-deps
   return createPortal(<div className="doc-screen">
-    <DocActions onClose={onClose} onEdit={onEdit} onEmail={() => setEmail(true)} onPrint={() => window.print()} busy={busy}
+    <DocActions onClose={onClose} onEdit={onEdit} onEmail={() => setEmail(true)} onPrint={print} busy={busy}
       saves={[{ label: "Save PDF", hint: proposalFileStem(p) + ".pdf", run: savePdf }, { label: "Save Word", hint: proposalFileStem(p) + ".docx", run: word }]} />
     {email && <EmailModal docType="proposal"
       title={"Email · " + p.number}

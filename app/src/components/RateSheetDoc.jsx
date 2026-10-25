@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { printOrShare } from "../lib/printSupport.js";
 import { createPortal } from "react-dom";
 import { money, fmtDate } from "../lib/helpers.js";
 import { rateSheetConfig, rateRows, multLabel } from "../lib/rateSheet.js";
@@ -34,7 +35,7 @@ export default function RateSheetDoc({ settings, timeCategories, onClose, toast 
   };
 
   return createPortal(<div className="doc-screen">
-    <DocActions onClose={onClose} onEmail={() => setEmail(true)} onPrint={() => window.print()} busy={busy}
+    <DocActions onClose={onClose} onEmail={() => setEmail(true)} onPrint={() => printOrShare(pdf)} busy={busy}
       saves={[{ label: "Save PDF", hint: stem + ".pdf", run: savePdf }]} />
     {email && <EmailModal docType="ratesheet" title="Email · Rate Sheet" defaultTo=""
       defaultSubject={`${s.company || ""} rate sheet — effective ${fmtDate(rs.effectiveDate)}`}

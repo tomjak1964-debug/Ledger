@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
+import IOSPrintHost from "./components/IOSPrintHost.jsx";
 import { useUpdateNudge } from "./lib/version.js";
 import RevisionFoot from "./components/RevisionFoot.jsx";
 import ChangePassword from "./components/ChangePassword.jsx";
@@ -270,6 +271,7 @@ export default function App({ session }) {
       onEmailed={doc.kind === "invoice" ? () => actions.markInvoicePrinted(doc.doc.id, true) : undefined}
       autoPrint={doc.autoPrint} onClose={() => setDoc(null)} db={db} toast={toast}
       onEdit={doc.kind === "invoice" && canWrite(member, "invoices") ? () => { setEditRequest({ kind: "invoice", id: doc.doc.id }); setDoc(null); go("invoices"); } : undefined} />}
+    <IOSPrintHost toast={toast} />
     {toastMsg && <div className="toast"><Ico d={ICONS.check} size={16} />{toastMsg.text}
       {toastMsg.onAction && <button className="link-btn" style={{ color: "#7FB0FF", marginLeft: 10, fontWeight: 600 }}
         onClick={() => { toastMsg.onAction(); setToastMsg(null); }}>{toastMsg.actionLabel || "Undo"}</button>}

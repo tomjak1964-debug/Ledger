@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { printOrShare, isIOS } from "../lib/printSupport.js";
 import { money, fmtDate } from "../lib/helpers.js";
 import { emailFor, contactNameFor } from "../lib/people.js";
 import { lineTotals, paid, balance } from "../calc/ledger.js";
@@ -9,7 +10,7 @@ import { Ico, ICONS } from "./ui.jsx";
 import DocActions from "./DocActions.jsx";
 import EmailModal from "./EmailModal.jsx";
 import { invoicePdf } from "../lib/invoicePdf.js";
-import { saveBlob } from "../lib/saveFile.js";
+import { saveBlob, pagesToPdf } from "../lib/saveFile.js";
 
 export default function DocumentView({ kind, doc, contact, settings, onClose, onPrinted, onEmailed, autoPrint, db, toast, onEdit }) {
   // While a document overlay is open, flag the body so print hides the app
@@ -23,12 +24,17 @@ export default function DocumentView({ kind, doc, contact, settings, onClose, on
     if (doc?.number) document.title = doc.number;
     return () => { document.body.classList.remove("doc-open"); document.title = title; };
   }, [doc?.number]);
-  const print = () => { onPrinted?.(); window.print(); };
+  // On an iPad the PDF goes to the Share sheet (lib/printSupport.js): an
+  // invoice's own PDF, a quote's or PO's drawn from the page.
+  const build = kind === "invoice" ? (db ? () => invoicePdf(doc, db) : null)
+    : () => pagesToPdf([document.querySelector(".doc-screen .printable")], { filename: (doc.number || kind) + ".pdf", title: doc.number, fit: false });
+  const print = () => { onPrinted?.(); printOrShare(build); };
   // Opened just to print it: once the page has laid out, bring up the print
   // dialog, then close — window.print() returns when the dialog does.
   useEffect(() => {
     if (!autoPrint) return;
-    const t = setTimeout(() => { print(); onClose?.(); }, 250);
+    // An iPad keeps the document open while its PDF is made for the Share sheet.
+    const t = setTimeout(() => { print(); if (!isIOS()) onClose?.(); }, 250);
     return () => clearTimeout(t);
   }, []);   // eslint-disable-line react-hooks/exhaustive-deps
   if (kind === "invoice") return <InvoiceDoc inv={doc} contact={contact} settings={settings} onClose={onClose} print={print} db={db} toast={toast} onEdit={onEdit} />;

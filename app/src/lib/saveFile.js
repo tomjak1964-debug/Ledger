@@ -21,7 +21,8 @@ export async function pagesToPdf(elements, { filename, title, fit = true, margin
   const W = 8.5 - 2 * margin, H = 11 - 2 * margin;
   let first = true;
   for (const el of elements) {
-    const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false });
+    const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false,
+      ignoreElements: n => !!n.classList?.contains("no-print") });
     const img = canvas.toDataURL("image/jpeg", 0.92);
     const ratio = canvas.height / canvas.width;
     if (fit || W * ratio <= H) {

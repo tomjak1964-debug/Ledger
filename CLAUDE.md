@@ -721,6 +721,15 @@ the app comes back into view: *Rev 1.26 · ✓ Up to date*, or an **Update to Re
 newer build. Clicking the rev checks again (hover shows the build stamp); *Reload* throws away a copy that seems
 stuck. There is no Settings → Revision tab any more.
 
+**Printing on an iPad / iPhone** (`lib/printSupport.js`, `components/IOSPrintHost.jsx`): iOS ignores `window.print()`
+in a home-screen app, so every Print goes through `printOrShare(build)` — elsewhere it is the browser's print as before;
+on iOS it makes the document's PDF (`build`: the invoice's `invoicePdf()`, the report / quote / PO / proposal page via
+`pagesToPdf()`, the rate and banking sheets' `pdf()`, a ready blob for PdfView and remittances) and IOSPrintHost (one,
+mounted by App, above open documents) offers **Print…**, which opens the Share sheet with the PDF (Print, Save to
+Files, Mail, AirDrop) — from a tap, since iOS only opens it from one — and Save PDF. A list's print icon on iOS keeps
+the document open while the PDF is made. `pagesToPdf()` leaves out `.no-print` elements, as print does. A new Print
+button must call `printOrShare`, never `window.print()`.
+
 **Unsticking a cached copy:** the app is a PWA, so a browser can keep serving the build it cached.
 The foot of the menu shows the running rev, and its *Reload* / *Update to Rev X*
 unregister the service worker and clear the caches. For a device too stuck to reach that button,

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { printOrShare } from "../lib/printSupport.js";
 import { createPortal } from "react-dom";
 import { saveBlob } from "../lib/saveFile.js";
 import DocActions from "./DocActions.jsx";
@@ -16,8 +17,11 @@ export default function PdfView({ blob, filename, onClose, onPrinted, autoPrint 
   }, []);
   const print = () => {
     onPrinted?.();
-    try { frame.current.contentWindow.focus(); frame.current.contentWindow.print(); }
-    catch { window.open(url, "_blank"); }
+    // On an iPad, to the Share sheet (lib/printSupport.js); elsewhere the PDF's own print.
+    printOrShare(async () => ({ blob, filename }), () => {
+      try { frame.current.contentWindow.focus(); frame.current.contentWindow.print(); }
+      catch { window.open(url, "_blank"); }
+    });
   };
   return createPortal(<div className="doc-screen">
     <DocActions onClose={onClose} onPrint={print} saves={[{ label: "Save PDF", hint: filename, run: () => saveBlob(blob, filename) }]} />

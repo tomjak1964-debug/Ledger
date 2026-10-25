@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { printOrShare } from "../lib/printSupport.js";
 import { createPortal } from "react-dom";
 import { money, fmtDate } from "../lib/helpers.js";
 import { remittancePdf } from "../lib/remittance.js";
@@ -25,8 +26,11 @@ export default function RemittanceView({ args, onClose, onEdit, toast, autoPrint
   const { payment, vendor } = args;
   const print = () => {
     // The PDF's own print, so the page prints exactly as it saves.
-    try { frame.current.contentWindow.focus(); frame.current.contentWindow.print(); }
-    catch { window.open(url, "_blank"); }
+    // On an iPad, to the Share sheet (lib/printSupport.js); elsewhere the PDF's own print.
+    printOrShare(async () => ({ blob, filename }), () => {
+      try { frame.current.contentWindow.focus(); frame.current.contentWindow.print(); }
+      catch { window.open(url, "_blank"); }
+    });
   };
   return createPortal(<div className="doc-screen">
     <DocActions onClose={onClose} onEdit={onEdit} onEmail={() => setEmail(true)} onPrint={print}

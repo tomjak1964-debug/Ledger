@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { printOrShare } from "../lib/printSupport.js";
 import { createPortal } from "react-dom";
 import { fmtDate, todayISO } from "../lib/helpers.js";
 import DocActions from "./DocActions.jsx";
@@ -47,7 +48,7 @@ export default function BankingSheetDoc({ settings, bankInfo, onClose, toast }) 
   const missing = !b.bankName || !b.accountNumber || !b.achRouting;
 
   return createPortal(<div className="doc-screen">
-    <DocActions onClose={onClose} onEmail={() => setEmail(true)} onPrint={() => window.print()} busy={busy}
+    <DocActions onClose={onClose} onEmail={() => setEmail(true)} onPrint={() => printOrShare(pdf)} busy={busy}
       saves={[{ label: "Save PDF", hint: stem + ".pdf", run: savePdf }]} />
     {missing && <div className="no-print" style={{ maxWidth: 816, margin: "0 auto 10px", padding: "10px 14px", background: "var(--warn-wash)", borderRadius: 9 }}>
       The bank name, account number and ACH routing number aren't all filled in yet — add them under <b>Settings → Company → Banking Information</b> (it takes the Banking permission to see or change them).</div>}

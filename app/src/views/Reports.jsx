@@ -211,6 +211,8 @@ function AgedPayablesReport(p) { return <AgedReport {...p} kind="ap" />; }
 
 function AgedReport({ db, asOf, partyId, kind }) {
   const isAR = kind === "ar";
+  // Summary: a line per customer / vendor. Detail: every outstanding item under it.
+  const [detail, setDetail] = useState(false);
   const r0 = isAR ? agedReceivables(db, asOf) : agedPayables(db, asOf);
   const rows = partyId ? r0.rows.filter(x => x.key === partyId) : r0.rows;
   const totals = partyId
@@ -224,14 +226,55 @@ function AgedReport({ db, asOf, partyId, kind }) {
     who: x => nameOf(db, x.key), total: x => x.total,
     ...Object.fromEntries(cols.map(([k]) => [k, x => x[k]])),
   });
-  const exportCSV = () => downloadCSV(isAR ? "aged-receivables" : "aged-payables",
-    [who, ...cols.map(([, l]) => l), "Total"],
-    [...agedRows.map(x => [nameOf(db, x.key), ...cols.map(([k]) => x[k].toFixed(2)), x.total.toFixed(2)]),
-    ["TOTAL", ...cols.map(([k]) => totals[k].toFixed(2)), totals.total.toFixed(2)]]);
+  const docLabel = isAR ? "Invoice" : "Bill / Ref";
+  const exportCSV = () => detail
+    ? downloadCSV((isAR ? "aged-receivables" : "aged-payables") + "-detail",
+      [who, docLabel, "Date", "Due", "Days Overdue", ...cols.map(([, l]) => l), "Balance"],
+      [...agedRows.flatMap(x => x.docs.map(d => [nameOf(db, x.key), d.number, d.date, d.due, d.days, ...cols.map(([k]) => (d.bucket === k ? d.balance.toFixed(2) : "")), d.balance.toFixed(2)])),
+      ["TOTAL", "", "", "", "", ...cols.map(([k]) => totals[k].toFixed(2)), totals.total.toFixed(2)]])
+    : downloadCSV(isAR ? "aged-receivables" : "aged-payables",
+      [who, ...cols.map(([, l]) => l), "Total"],
+      [...agedRows.map(x => [nameOf(db, x.key), ...cols.map(([k]) => x[k].toFixed(2)), x.total.toFixed(2)]),
+      ["TOTAL", ...cols.map(([k]) => totals[k].toFixed(2)), totals.total.toFixed(2)]]);
+  const cell = (k, v) => <td key={k} className="num" style={k !== "cur" && v > 0 ? { color: "var(--neg)" } : {}}>{Math.abs(v) > 0.005 ? money(v) : "—"}</td>;
   return <ReportCard title={title} rangeLabel={"As of " + fmtDate(asOf)}
-    right={<button className="btn sm no-print" onClick={exportCSV}>Export CSV</button>}>
+    right={<>
+      <div className="pill-tabs no-print">
+        <button className={detail ? "" : "on"} onClick={() => setDetail(false)}>Summary</button>
+        <button className={detail ? "on" : ""} onClick={() => setDetail(true)}>Detail</button>
+      </div>
+      <button className="btn sm no-print" onClick={exportCSV}>Export CSV</button></>}>
     {rows.length === 0
       ? <Empty icon={isAR ? ICONS.ar : ICONS.ap} title="Nothing outstanding" msg={isAR ? "No customer owed you money on this date." : "You owed no vendor bills on this date."} />
+      : detail
+      ? <table><thead><tr>
+        <SortTh label={who} col="who" sort={sort} onSort={onSort} />
+        <th>{docLabel}</th><th>Date</th><th>Due</th><th className="num">Days Overdue</th>
+        {cols.map(([k, l]) => <SortTh key={k} label={l} col={k} sort={sort} onSort={onSort} num />)}
+        <SortTh label="Balance" col="total" sort={sort} onSort={onSort} num /></tr></thead>
+        <tbody>
+          {agedRows.map(x => [
+            ...x.docs.map((d, i) => <tr key={x.key + d.id}>
+              <td style={{ fontWeight: 600 }}>{i === 0 ? nameOf(db, x.key) : ""}</td>
+              <td className="doc-id">{d.number || "—"}{d.balance < 0 && <span className="subtle" style={{ fontWeight: 400 }}> · credit</span>}</td>
+              <td className="subtle nowrap">{fmtDate(d.date)}</td>
+              <td className="subtle nowrap">{fmtDate(d.due)}</td>
+              <td className="num" style={d.days > 0 ? { color: "var(--neg)" } : {}}>{d.days > 0 ? d.days : "—"}</td>
+              {cols.map(([k]) => cell(k, d.bucket === k ? d.balance : 0))}
+              <td className="num">{money(d.balance)}</td>
+            </tr>),
+            <tr key={x.key + "-sub"} style={{ background: "var(--canvas)" }}>
+              <td colSpan={5} style={{ fontWeight: 600 }}>{nameOf(db, x.key)} total</td>
+              {cols.map(([k]) => <td key={k} className="num" style={{ fontWeight: 600 }}>{Math.abs(x[k]) > 0.005 ? money(x[k]) : "—"}</td>)}
+              <td className="num" style={{ fontWeight: 700 }}>{money(x.total)}</td>
+            </tr>,
+          ])}
+          <tr>
+            <td colSpan={5} style={{ fontWeight: 700 }}>Total</td>
+            {cols.map(([k]) => <td key={k} className="num" style={{ fontWeight: 700 }}>{money(totals[k])}</td>)}
+            <td className="num" style={{ fontWeight: 700 }}>{money(totals.total)}</td>
+          </tr>
+        </tbody></table>
       : <table><thead><tr>
         <SortTh label={who} col="who" sort={sort} onSort={onSort} />
         {cols.map(([k, l]) => <SortTh key={k} label={l} col={k} sort={sort} onSort={onSort} num />)}
@@ -239,7 +282,7 @@ function AgedReport({ db, asOf, partyId, kind }) {
         <tbody>
           {agedRows.map(x => <tr key={x.key}>
             <td style={{ fontWeight: 600 }}>{nameOf(db, x.key)}</td>
-            {cols.map(([k]) => <td key={k} className="num" style={k !== "cur" && x[k] > 0 ? { color: "var(--neg)" } : {}}>{x[k] > 0 ? money(x[k]) : "—"}</td>)}
+            {cols.map(([k]) => cell(k, x[k]))}
             <td className="num" style={{ fontWeight: 600 }}>{money(x.total)}</td>
           </tr>)}
           <tr>

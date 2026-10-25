@@ -639,6 +639,13 @@ whose number doesn't change is untouched (three invoices issued unsuffixed befor
 device saved Barry's first proposal of 2026-10-21 as PROP-VG261021 — hence this, and `updateOnStart()` below.
 Venture Global's code was set to VG on 2026-10-18; most other customers have none yet.
 
+**Aged Receivables / Aged Payables** (`agedReceivables()` / `agedPayables()` → `agedBy()` in `calc/reports.js`, `AgedReport`
+in `views/Reports.jsx`): **Summary** is a line per customer / vendor in Current · 1–30 · 31–60 · 61–90 · 90+; **Detail**
+lists every outstanding document under its party (number, date, due, days overdue, the amount in its bucket, balance)
+with a subtotal per party; CSV exports the view on screen. Balances as of the report date subtract cash **and
+discounts** (`settledAsOf`), and an unapplied credit note counts as a negative in Current, so the A/R total is what
+Receivables shows open (checked equal, 35 items, 2026-10-24).
+
 **Payment terms live on the contact** (`src/lib/terms.js`, migration 019). Each customer and vendor
 carries `terms` (days), `discountPct` and `discountDays`; `terms` blank means "use the company default"
 in Settings, so nothing changes for a contact nobody has set up. `termsLabel()` renders them the way the

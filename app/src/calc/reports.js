@@ -84,33 +84,42 @@ export function expensesByCategory(db, from, to) {
    Rows are customers/vendors, columns are aging buckets. Balances are
    reconstructed as of the given date: only payments dated on or before it
    count, and documents dated after it are excluded entirely. */
-function agedBy(items, keyOf, dueOf, balOf, asOf) {
+// Each row also carries `docs`: every outstanding document behind it, with its
+// days overdue and bucket — the report's Detail view. An unapplied credit (a
+// negative balance, `credits` on) counts in Current, taking the party's total
+// down the way it does in Receivables.
+function agedBy(items, keyOf, dueOf, balOf, asOf, { numOf = () => "", credits = false } = {}) {
   const m = {};
   const totals = { cur: 0, d30: 0, d60: 0, d90: 0, d90p: 0, total: 0 };
   items.forEach(it => {
-    const bal = balOf(it); if (bal <= 0.005) return;
+    const bal = Math.round(balOf(it) * 100) / 100;
+    if (bal <= 0.005 && !(credits && bal < -0.005)) return;
     const k = keyOf(it);
-    m[k] ||= { key: k, cur: 0, d30: 0, d60: 0, d90: 0, d90p: 0, total: 0 };
+    m[k] ||= { key: k, cur: 0, d30: 0, d60: 0, d90: 0, d90p: 0, total: 0, docs: [] };
     const due = dueOf(it);
     const od = due ? daysBetween(due, asOf) : 0;
-    const b = od <= 0 ? "cur" : od <= 30 ? "d30" : od <= 60 ? "d60" : od <= 90 ? "d90" : "d90p";
+    const b = bal < 0 || od <= 0 ? "cur" : od <= 30 ? "d30" : od <= 60 ? "d60" : od <= 90 ? "d90" : "d90p";
     m[k][b] += bal; m[k].total += bal; totals[b] += bal; totals.total += bal;
+    m[k].docs.push({ id: it.id, number: numOf(it), date: it.date || "", due: due || "", days: bal < 0 ? 0 : Math.max(0, od), bucket: b, balance: bal });
   });
-  return { rows: Object.values(m).sort((a, b) => b.total - a.total), totals };
+  Object.values(m).forEach(r => r.docs.sort((a, b) => (a.due || a.date).localeCompare(b.due || b.date)));
+  return { rows: Object.values(m).filter(r => Math.abs(r.total) > 0.005 || r.docs.length).sort((a, b) => b.total - a.total), totals };
 }
 
+// What settled a document by a date: cash plus any discount taken (§6) — a
+// discount is not money still owed.
+const settledAsOf = (doc, asOf) => sum((doc.payments || []).filter(p => !p.date || p.date <= asOf), p => (Number(p.amount) || 0) + (Number(p.discount) || 0));
+
 export function agedReceivables(db, asOf) {
-  const balAsOf = inv => lineTotals(inv.lineItems, inv.taxRate).total
-    - sum((inv.payments || []).filter(p => !p.date || p.date <= asOf), p => Number(p.amount) || 0);
+  const balAsOf = inv => lineTotals(inv.lineItems, inv.taxRate).total - settledAsOf(inv, asOf);
   const items = db.invoices.filter(i => !i.date || i.date <= asOf);
-  return agedBy(items, i => i.customerId || "", i => i.dueDate, balAsOf, asOf);
+  return agedBy(items, i => i.customerId || "", i => i.dueDate, balAsOf, asOf, { numOf: i => i.number || "", credits: true });
 }
 
 export function agedPayables(db, asOf) {
-  const balAsOf = b => (Number(b.amount) || 0)
-    - sum((b.payments || []).filter(p => !p.date || p.date <= asOf), p => Number(p.amount) || 0);
+  const balAsOf = b => (Number(b.amount) || 0) - settledAsOf(b, asOf);
   const items = db.bills.filter(b => !b.date || b.date <= asOf);
-  return agedBy(items, b => b.vendorId || "", b => b.dueDate, balAsOf, asOf);
+  return agedBy(items, b => b.vendorId || "", b => b.dueDate, balAsOf, asOf, { numOf: b => b.ref || b.number || "" });
 }
 
 // Month-by-month cash flow: income (payments received) vs money out

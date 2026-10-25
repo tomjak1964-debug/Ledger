@@ -727,7 +727,10 @@ on iOS it makes the document's PDF (`build`: the invoice's `invoicePdf()`, the r
 `pagesToPdf()`, the rate and banking sheets' `pdf()`, a ready blob for PdfView and remittances) and IOSPrintHost (one,
 mounted by App, above open documents) offers **Print…**, which opens the Share sheet with the PDF (Print, Save to
 Files, Mail, AirDrop) — from a tap, since iOS only opens it from one — and Save PDF. A list's print icon on iOS keeps
-the document open while the PDF is made. `pagesToPdf()` leaves out `.no-print` elements, as print does. A new Print
+the document open while the PDF is made. `pagesToPdf()` leaves out `.no-print` elements, as print does; with `width` (reports 1060, quotes / POs 816) it lays the
+copy it draws out at that width as on a desktop (`windowWidth`), with nothing inside it scrolling or clipped — an iPad
+cut wide report tables off at the screen edge — and a run-on PDF breaks each page on a clean line (a blank band or a row
+rule, found in the bottom sixth of the page, the card's side borders ignored), so no row is cut in two. A new Print
 button must call `printOrShare`, never `window.print()`.
 
 **Unsticking a cached copy:** the app is a PWA, so a browser can keep serving the build it cached.

@@ -27,7 +27,7 @@ export default function DocumentView({ kind, doc, contact, settings, onClose, on
   // On an iPad the PDF goes to the Share sheet (lib/printSupport.js): an
   // invoice's own PDF, a quote's or PO's drawn from the page.
   const build = kind === "invoice" ? (db ? () => invoicePdf(doc, db) : null)
-    : () => pagesToPdf([document.querySelector(".doc-screen .printable")], { filename: (doc.number || kind) + ".pdf", title: doc.number, fit: false });
+    : () => pagesToPdf([document.querySelector(".doc-screen .printable")], { filename: (doc.number || kind) + ".pdf", title: doc.number, fit: false, width: 816 });
   const print = () => { onPrinted?.(); printOrShare(build); };
   // Opened just to print it: once the page has laid out, bring up the print
   // dialog, then close — window.print() returns when the dialog does.

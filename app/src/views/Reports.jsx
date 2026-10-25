@@ -114,7 +114,7 @@ export default function ReportsView({ db }) {
           <FilterBar
             preset={preset} onPreset={setPreset} custom={custom} onCustom={setCustom}
             partyKind={rpt.party} partyId={partyId} onParty={setPartyId} contacts={db.contacts}
-            right={<button className="btn" onClick={() => printOrShare(() => pagesToPdf([reportRef.current], { filename: `${rpt.label} ${asOf}.pdf`, title: rpt.label, fit: false }))}><Ico d={ICONS.print} size={15} />Print</button>} />
+            right={<button className="btn" onClick={() => printOrShare(() => pagesToPdf([reportRef.current], { filename: `${rpt.label} ${asOf}.pdf`, title: rpt.label, fit: false, width: 1060 }))}><Ico d={ICONS.print} size={15} />Print</button>} />
           {rpt.asOf && <p className="subtle no-print" style={{ margin: "-6px 0 14px" }}>
             Aging is calculated as of the end of the selected range ({fmtDate(asOf)}).
           </p>}

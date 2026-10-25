@@ -1,6 +1,10 @@
 import { Fragment, useState, useRef } from "react";
-import { printOrShare } from "../lib/printSupport.js";
-import { pagesToPdf } from "../lib/saveFile.js";
+import { printOrShare, isIOS } from "../lib/printSupport.js";
+import { saveBlob } from "../lib/saveFile.js";
+import { reportPdf } from "../lib/reportPdf.js";
+import { emailFor } from "../lib/people.js";
+import PdfView from "../components/PdfView.jsx";
+import EmailModal from "../components/EmailModal.jsx";
 import { money, fmtDate, todayISO, daysBetween, nameOf } from "../lib/helpers.js";
 import { balance, invoiceStatus } from "../calc/ledger.js";
 import { rangeFor, defaultCustom } from "../lib/dateRanges.js";
@@ -60,9 +64,12 @@ const CATEGORIES = [
   { key: "company", label: "Company Reports", icon: ICONS.settings, blurb: "Company-wide lists and settings.", reports: [] },
 ];
 
-export default function ReportsView({ db }) {
+export default function ReportsView({ db, toast }) {
   const [catKey, setCatKey] = useState("ar");
-  const reportRef = useRef();   // the report as it prints — an iPad's Print makes its PDF from this
+  const reportRef = useRef();   // the report as shown — its PDF (lib/reportPdf.js) is drawn from its tables
+  const [pdfView, setPdfView] = useState(null);   // { blob, filename } on screen with Print / Save
+  const [emailing, setEmailing] = useState(false);
+  const [making, setMaking] = useState(false);
   const [rptKey, setRptKey] = useState("");
   const [preset, setPreset] = useState("thisYear");
   const [custom, setCustom] = useState(defaultCustom);
@@ -76,6 +83,18 @@ export default function ReportsView({ db }) {
 
   const asOf = rpt?.asOf ? (to || todayISO()) : undefined;
   const label = rpt?.asOf ? "As of " + fmtDate(asOf) : rangeLabel(from, to);
+  // The report's PDF: letterhead, title, date and filter on every page, real
+  // tables, "Page n of m" footers (lib/reportPdf.js).
+  const partyName = partyId ? nameOf(db, partyId) : "";
+  const pdfName = () => [rpt?.label, partyName, rpt?.asOf ? asOf : (to || todayISO())].filter(Boolean).join(" ") + ".pdf";
+  const buildPdf = () => reportPdf(reportRef.current, { title: rpt?.label, subtitle: label, filter: partyName, settings: db.settings, filename: pdfName() });
+  const withPdf = async (fn) => {
+    setMaking(true);
+    try { fn(await buildPdf()); } catch (e) { toast?.("⚠ Couldn't make the PDF: " + (e.message || e)); }
+    setMaking(false);
+  };
+  const printReport = () => (isIOS() ? printOrShare(buildPdf) : withPdf(setPdfView));
+  const savePdf = () => withPdf(({ blob, filename }) => saveBlob(blob, filename));
 
   // The category rail folds away while a report is open, so the report has
   // the page; its Back brings the rail out again.
@@ -114,13 +133,23 @@ export default function ReportsView({ db }) {
           <FilterBar
             preset={preset} onPreset={setPreset} custom={custom} onCustom={setCustom}
             partyKind={rpt.party} partyId={partyId} onParty={setPartyId} contacts={db.contacts}
-            right={<button className="btn" onClick={() => printOrShare(() => pagesToPdf([reportRef.current], { filename: `${rpt.label} ${asOf}.pdf`, title: rpt.label, fit: false, width: 1060 }))}><Ico d={ICONS.print} size={15} />Print</button>} />
+            right={<span style={{ display: "inline-flex", gap: 8, flexWrap: "wrap" }}>
+              <button className="btn" disabled={making} onClick={() => setEmailing(true)}><Ico d={ICONS.mail} size={15} />Email</button>
+              <button className="btn" disabled={making} onClick={savePdf}><Ico d={ICONS.download} size={15} />Save PDF</button>
+              <button className="btn" disabled={making} onClick={printReport}><Ico d={ICONS.print} size={15} />{making ? "Preparing…" : "Print"}</button>
+            </span>} />
           {rpt.asOf && <p className="subtle no-print" style={{ margin: "-6px 0 14px" }}>
             Aging is calculated as of the end of the selected range ({fmtDate(asOf)}).
           </p>}
           <div ref={reportRef}><rpt.Render db={db} from={from} to={to} asOf={asOf} partyId={partyId} rangeLabel={label} /></div>
         </>}
     </div>
+    {pdfView && <PdfView blob={pdfView.blob} filename={pdfView.filename} autoPrint onClose={() => setPdfView(null)} />}
+    {emailing && rpt && <EmailModal docType="invoice" title={"Email · " + rpt.label}
+      defaultTo={partyId ? emailFor(db, partyId, "invoice") : ""}
+      defaultSubject={`${rpt.label}${partyName ? " — " + partyName : ""} · ${label} — ${db.settings.company || ""}`}
+      defaultBody={`Hello,\n\nPlease find attached our ${rpt.label.toLowerCase()}${partyName ? " for " + partyName : ""} (${label.replace(/^As of/, "as of")}).\n\nRegards,\n${db.settings.company || ""}\n${db.settings.companyPhone || ""}`}
+      buildAttachment={buildPdf} onClose={() => setEmailing(false)} toast={toast || (() => {})} />}
   </div>;
 }
 

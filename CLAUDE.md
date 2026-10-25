@@ -721,6 +721,15 @@ the app comes back into view: *Rev 1.26 · ✓ Up to date*, or an **Update to Re
 newer build. Clicking the rev checks again (hover shows the build stamp); *Reload* throws away a copy that seems
 stuck. There is no Settings → Revision tab any more.
 
+**Reports print as real documents** (`lib/reportPdf.js`): a report's Print, **Save PDF** and **Email** (Reports' toolbar)
+make a jsPDF + autotable document from the report's own tables (`reportRef` around `rpt.Render`) — not a picture: text
+you can select, the TMJ logo and letterhead with the report's title, its date / as-of and the customer or vendor it's
+filtered to at the head of **every page**, column headings repeated on each page, and a footer of company · printed
+date · **Page n of m**. Stat tiles become a summary strip; each table keeps the screen's alignment and weight
+(amounts right, totals and shaded subtotals bold / shaded, document numbers in courier); `.no-print` controls, buttons
+and inputs are left out; more than eight columns goes landscape. On a computer Print opens it in PdfView and the
+printer dialog; on an iPad the Share sheet. Email sends it from invoices@, to the filtered customer's invoice contact.
+
 **Printing on an iPad / iPhone** (`lib/printSupport.js`, `components/IOSPrintHost.jsx`): iOS ignores `window.print()`
 in a home-screen app, so every Print goes through `printOrShare(build)` — elsewhere it is the browser's print as before;
 on iOS it makes the document's PDF (`build`: the invoice's `invoicePdf()`, the report / quote / PO / proposal page via

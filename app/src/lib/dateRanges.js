@@ -8,7 +8,7 @@ const lastOf = (y, m) => `${y}-${pad2(m + 1)}-${pad2(new Date(y, m + 1, 0).getDa
 export const RANGE_PRESETS = [
   ["thisMonth", "This Month"], ["lastMonth", "Last Month"],
   ["thisQuarter", "This Quarter"], ["lastQuarter", "Last Quarter"],
-  ["thisYear", "This Year"], ["lastYear", "Last Year"],
+  ["ytd", "Year to Date"], ["thisYear", "This Year"], ["lastYear", "Last Year"],
   ["range", "Range…"], ["all", "All Time"],
 ];
 
@@ -23,6 +23,7 @@ export function rangeFor(preset, custom) {
       const q = Math.floor(m / 3) * 3 - 3;
       return q < 0 ? [firstOf(y - 1, 9), lastOf(y - 1, 11)] : [firstOf(y, q), lastOf(y, q + 2)];
     }
+    case "ytd": return [`${y}-01-01`, todayISO()];
     case "thisYear": return [`${y}-01-01`, `${y}-12-31`];
     case "lastYear": return [`${y - 1}-01-01`, `${y - 1}-12-31`];
     case "range": return [custom?.from || "", custom?.to || ""];

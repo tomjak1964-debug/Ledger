@@ -736,6 +736,11 @@ date · **Page n of m**. Stat tiles become a summary strip; each table keeps the
 and inputs are left out; more than eight columns goes landscape. On a computer Print opens it in PdfView and the
 printer dialog; on an iPad the Share sheet. Email sends it from invoices@, to the filtered customer's invoice contact.
 
+**Reports open on Year to Date** (`ytd` in `lib/dateRanges.js` — Jan 1 through today, a preset every date filter
+now offers); each report opened starts there. **Headings name who the report covers:** a report with a customer /
+vendor filter heads its card, and every page of its PDF, with *Customer: X* / *Vendor: X*, or *All customers* /
+*All vendors* when none is picked (`partyLine` in `ReportsView`, passed into the card's `rangeLabel`).
+
 **Printing on an iPad / iPhone** (`lib/printSupport.js`, `components/IOSPrintHost.jsx`): iOS ignores `window.print()`
 in a home-screen app, so every Print goes through `printOrShare(build)` — elsewhere it is the browser's print as before;
 on iOS it makes the document's PDF (`build`: the invoice's `invoicePdf()`, the report / quote / PO / proposal page via

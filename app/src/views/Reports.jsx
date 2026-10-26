@@ -58,12 +58,11 @@ const CATEGORIES = [
   { key: "payroll", label: "Payroll", icon: ICONS.contacts, blurb: "Wages and payroll taxes.", reports: [] },
   { key: "gl", label: "General Ledger", icon: ICONS.catalog, blurb: "Account activity and the trial balance, posted from the documents and the journal entries booked by hand.", reports: ["gl", "tb"] },
   { key: "financial", label: "Financial Statements", icon: ICONS.reports, blurb: "The balance sheet, the income statement, cash-basis profit and loss, and cash in versus cash out.", reports: ["bs", "is", "pl", "ie"] },
-  { key: "company", label: "Company", icon: ICONS.mail, blurb: "What went out of Ledger: every email sent, to whom, and what was attached.", reports: ["emails"] },
   { key: "inventory", label: "Inventory", icon: ICONS.catalog, blurb: "Stock on hand and item movement.", reports: [] },
   { key: "jobs", label: "Job Reports", icon: ICONS.job, blurb: "Where each job stands, and what it cost against what it was sold for.", reports: ["jobTracking", "proposals", "jobCosting"] },
   { key: "recon", label: "Account Reconciliation", icon: ICONS.check, blurb: "Bank statements against the register.", reports: ["reconSummary"] },
   { key: "time", label: "Time/Expense Reports", icon: ICONS.clock, blurb: "Hours logged and business spending.", reports: ["expenses"] },
-  { key: "company", label: "Company Reports", icon: ICONS.settings, blurb: "Company-wide lists and settings.", reports: [] },
+  { key: "company", label: "Company Reports", icon: ICONS.mail, blurb: "Company-wide lists — every email sent from Ledger, to whom, and what was attached.", reports: ["emails"] },
 ];
 
 export default function ReportsView({ db, toast }) {
@@ -73,7 +72,8 @@ export default function ReportsView({ db, toast }) {
   const [emailing, setEmailing] = useState(false);
   const [making, setMaking] = useState(false);
   const [rptKey, setRptKey] = useState("");
-  const [preset, setPreset] = useState("thisYear");
+  // Every report opens on Year to Date (Jan 1 through today).
+  const [preset, setPreset] = useState("ytd");
   const [custom, setCustom] = useState(defaultCustom);
   const [partyId, setPartyId] = useState("");
 
@@ -81,15 +81,18 @@ export default function ReportsView({ db, toast }) {
   const rpt = REPORTS[rptKey];
   const [from, to] = rangeFor(preset, custom);
   const pickCat = (k) => { setCatKey(k); setRptKey(""); };
-  const openReport = (k) => { setRptKey(k); setPartyId(""); };
+  const openReport = (k) => { setRptKey(k); setPartyId(""); setPreset("ytd"); };
 
   const asOf = rpt?.asOf ? (to || todayISO()) : undefined;
   const label = rpt?.asOf ? "As of " + fmtDate(asOf) : rangeLabel(from, to);
   // The report's PDF: letterhead, title, date and filter on every page, real
   // tables, "Page n of m" footers (lib/reportPdf.js).
   const partyName = partyId ? nameOf(db, partyId) : "";
+  // Who the report covers, for its headings: the customer / vendor picked, or all of them.
+  const partyLine = rpt?.party ? (partyName ? (rpt.party === "vendor" ? "Vendor: " : "Customer: ") + partyName : (rpt.party === "vendor" ? "All vendors" : "All customers")) : "";
+  const headLabel = [label, partyLine].filter(Boolean).join(" · ");
   const pdfName = () => [rpt?.label, partyName, rpt?.asOf ? asOf : (to || todayISO())].filter(Boolean).join(" ") + ".pdf";
-  const buildPdf = () => reportPdf(reportRef.current, { title: rpt?.label, subtitle: label, filter: partyName, settings: db.settings, filename: pdfName() });
+  const buildPdf = () => reportPdf(reportRef.current, { title: rpt?.label, subtitle: label, filter: partyLine, settings: db.settings, filename: pdfName() });
   const withPdf = async (fn) => {
     setMaking(true);
     try { fn(await buildPdf()); } catch (e) { toast?.("⚠ Couldn't make the PDF: " + (e.message || e)); }
@@ -143,7 +146,7 @@ export default function ReportsView({ db, toast }) {
           {rpt.asOf && <p className="subtle no-print" style={{ margin: "-6px 0 14px" }}>
             Aging is calculated as of the end of the selected range ({fmtDate(asOf)}).
           </p>}
-          <div ref={reportRef}><rpt.Render db={db} from={from} to={to} asOf={asOf} partyId={partyId} rangeLabel={label} /></div>
+          <div ref={reportRef}><rpt.Render db={db} from={from} to={to} asOf={asOf} partyId={partyId} rangeLabel={headLabel} partyLine={partyLine} /></div>
         </>}
     </div>
     {pdfView && <PdfView blob={pdfView.blob} filename={pdfView.filename} autoPrint onClose={() => setPdfView(null)} />}
@@ -243,7 +246,7 @@ function RegisterReport({ db, from, to, partyId, rangeLabel: label, kind }) {
 function AgedReceivablesReport(p) { return <AgedReport {...p} kind="ar" />; }
 function AgedPayablesReport(p) { return <AgedReport {...p} kind="ap" />; }
 
-function AgedReport({ db, asOf, partyId, kind }) {
+function AgedReport({ db, asOf, partyId, kind, rangeLabel: label }) {
   const isAR = kind === "ar";
   // Summary: a line per customer / vendor. Detail: every outstanding item under it.
   const [detail, setDetail] = useState(false);
@@ -271,7 +274,7 @@ function AgedReport({ db, asOf, partyId, kind }) {
       [...agedRows.map(x => [nameOf(db, x.key), ...cols.map(([k]) => x[k].toFixed(2)), x.total.toFixed(2)]),
       ["TOTAL", ...cols.map(([k]) => totals[k].toFixed(2)), totals.total.toFixed(2)]]);
   const cell = (k, v) => <td key={k} className="num" style={k !== "cur" && v > 0 ? { color: "var(--neg)" } : {}}>{Math.abs(v) > 0.005 ? money(v) : "—"}</td>;
-  return <ReportCard title={title} rangeLabel={"As of " + fmtDate(asOf)}
+  return <ReportCard title={title} rangeLabel={label || "As of " + fmtDate(asOf)}
     right={<>
       <div className="pill-tabs no-print">
         <button className={detail ? "" : "on"} onClick={() => setDetail(false)}>Summary</button>
@@ -729,7 +732,7 @@ function ReconciliationSummary({ db, from, to }) {
    For the calendar year the range ends in: every vendor marked 1099-NEC or
    1099-MISC, its address and tax id, each payment made that year with its
    check or reference number, the total, and whether the $600 limit was met. */
-function Vendor1099Report({ db, to, partyId }) {
+function Vendor1099Report({ db, to, partyId, partyLine }) {
   const year = (to || todayISO()).slice(0, 4);
   const r0 = vendor1099(db, year);
   const rows = partyId ? r0.rows.filter(x => x.vendor.id === partyId) : r0.rows;
@@ -749,7 +752,7 @@ function Vendor1099Report({ db, to, partyId }) {
       <div className="stat"><div className="lbl">1099 Vendors Paid</div><div className="val mono">{rows.length}</div><div className="meta">{rows.filter(x => x.limitMet).length} at or over {money(TEN99_LIMIT)} · {setup} marked for 1099s</div></div>
       <div className="stat"><div className="lbl">Paid</div><div className="val mono neg">{money(rows.reduce((t, x) => t + x.total, 0))}</div><div className="meta">cash paid to 1099 vendors in {year}</div></div>
     </div>
-    <ReportCard title={"1099 Vendor Report — " + year} rangeLabel={"For the year " + year} right={<>
+    <ReportCard title={"1099 Vendor Report — " + year} rangeLabel={["For the year " + year, partyLine].filter(Boolean).join(" · ")} right={<>
       <div className="pill-tabs no-print">
         <button className={detail ? "" : "on"} onClick={() => setDetail(false)}>Summary</button>
         <button className={detail ? "on" : ""} onClick={() => setDetail(true)}>Detail</button>

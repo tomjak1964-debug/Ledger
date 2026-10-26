@@ -704,7 +704,10 @@ balance. `app/public/logo.svg` is the source (navy tile, white and blue L's); `n
 every icon from it: `pwa-64/192/512`, the maskable and Apple icons (inset on full-bleed navy), `favicon.ico` (a 48px
 PNG in an ICO) and the Capacitor sources. In the navy sidebar and on the sign-in and landing pages the tile is blue
 with a white and a navy L (`BrandMark` in `components/ui.jsx`, inline in `index.html`). Change the mark in all
-three places.
+three places. **Icon files carry a version in their name** (`pwa-192x192-v2.png`, `favicon-v2.ico`…, since Rev 1.79):
+an installed app (Chrome / Edge on Windows — the taskbar and Start menu) only replaces its icon when the manifest names
+a different file, so a new mark means new file names (`-v3`) in `gen-icons.mjs`, `vite.config.js` and both `index.html`.
+`favicon.ico` stays as a copy for browsers that ask for it by default.
 
 **Revision and updates:** the app carries **Rev X.yy** from `app/version.json` — bump `yy` for each
 shipped change the shop can see, `X` for a big one — and a **build** stamp (`__BUILD__`: build time plus

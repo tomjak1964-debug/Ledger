@@ -40,7 +40,7 @@ export default defineConfig({
     versionJson,
     VitePWA({
       registerType: 'autoUpdate',            // new deploys refresh the cached shell automatically
-      includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png', 'logo.svg'],
+      includeAssets: ['favicon-v2.ico', 'apple-touch-icon-180x180-v2.png', 'logo.svg'],
       manifest: {
         name: 'Ledger — Quote to Cash',
         short_name: 'Ledger',
@@ -50,10 +50,10 @@ export default defineConfig({
         display: 'standalone',
         start_url: '/app',
         icons: [
-          { src: 'pwa-64x64.png', sizes: '64x64', type: 'image/png' },
-          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'maskable-icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: 'pwa-64x64-v2.png', sizes: '64x64', type: 'image/png' },
+          { src: 'pwa-192x192-v2.png', sizes: '192x192', type: 'image/png' },
+          { src: 'pwa-512x512-v2.png', sizes: '512x512', type: 'image/png' },
+          { src: 'maskable-icon-512x512-v2.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       // Precache only the built app shell. Supabase requests are NOT cached,

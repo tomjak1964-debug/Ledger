@@ -52,6 +52,12 @@ reach the database, by design.
   (semicolons or spaces work too); `parseAddresses()` names any that aren't addresses and Send waits until they're
   fixed. The function takes `to` / `cc` as a list or a string (an older copy sends one string), re-checks every
   address, drops duplicates (and a CC that's already a To) and caps an email at 20 recipients.
+- **Every email is logged** (`email_log`, migration 040): `send-document` writes one row per attempt — when, who
+  sent it (and as which address), to / cc, `docType`, subject, attachment file names, the message text and
+  `sent` / `failed` with the error — after Resend answers; a logging failure never fails the email. Members can
+  read it with the `reports` permission; nothing but the function writes it. Reports → **Company → Correspondence**
+  lists it (date range, search by recipient / subject / file, Summary or Detail with the message text, CSV, PDF).
+  Only emails sent since 2026-10-26 are there.
 - **Function secrets** (`RESEND_API_KEY`, `EMAIL_FROM`=`remittances@tmjengineering.com`, `EMAIL_FROM_INVOICE`,
   `EMAIL_FROM_REMITTANCE`, `EMAIL_FROM_SALES`, `EMAIL_FROM_RECEIVABLES`, `CRON_SECRET`) live in
   `~/apps/ledger/.env` on the NUC, never in git. A new secret also has to be listed under `functions:` in

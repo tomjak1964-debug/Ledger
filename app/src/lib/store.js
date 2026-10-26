@@ -36,7 +36,7 @@ const th = (res) => { if (res.error) throw res.error; return res.data; };
 
 async function fetchAll() {
   const [settings, sequences, contacts, catalog, quotes, qli, sos, soli, invoices, invli, payments, bills, expenses,
-    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments, pos, poli, accounts, journal, recons, cleared, jobCosts, serviceReports, cardStatements, bankInfo] = await Promise.all([
+    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments, pos, poli, accounts, journal, recons, cleared, jobCosts, serviceReports, cardStatements, bankInfo, emailLog] = await Promise.all([
     supabase.from("settings").select("*").maybeSingle(),
     supabase.from("org_sequences").select("*"),
     supabase.from("contacts").select("*").order("created_at"),
@@ -72,6 +72,8 @@ async function fetchAll() {
     // Banking details (migration 037): the database only returns the row to an
     // admin or a member with the Banking permission — everyone else gets none.
     supabase.from("bank_info").select("*").maybeSingle(),
+    // Every email sent through Ledger (migration 040) — the Correspondence report.
+    supabase.from("email_log").select("*").order("sent_at", { ascending: false }).limit(5000),
   ]);
   return {
     settingsRow: th(settings), sequences: th(sequences),
@@ -98,6 +100,7 @@ async function fetchAll() {
     serviceReports: serviceReports && !serviceReports.error ? (serviceReports.data || []) : [],   // migration 029
     cardStatements: cardStatements && !cardStatements.error ? (cardStatements.data || []) : [],   // migration 031
     bankInfo: bankInfo && !bankInfo.error ? (bankInfo.data?.data || null) : null,                 // migration 037
+    emailLog: emailLog && !emailLog.error ? (emailLog.data || []) : [],                         // migration 040
   };
 }
 
@@ -114,6 +117,9 @@ function assemble(raw) {
   return {
     settings: { ...defaultSettings(), ...(raw.settingsRow?.data || {}), counters },
     bankInfo: raw.bankInfo,
+    emailLog: raw.emailLog.map(r => ({ id: r.id, sentAt: r.sent_at, byEmail: r.sent_by_email || "", byName: r.sent_by_name || "",
+      from: r.from_addr || "", replyTo: r.reply_to || "", to: r.to_addrs || [], cc: r.cc_addrs || [], docType: r.doc_type || "",
+      subject: r.subject || "", attachments: r.attachments || [], body: r.body || "", status: r.status || "sent", error: r.error || "" })),
     contacts: raw.contacts.map(A.contactFromRow),
     catalog: raw.catalog.map(A.catalogFromRow),
     quotes: raw.quotes.map(r => A.quoteFromRow(r, li(qItems[r.id]))),

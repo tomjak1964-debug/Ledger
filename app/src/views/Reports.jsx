@@ -48,6 +48,7 @@ const REPORTS = {
   jobTracking: { label: "Job Tracking", blurb: "Every job: job #, PO, sales order, proposal, description, where it stands, and each billing milestone — not invoiced, ready to invoice, or invoiced.", party: "customer", Render: JobTrackingReport },
   proposals: { label: "Proposals", blurb: "Proposals still out — draft or submitted — with the job #, customer, description, type, date, status and total from the Proposals page.", party: "customer", Render: ProposalsReport },
   jobCosting: { label: "Job Costing", blurb: "Profit per job: the specs and proposal budget it was sold on, against the costs booked to it from bills, expenses, time, journal lines and costs entered by hand.", party: "customer", Render: JobCostingReport },
+  emails: { label: "Correspondence", blurb: "Every email sent from Ledger: when, by whom, to and cc, what kind of document, the subject, the files attached and whether it went through.", party: null, Render: CorrespondenceReport },
   v1099: { label: "1099 Vendor Report", blurb: "Every 1099 vendor paid in the year, each payment made, the total, and whether the $600 limit was met.", party: "vendor", Render: Vendor1099Report },
 };
 
@@ -57,6 +58,7 @@ const CATEGORIES = [
   { key: "payroll", label: "Payroll", icon: ICONS.contacts, blurb: "Wages and payroll taxes.", reports: [] },
   { key: "gl", label: "General Ledger", icon: ICONS.catalog, blurb: "Account activity and the trial balance, posted from the documents and the journal entries booked by hand.", reports: ["gl", "tb"] },
   { key: "financial", label: "Financial Statements", icon: ICONS.reports, blurb: "The balance sheet, the income statement, cash-basis profit and loss, and cash in versus cash out.", reports: ["bs", "is", "pl", "ie"] },
+  { key: "company", label: "Company", icon: ICONS.mail, blurb: "What went out of Ledger: every email sent, to whom, and what was attached.", reports: ["emails"] },
   { key: "inventory", label: "Inventory", icon: ICONS.catalog, blurb: "Stock on hand and item movement.", reports: [] },
   { key: "jobs", label: "Job Reports", icon: ICONS.job, blurb: "Where each job stands, and what it cost against what it was sold for.", reports: ["jobTracking", "proposals", "jobCosting"] },
   { key: "recon", label: "Account Reconciliation", icon: ICONS.check, blurb: "Bank statements against the register.", reports: ["reconSummary"] },
@@ -782,6 +784,70 @@ function Vendor1099Report({ db, to, partyId }) {
       <div className="card-body subtle" style={{ paddingTop: 10 }}>
         Cash paid in {year}: every bill payment to the vendor plus any expense entry whose payee is the vendor's name. Discounts taken are not payments. A 1099 vendor paid nothing in the year is left off. Limit met at {money(TEN99_LIMIT)}.
       </div>
+    </ReportCard>
+  </>;
+}
+
+/* ---------- Correspondence: every email sent from Ledger ----------
+   From email_log (migration 040), which the send-document function writes for
+   every attempt — so it holds what actually went out, not what was meant to.
+   Search finds a recipient, subject, attachment or sender; Detail adds each
+   message's text. */
+const DOC_TYPES = { invoice: "Invoice / statement", remittance: "Remittance", proposal: "Proposal", ratesheet: "Rate sheet", banking: "Banking info", "": "Other" };
+function CorrespondenceReport({ db, from, to, rangeLabel: label }) {
+  const [q, setQ] = useState("");
+  const [detail, setDetail] = useState(false);
+  const day = iso => String(iso || "").slice(0, 10);
+  const when = iso => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }); };
+  const needle = q.trim().toLowerCase();
+  const rows = (db.emailLog || []).filter(e => (!from || day(e.sentAt) >= from) && (!to || day(e.sentAt) <= to))
+    .filter(e => !needle || [e.subject, e.byName, e.byEmail, e.from, ...e.to, ...e.cc, ...e.attachments].some(x => String(x).toLowerCase().includes(needle)));
+  const { sorted, sort, onSort } = useTableSort(rows, {
+    when: e => e.sentAt, by: e => e.byName || e.byEmail, to: e => e.to.join(", "), type: e => DOC_TYPES[e.docType] || e.docType,
+    subject: e => e.subject, files: e => e.attachments.length, status: e => e.status,
+  }, { key: "when", dir: "desc" });
+  const sent = rows.filter(e => e.status === "sent").length;
+  const exportCSV = () => downloadCSV("correspondence",
+    ["Sent", "By", "From", "To", "CC", "Type", "Subject", "Attachments", "Status", "Error"],
+    sorted.map(e => [when(e.sentAt), e.byName || e.byEmail, e.from, e.to.join("; "), e.cc.join("; "), DOC_TYPES[e.docType] || e.docType, e.subject, e.attachments.join("; "), e.status, e.error]));
+  return <>
+    <div className="grid" style={{ gridTemplateColumns: "repeat(3,1fr)", marginBottom: 16 }}>
+      <div className="stat"><div className="lbl">Emails sent</div><div className="val mono">{sent}</div><div className="meta">in this range</div></div>
+      <div className="stat"><div className="lbl">Recipients</div><div className="val mono">{new Set(rows.flatMap(e => [...e.to, ...e.cc]).map(a => a.toLowerCase())).size}</div><div className="meta">different addresses</div></div>
+      <div className="stat"><div className="lbl">Failed</div><div className={"val mono" + (rows.length - sent ? " neg" : "")}>{rows.length - sent}</div><div className="meta">refused by the mail service</div></div>
+    </div>
+    <ReportCard title="Correspondence" rangeLabel={label} right={<>
+      <input className="input no-print" style={{ maxWidth: 220 }} value={q} onChange={e => setQ(e.target.value)} placeholder="Search recipient, subject, file…" />
+      <div className="pill-tabs no-print">
+        <button className={detail ? "" : "on"} onClick={() => setDetail(false)}>Summary</button>
+        <button className={detail ? "on" : ""} onClick={() => setDetail(true)}>Detail</button>
+      </div>
+      <button className="btn sm no-print" onClick={exportCSV}>Export CSV</button></>}>
+      {rows.length === 0
+        ? <Empty icon={ICONS.mail} title="No emails in this range" msg={(db.emailLog || []).length ? "Nothing sent from Ledger matches these dates or that search." : "Emails sent from Ledger are recorded from now on — invoices, statements, proposals, remittances, the rate sheet and the banking sheet."} />
+        : <table><thead><tr>
+          <SortTh label="Sent" col="when" sort={sort} onSort={onSort} />
+          <SortTh label="By" col="by" sort={sort} onSort={onSort} />
+          <SortTh label="To" col="to" sort={sort} onSort={onSort} />
+          <SortTh label="Type" col="type" sort={sort} onSort={onSort} />
+          <SortTh label="Subject" col="subject" sort={sort} onSort={onSort} />
+          <SortTh label="Attachments" col="files" sort={sort} onSort={onSort} />
+          <SortTh label="Status" col="status" sort={sort} onSort={onSort} />
+        </tr></thead>
+          <tbody>{sorted.map(e => <Fragment key={e.id}>
+            <tr>
+              <td className="subtle nowrap">{when(e.sentAt)}</td>
+              <td>{e.byName || e.byEmail}<div className="subtle" style={{ fontSize: 12 }}>from {e.from.replace(/^.*<([^>]+)>.*$/, "$1")}</div></td>
+              <td style={{ wordBreak: "break-word" }}>{e.to.join(", ")}{e.cc.length > 0 && <div className="subtle" style={{ fontSize: 12 }}>cc {e.cc.join(", ")}</div>}</td>
+              <td className="subtle">{DOC_TYPES[e.docType] || e.docType}</td>
+              <td>{e.subject}</td>
+              <td className="subtle" style={{ fontSize: 12.5, whiteSpace: "pre-line" }}>{e.attachments.length ? e.attachments.join("\n") : "—"}</td>
+              <td>{e.status === "sent" ? <span className="badge green"><span className="dot"></span>Sent</span>
+                : <span className="badge red" title={e.error}><span className="dot"></span>Failed</span>}</td>
+            </tr>
+            {detail && <tr><td></td><td colSpan={6} style={{ whiteSpace: "pre-line", fontSize: 12.5, color: "var(--ink-soft)", background: "var(--canvas)" }}>
+              {e.body || "(no message text)"}{e.status !== "sent" && e.error ? "\n\nNot sent: " + e.error : ""}</td></tr>}
+          </Fragment>)}</tbody></table>}
     </ReportCard>
   </>;
 }

@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
     // 2) They must belong to a company in Ledger.
     const admin = createClient(url, service, { auth: { autoRefreshToken: false, persistSession: false } });
     const { data: member } = await admin.from("org_members")
-      .select("org_id").eq("user_id", user.id).limit(1).maybeSingle();
+      .select("org_id, name").eq("user_id", user.id).limit(1).maybeSingle();
     if (!member) throw new Error("Not a member of any company");
 
     const body = await req.json();
@@ -103,6 +103,21 @@ Deno.serve(async (req) => {
       replyTo = ownOk ? own : (user.email || undefined);
     }
 
+    // Every attempt is written to email_log (the Correspondence report), sent or
+    // refused. Logging never stops the email itself.
+    const logIt = async (status: string, providerId = "", error = "") => {
+      try {
+        const text = String(html ?? "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n").replace(/<[^>]+>/g, "")
+          .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/\n{3,}/g, "\n\n").trim().slice(0, 4000);
+        await admin.from("email_log").insert({
+          org_id: member.org_id, sent_by: user.id, sent_by_email: user.email ?? "", sent_by_name: member.name ?? "",
+          from_addr: from, reply_to: replyTo ?? "", to_addrs: to, cc_addrs: cc, doc_type: String(docType ?? ""),
+          subject: String(subject ?? "").slice(0, 500),
+          attachments: (attachments ?? []).map((a: { filename: string }) => String(a.filename ?? "")).filter(Boolean),
+          body: text, status, provider_id: providerId, error: error.slice(0, 1000),
+        });
+      } catch (_) { /* the email matters more than its log line */ }
+    };
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
@@ -113,7 +128,12 @@ Deno.serve(async (req) => {
       }),
     });
     const data = await r.json();
-    if (!r.ok) throw new Error(data?.message ?? "Resend rejected the email");
+    if (!r.ok) {
+      const why = data?.message ?? "Resend rejected the email";
+      await logIt("failed", "", why);
+      throw new Error(why);
+    }
+    await logIt("sent", data.id ?? "");
     return new Response(JSON.stringify({ ok: true, id: data.id, to, cc }), {
       headers: { ...cors, "Content-Type": "application/json" },
     });

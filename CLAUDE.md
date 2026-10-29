@@ -547,6 +547,10 @@ won / superseded ones are skipped. A won proposal's row menu has **Change PO…*
 its sales order; issued invoices keep theirs). Sales Orders and Jobs have a **PO filter**; on Sales Orders it shows the
 PO's total and what's left to invoice, and on Jobs it includes closed jobs.
 
+**Emailing a proposal submits it:** a draft emailed from its row, from the open proposal, or with others from
+Select → Email is marked **Submitted** once the email goes (`markEmailed()` in `views/Proposals.jsx`, from
+`EmailModal`'s `onSent`); a proposal past draft keeps its status.
+
 **Copy Proposal** (the copy icon on the proposal's row, beside Email / Print / Save / Edit, `CopyProposalModal` in `views/Proposals.jsx`): asks for a new job number and
 description, shows the number the copy will take (the customer's next free one for today), and offers a
 **duplicate machine reduction** — dollars or a percentage off — with the original price, the reduction and the new

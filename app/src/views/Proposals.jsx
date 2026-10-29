@@ -204,6 +204,14 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
     const saved = await actions.saveProposal({ ...p, pricing });
     if (saved) { setEdit(null); toast(p._new ? "Proposal " + saved.number + " created" : "Proposal saved"); }
   };
+  // Emailing a draft submits it: the customer has it now. Anything past draft is left alone.
+  const markEmailed = async (list) => {
+    if (readOnly) return;
+    const drafts = list.map(p => db.proposals.find(x => x.id === p.id) || p).filter(p => p.status === "draft");
+    let done = 0;
+    for (const p of drafts) if (await actions.setProposalStatus(p.id, "submitted")) done++;
+    if (done) toast(`Email sent · ${done === 1 ? drafts[0].number + " is" : plural(done) + " are"} now Submitted`);
+  };
   const setStatus = async (id, status) => { if (await actions.setProposalStatus(id, status)) toast("Marked " + status); };
   const del = async (id) => { if (!confirm("Delete this proposal?")) return; if (await actions.deleteProposal(id)) toast("Deleted"); };
   // Several proposals won on one purchase order: a sales order (a job) each,
@@ -375,7 +383,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
     </div>
     {importing && <ImportProposalsModal db={db} actions={actions} toast={toast} onClose={() => setImporting(false)} />}
     {importingLineup && <ImportLineupModal db={db} actions={actions} toast={toast} onClose={() => setImportingLineup(false)} />}
-    {doc && <ProposalDoc p={doc.p} auto={doc.auto} db={db} onClose={() => setDoc(null)} toast={toast}
+    {doc && <ProposalDoc p={doc.p} auto={doc.auto} db={db} onClose={() => setDoc(null)} toast={toast} onEmailed={() => markEmailed([doc.p])}
       onEdit={readOnly ? undefined : () => { const x = doc.p; setDoc(null); setEdit({ ...x }); }} />}
     {/* Save PDF for several: each proposal opens, saves itself and closes, then the next. */}
     {pdfQueue && <ProposalDoc key={pdfQueue.list[pdfQueue.i].id} p={pdfQueue.list[pdfQueue.i]} auto="pdf" db={db} toast={toast}
@@ -391,7 +399,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
         : `Proposals ${chosen.map(p => p.number).join(", ")}`}
       defaultBody={`Hello,\n\nPlease find attached ${chosen.length === 1 ? "our proposal" : `our ${chosen.length} proposals`}:\n${chosen.map(p => `  • ${p.number}${revLabel(p) ? " " + revLabel(p) : ""} — ${[p.jobNumber, p.description].filter(Boolean).join(" – ")}`).join("\n")}\n\nRegards,\n${cfg.signer || db.settings.company}`}
       buildAttachment={() => Promise.all(chosen.map(p => proposalDocxBlob(p, db)))}
-      onSent={endSelect}
+      onSent={() => { markEmailed(chosen); endSelect(); }}
       onClose={() => setBulkEmail(false)} toast={toast} />}
     {winMany && <WinOnPoModal list={winMany} db={db} canWin={canWin} busy={bulkBusy} onClose={() => setWinMany(null)} onWin={winOnPo} />}
     {copyOf && <CopyProposalModal p={copyOf} db={db} cfg={cfg} onClose={() => setCopyOf(null)}
@@ -720,7 +728,7 @@ function PhasesModal({ p, db, actions, toast, onClose }) {
   </Modal>;
 }
 
-function ProposalDoc({ p, db, onClose, toast, onEdit, auto }) {
+function ProposalDoc({ p, db, onClose, toast, onEdit, auto, onEmailed }) {
   const c = p.kind === "controls" ? buildControlsContent(p, db) : buildProposalContent(p, db);
   const s = db.settings;
   const [busy, setBusy] = useState(false);
@@ -778,6 +786,7 @@ function ProposalDoc({ p, db, onClose, toast, onEdit, auto }) {
       defaultSubject={`Proposal ${p.number}${revLabel(p) ? " " + revLabel(p) : ""} — ${[p.jobNumber, p.description].filter(Boolean).join(" – ")}`}
       defaultBody={`${c.salutation.replace(/:$/, ",")}\n\nPlease find attached proposal ${p.number} for ${p.description || "the machine"}.\n\nRegards,\n${c.cfg.signer || s.company}`}
       buildAttachment={() => proposalDocxBlob(p, db)}
+      onSent={onEmailed}
       onClose={() => setEmail(false)} toast={toast} />}
     <div ref={docRef}>
     {p.kind === "controls" ? <ControlsDocBody p={p} db={db} /> : <><div className="printable prop-doc prop-page">

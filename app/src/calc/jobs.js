@@ -4,6 +4,7 @@
 // Pure functions over the db object; the reports in views/Reports.jsx read them.
 import { lineTotals, paid, settled, balance, round2 } from "./ledger.js";
 import { sum, nameOf } from "../lib/helpers.js";
+import { billLines } from "./accounts.js";
 
 const n = v => Number(v) || 0;
 const inRange = (d, from, to) => (!from || (d || "") >= from) && (!to || (d || "") <= to);
@@ -221,8 +222,13 @@ export function jobCostItems(db, so) {
   const out = [];
   (db.jobCosts || []).filter(c => c.salesOrderId === so.id).forEach(c =>
     out.push({ source: c.source === "sheet" ? "Sheet" : "Manual", id: c.id, date: c.date, category: costKey(c.category), desc: c.description, hours: n(c.hours), amount: n(c.amount), editable: true }));
-  db.bills.filter(b => b.salesOrderId === so.id).forEach(b =>
-    out.push({ source: "Bill", id: b.id, date: b.date, category: costKey(b.costCategory), desc: `${b.number} · ${nameOf(db, b.vendorId)}${b.ref ? " · " + b.ref : ""}`, hours: 0, amount: n(b.amount) }));
+  // A bill costs a job line by line: an itemized bill can carry material or
+  // services for several jobs (billLines — a one-line bill is its own line).
+  db.bills.forEach(b => billLines(db, b).forEach((l, i, all) => {
+    if (l.salesOrderId !== so.id) return;
+    out.push({ source: "Bill", id: all.length > 1 ? b.id + ":" + l.id : b.id, date: b.date, category: costKey(l.costCategory),
+      desc: [`${b.number} · ${nameOf(db, b.vendorId)}${b.ref ? " · " + b.ref : ""}`, all.length > 1 ? l.desc : ""].filter(Boolean).join(" · "), hours: 0, amount: n(l.amount) });
+  }));
   db.expenses.filter(e => e.salesOrderId === so.id).forEach(e =>
     out.push({ source: "Expense", id: e.id, date: e.date, category: costKey(e.costCategory), desc: [e.vendor, e.notes].filter(Boolean).join(" · "), hours: 0, amount: n(e.amount) }));
   (db.timeEntries || []).filter(t => t.salesOrderId === so.id).forEach(t =>

@@ -149,13 +149,13 @@ export const billToRow = b => ({
   id: b.id, number: b.number, vendor_id: idOrNull(b.vendorId), date: dateOrNull(b.date),
   due_date: dateOrNull(b.dueDate), amount: num(b.amount), ref: b.ref ?? "", notes: b.notes ?? "",
   sales_order_id: idOrNull(b.salesOrderId), purchase_order_id: idOrNull(b.purchaseOrderId),
-  expense_account: b.expenseAccount ?? "", cost_category: b.costCategory ?? "",
+  expense_account: b.expenseAccount ?? "", cost_category: b.costCategory ?? "", lines: b.lines || [],
 });
 export const billFromRow = (r, payments) => ({
   id: r.id, number: r.number, vendorId: r.vendor_id || "", date: r.date || "", dueDate: r.due_date || "",
   amount: num(r.amount), ref: r.ref, notes: r.notes, salesOrderId: r.sales_order_id || "",
   purchaseOrderId: r.purchase_order_id || "", payments: payments || [], expenseAccount: r.expense_account || "",
-  costCategory: r.cost_category || "",
+  costCategory: r.cost_category || "", lines: Array.isArray(r.lines) ? r.lines : [],
 });
 
 /* ---- purchase orders ---- */

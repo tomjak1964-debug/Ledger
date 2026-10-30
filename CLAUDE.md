@@ -789,6 +789,18 @@ above the MICR clear band.
 drive it. Forms live in the settings jsonb (`settings.forms`, `settings.formFor`) — no migration.
 Invoices and remittances keep their standard renderers; they are listed so every document type names its form.
 
+**Itemized vendor bills** (migration 041, `bills.lines` jsonb — `[{ id, desc, qty, unitPrice, amount, account,
+salesOrderId, costCategory }]`): **Enter Line Items** in the bill editor turns a bill into the vendor's invoice line by
+line, each line with its own expense account (blank = the bill's / vendor's default) and its own **job and cost
+category**, so one invoice can carry material or services for several jobs; a new line starts on the job above it, and
+the editor totals by job. The bill's `amount` is the sum of its lines (`saveBill()` recomputes it and refuses lines that
+come to less than is already paid), so payments, aging and the registers are unchanged; with lines, the bill's own job
+and category are cleared. `billLines(db, bill)` (`calc/accounts.js`) is the one reader — a bill without lines is one line
+of the bill's account, job and category — used by `journal()` (accrual: Dr each line's account; cash basis: each payment
+shared across the lines in proportion, `shareByLines()`, last line takes the cents) and `jobCostItems()` (a cost row per
+line on that job). A Close match in Bank Reconciliation adds the difference to an itemized bill as a line. The lock
+trigger counts `lines` as money.
+
 **Partial payments** (`applyAgainst()` / `applyOldestFirst()` in `calc/ledger.js`): any invoice or bill can be
 part-paid and stays open (status *partial*) for the rest. The single Pay / Receive dialog says *Part payment —
 leaves $X open* with a **Pay in full** button; the whole-receipt/payment dialog takes an optional **Amount

@@ -1031,6 +1031,21 @@ export function useLedger(session, onError) {
       try {
         const isNew = !!b._new;
         const bill = { ...b, amount: Number(b.amount) || 0 }; delete bill._new;
+        // Itemized (migration 041): each line qty × price, the bill the sum of its
+        // lines; the job and category live on the lines, not the bill.
+        const lines = (bill.lines || []).map(l => {
+          const qty = l.qty === "" || l.qty == null ? 1 : Number(l.qty) || 0;
+          return { id: l.id || uid(), desc: (l.desc || "").trim(), qty, unitPrice: Number(l.unitPrice) || 0,
+            amount: round2(qty * (Number(l.unitPrice) || 0)), account: (l.account || "").trim(),
+            salesOrderId: l.salesOrderId || "", costCategory: l.salesOrderId ? l.costCategory || "" : "" };
+        }).filter(l => l.desc || Math.abs(l.amount) > 0.0001);
+        bill.lines = lines;
+        if (lines.length) {
+          bill.amount = round2(lines.reduce((t, l) => t + l.amount, 0));
+          bill.salesOrderId = ""; bill.costCategory = "";
+          const settledNow = (bill.payments || []).reduce((t, p) => t + (Number(p.amount) || 0) + (Number(p.discount) || 0), 0);
+          if (bill.amount < settledNow - 0.005) throw new Error(`The lines come to ${money(bill.amount)}, less than the ${money(settledNow)} already paid on this bill.`);
+        }
         const ref = (bill.ref || "").trim();
         if (!ref) throw new Error("Vendor invoice # (Ref) is required — it can't be blank.");
         const dup = dbRef.current.bills.find(x => x.id !== bill.id && x.vendorId === bill.vendorId

@@ -88,6 +88,30 @@ export const expenseAccountOfBill = (db, bill) => {
   const vend = db.contacts.find(c => c.id === bill.vendorId);
   return key(bill.expenseAccount) || key(vend?.expenseAccount) || accountSettings(db.settings).expense;
 };
+// A bill's lines as they post and as they cost a job (migration 041): its own
+// line items when it has them — each line's account, else the bill's — or one
+// line for the whole bill, carrying the bill's account, job and category.
+export function billLines(db, bill) {
+  const own = (bill.lines || []).filter(l => Math.abs(Number(l.amount) || 0) > 0.0001);
+  if (!own.length) return [{ id: bill.id, desc: "", amount: Number(bill.amount) || 0, account: expenseAccountOfBill(db, bill),
+    salesOrderId: bill.salesOrderId || "", costCategory: bill.costCategory || "" }];
+  return own.map(l => ({ ...l, amount: Number(l.amount) || 0, account: key(l.account) || expenseAccountOfBill(db, bill),
+    salesOrderId: l.salesOrderId || "", costCategory: l.costCategory || "" }));
+}
+// An amount (a payment on the bill) shared across its lines in proportion to
+// their amounts, in cents, the last line taking what rounding leaves.
+export function shareByLines(lines, amount) {
+  const total = lines.reduce((t, l) => t + l.amount, 0);
+  if (lines.length === 1 || Math.abs(total) < 0.005) return lines.map((l, i) => (i === 0 ? amount : 0));
+  let run = 0, given = 0;
+  return lines.map((l, i) => {
+    run += l.amount;
+    const upTo = i === lines.length - 1 ? amount : Math.round(amount * run / total * 100) / 100;
+    const part = Math.round((upTo - given) * 100) / 100;
+    given = upTo;
+    return part;
+  });
+}
 export const expenseAccountOfExpense = (db, e) =>
   key(e.account) || CATEGORY_ACCOUNTS[e.category] || accountSettings(db.settings).expense;
 export const cashAccountOf = (db, p) => key(p?.cashAccount) || accountSettings(db.settings).cash;

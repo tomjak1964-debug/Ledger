@@ -7,7 +7,7 @@ import { remittancesPdf } from "../lib/remittance.js";
 import { nextCheckNumber, checkNumberTaken, remitEmail } from "../lib/checks.js";
 import { useFilters } from "../components/useFilters.jsx";
 import { dueDateFor, termsLabelFor, discountOffer } from "../lib/terms.js";
-import { Ico, ICONS, Badge, Empty, Modal, Field, SortTh, useTableSort } from "../components/ui.jsx";
+import { Ico, ICONS, Badge, Empty, Modal, Field, SortTh, useTableSort, AutoTextarea } from "../components/ui.jsx";
 import PaymentModal from "../components/PaymentModal.jsx";
 import Attachments from "../components/Attachments.jsx";
 import { openCheckPdf } from "../lib/checkPrint.js";
@@ -15,7 +15,7 @@ import { remittancePdf } from "../lib/remittance.js";
 import RemittanceView from "../components/RemittanceView.jsx";
 import EmailModal from "../components/EmailModal.jsx";
 import AccountSelect from "../components/AccountSelect.jsx";
-import JobCostPicker from "../components/JobCostPicker.jsx";
+import JobCostPicker, { JobSelect, CostCategorySelect, jobOptionLabel } from "../components/JobCostPicker.jsx";
 import { expenseAccountOfBill, accountLabel, accountSettings } from "../calc/accounts.js";
 
 // The date a bill was settled — the last payment on it.
@@ -127,7 +127,8 @@ export default function PayablesView({ db, actions, toast, readOnly, go }) {
       const dup = db.bills.find(x => x.id !== edit.id && x.vendorId === edit.vendorId
         && (x.ref || "").trim().toLowerCase() === refTrim.toLowerCase());
       const err = !edit.vendorId ? "Select a vendor." : !refTrim ? "Vendor invoice # (Ref) is required." : dup ? `Already entered as ${dup.number} for this vendor.` : "";
-      return <Modal title={edit._new ? "New Vendor Bill" : "Edit " + edit.number} onClose={() => setEdit(null)}
+      const itemized = (edit.lines || []).length > 0;
+      return <Modal wide={itemized} title={edit._new ? "New Vendor Bill" : "Edit " + edit.number} onClose={() => setEdit(null)}
       foot={<><button className="btn" onClick={() => setEdit(null)}>Cancel</button>
         <button className="btn primary" disabled={!!err} onClick={() => save(edit)}>Save Bill</button></>}>
       <div className="row">
@@ -145,12 +146,23 @@ export default function PayablesView({ db, actions, toast, readOnly, go }) {
           onChange={e => setEdit({ ...edit, date: e.target.value, dueDate: dueDateFor(db, edit.vendorId, e.target.value) })} /></Field>
         <Field label="Due Date" hint={edit.vendorId ? "From " + termsLabelFor(db, edit.vendorId) : undefined}>
           <input className="input" type="date" value={edit.dueDate} onChange={e => setEdit({ ...edit, dueDate: e.target.value })} /></Field>
-        <Field label="Amount"><input className="input mono" type="number" step="any" value={edit.amount} onChange={e => setEdit({ ...edit, amount: e.target.value })} /></Field>
+        <Field label="Amount" hint={itemized ? "The total of the lines" : undefined}>
+          {itemized
+            ? <input className="input mono" readOnly value={money(billLinesTotal(edit.lines))} />
+            : <input className="input mono" type="number" step="any" value={edit.amount} onChange={e => setEdit({ ...edit, amount: e.target.value })} />}</Field>
       </div>
-      <Field label="Expense Account" hint={edit.expenseAccount ? "Where this bill posts" : "Default: " + (accountLabel(db, expenseAccountOfBill(db, edit)) || "none set — see Settings → Accounts")}>
-        <AccountSelect db={db} value={edit.expenseAccount} onChange={v => setEdit({ ...edit, expenseAccount: v })} groups={["expense", "cos", "liability", "asset"]} blank="— vendor's default —" /></Field>
-      <JobCostPicker db={db} salesOrderId={edit.salesOrderId} costCategory={edit.costCategory}
-        hint="Attribute this bill to a sales order for job costing" onChange={patch => setEdit({ ...edit, ...patch })} />
+      {itemized
+        ? <BillLinesEditor db={db} bill={edit} onChange={lines => setEdit({ ...edit, lines, amount: billLinesTotal(lines) })} />
+        : <>
+          <Field label="Expense Account" hint={edit.expenseAccount ? "Where this bill posts" : "Default: " + (accountLabel(db, expenseAccountOfBill(db, edit)) || "none set — see Settings → Accounts")}>
+            <AccountSelect db={db} value={edit.expenseAccount} onChange={v => setEdit({ ...edit, expenseAccount: v })} groups={["expense", "cos", "liability", "asset"]} blank="— vendor's default —" /></Field>
+          <JobCostPicker db={db} salesOrderId={edit.salesOrderId} costCategory={edit.costCategory}
+            hint="Attribute this bill to a sales order for job costing" onChange={patch => setEdit({ ...edit, ...patch })} />
+          <button className="btn sm" style={{ marginBottom: 12 }} onClick={() => setEdit({ ...edit, lines: [
+            { id: uid(), desc: "", qty: 1, unitPrice: Number(edit.amount) || "", account: edit.expenseAccount || "", salesOrderId: edit.salesOrderId || "", costCategory: edit.costCategory || "" }] })}>
+            <Ico d={ICONS.plus} size={14} />Enter Line Items</button>
+          <span className="subtle" style={{ marginLeft: 8, fontSize: 12.5 }}>To match the vendor's invoice line by line, each line to its own job and account.</span>
+        </>}
       <Field label="Notes"><textarea className="input" value={edit.notes} onChange={e => setEdit({ ...edit, notes: e.target.value })} /></Field>
       {edit._new
         ? <p className="subtle" style={{ margin: "8px 0 0" }}>Save the bill first to attach receipts.</p>
@@ -443,4 +455,48 @@ function PayBillsModal({ db, actions, toast, onClose }) {
       {eGroups.length > 0 ? ` · ${eGroups.length} electronic payment${eGroups.length > 1 ? "s" : ""} with a remittance` : ""}</div>
     <p className="subtle" style={{ marginBottom: 0 }}>Multiple bills for the same vendor and method combine into one check or one remittance, with every bill listed on the stub.</p>
   </Modal>;
+}
+
+/* ---------- Itemized bill (migration 041) ----------
+   The vendor's invoice line by line: what it was, qty × price, the account it
+   posts to (blank: the bill's / vendor's default) and the job and cost category
+   it is a cost of, so one invoice can carry material or services for several
+   jobs. A new line starts on the job and category of the line above it. */
+const lineAmt = l => round2((l.qty === "" || l.qty == null ? 1 : Number(l.qty) || 0) * (Number(l.unitPrice) || 0));
+const billLinesTotal = lines => round2((lines || []).reduce((t, l) => t + lineAmt(l), 0));
+
+function BillLinesEditor({ db, bill, onChange }) {
+  const lines = bill.lines || [];
+  const set = (id, patch) => onChange(lines.map(l => l.id === id ? { ...l, ...patch } : l));
+  const add = () => { const last = lines[lines.length - 1] || {};
+    onChange([...lines, { id: uid(), desc: "", qty: 1, unitPrice: "", account: last.account || "", salesOrderId: last.salesOrderId || "", costCategory: last.costCategory || "" }]); };
+  const remove = id => onChange(lines.filter(l => l.id !== id));
+  const byJob = {};
+  lines.forEach(l => { const k = l.salesOrderId || ""; byJob[k] = round2((byJob[k] || 0) + lineAmt(l)); });
+  const jobKeys = Object.keys(byJob);
+  return <div style={{ marginBottom: 12 }}>
+    <div style={{ overflowX: "auto" }}><table className="li-table">
+      <thead><tr><th style={{ minWidth: 200 }}>Description</th><th style={{ minWidth: 190 }}>Job / Cost Category</th><th style={{ minWidth: 170 }}>Account</th>
+        <th className="num" style={{ width: 70 }}>Qty</th><th className="num" style={{ width: 110 }}>Unit Price</th><th className="num" style={{ width: 100 }}>Amount</th><th></th></tr></thead>
+      <tbody>{lines.map(l => <tr key={l.id}>
+        <td><AutoTextarea className="input" value={l.desc} placeholder="As on the vendor's invoice" onChange={e => set(l.id, { desc: e.target.value })} /></td>
+        <td><JobSelect db={db} value={l.salesOrderId} blank="— no job —" onChange={v => set(l.id, { salesOrderId: v })} />
+          {l.salesOrderId && <div style={{ marginTop: 4 }}><CostCategorySelect value={l.costCategory} onChange={v => set(l.id, { costCategory: v })} /></div>}</td>
+        <td><AccountSelect db={db} value={l.account} onChange={v => set(l.id, { account: v })} groups={["expense", "cos", "liability", "asset"]}
+          blank={"Default · " + (expenseAccountOfBill(db, bill) || "—")} /></td>
+        <td><input className="input mono" type="number" step="any" value={l.qty} onChange={e => set(l.id, { qty: e.target.value })} style={{ textAlign: "right" }} /></td>
+        <td><input className="input mono" type="number" step="any" value={l.unitPrice} onChange={e => set(l.id, { unitPrice: e.target.value })} style={{ textAlign: "right" }} /></td>
+        <td className="num mono">{money(lineAmt(l))}</td>
+        <td><button className="btn ghost icon" title="Remove line" onClick={() => remove(l.id)}><Ico d={ICONS.trash} size={15} /></button></td>
+      </tr>)}</tbody>
+    </table></div>
+    <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap", marginTop: 8 }}>
+      <button className="btn sm" onClick={add}><Ico d={ICONS.plus} size={14} />Add Line</button>
+      <div className="subtle" style={{ marginLeft: "auto", fontSize: 12.5, textAlign: "right" }}>
+        {jobKeys.length > 1 || jobKeys[0] ? jobKeys.map(k => <div key={k}>{k ? jobOptionLabel(db, db.salesOrders.find(s => s.id === k) || { number: "?" }) : "No job"} · <span className="mono">{money(byJob[k])}</span></div>) : null}
+        <div style={{ fontWeight: 600, color: "var(--ink)", marginTop: 2 }}>Bill total <span className="mono">{money(billLinesTotal(lines))}</span></div>
+      </div>
+    </div>
+    <p className="subtle" style={{ margin: "6px 0 0", fontSize: 12.5 }}>Remove every line to go back to a single amount.</p>
+  </div>;
 }

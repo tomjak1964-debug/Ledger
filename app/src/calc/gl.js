@@ -41,7 +41,7 @@ import { lineTotals, round2 as r2 } from "./ledger.js";
 import { CREDIT_METHOD } from "../lib/credits.js";
 import {
   accountSettings, isCashBasis, normalSide, TYPE_GROUP, accountByNumber, accountsOfType, chart, closesAtYearEnd,
-  incomeAccountOf, expenseAccountOfBill, expenseAccountOfExpense, cashAccountOf,
+  incomeAccountOf, expenseAccountOfBill, billLines, shareByLines, expenseAccountOfExpense, cashAccountOf,
 } from "./accounts.js";
 
 const round2 = v => r2(Number(v) || 0);
@@ -110,16 +110,21 @@ export function journal(db, { close = true } = {}) {
   });
 
   db.bills.forEach(b => {
-    const expense = expenseAccountOfBill(db, b);
+    // An itemized bill posts each line to its own account (billLines); on the
+    // cash basis each payment is shared across the lines in proportion.
+    const lines = billLines(db, b);
     const who = partyName(db, b.vendorId);
     if (!cash) post(b.date, { type: "bill", id: b.id, number: b.number, ref: b.ref }, `Bill ${b.number}${b.ref ? " (" + b.ref + ")" : ""}`, who, [
-      { account: expense, debit: Number(b.amount) || 0 },
+      ...lines.map(l => ({ account: l.account, debit: l.amount, memo: l.desc || "" })),
       { account: acct.ap, credit: Number(b.amount) || 0 },
     ]);
     (b.payments || []).forEach(p => {
       const amount = Number(p.amount) || 0, disc = Number(p.discount) || 0;
+      const shares = cash ? shareByLines(lines, amount + disc) : [];
       post(p.date, { type: "payment", id: p.id, number: b.number, ref: p.ref }, `Payment on ${b.number}${p.ref ? " #" + p.ref : ""}`, who, [
-        { account: cash ? expense : acct.ap, debit: amount + disc },   // cash basis: the expense is recognized as it is paid
+        ...(cash   // cash basis: the expense is recognized as it is paid
+          ? lines.map((l, i) => ({ account: l.account, debit: shares[i], memo: lines.length > 1 ? l.desc || "" : "" }))
+          : [{ account: acct.ap, debit: amount + disc }]),
         { account: cashAccountOf(db, p), credit: amount },
         { account: acct.purchaseDiscount, credit: disc },
       ]);

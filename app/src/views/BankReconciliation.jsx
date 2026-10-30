@@ -388,7 +388,10 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
           if (f) {
             const isBill = it.type === "payment", diff = round2(amt - (Number(f.p.amount) || 0));
             // The bill was mistyped too — raise (or lower) it by the same amount.
-            if (isBill && r.raiseDoc && !await actions.saveBill({ ...f.doc, amount: round2((Number(f.doc.amount) || 0) + diff) })) { failed++; continue; }
+            if (isBill && r.raiseDoc && !await actions.saveBill((f.doc.lines || []).length
+              // An itemized bill is the sum of its lines: the difference goes on as a line of its own.
+              ? { ...f.doc, lines: [...f.doc.lines, { id: uid(), desc: "Adjusted to the bank statement", qty: 1, unitPrice: diff, account: "" }] }
+              : { ...f.doc, amount: round2((Number(f.doc.amount) || 0) + diff) })) { failed++; continue; }
             ok = !!await actions.updatePayment(isBill ? "bill" : "invoice", f.doc.id, { ...f.p, amount: amt });
           }
         }

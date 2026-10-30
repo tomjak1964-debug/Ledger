@@ -1,3 +1,4 @@
+import { agedExtras } from "../lib/agedAttachment.jsx";
 import { useState, useEffect } from "react";
 import { uid, money, fmtDate, todayISO, addDays, nameOf, pickable } from "../lib/helpers.js";
 import { emailFor } from "../lib/people.js";
@@ -239,7 +240,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
       defaultTo={emailFor(db, email.customerId, "invoice", email.contactPersonId)}
       defaultSubject={`Invoice ${email.number} — ${db.settings.company}`}
       defaultBody={`Please find attached invoice ${email.number}.\n\nThank you for your business.\n\n${db.settings.company}\n${db.settings.companyPhone || ""}`}
-      buildAttachment={() => invoicePdf(email, db)}
+      buildAttachment={() => invoicePdf(email, db)} extras={agedExtras(db, [email.customerId])}
       onSent={readOnly ? undefined : () => actions.markInvoicePrinted(email.id, true)}
       onClose={() => setEmail(null)} toast={toast} />}
     {printSet && <PdfView blob={printSet.blob} filename={printSet.filename} autoPrint
@@ -250,7 +251,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
       defaultTo={emailTo()}
       defaultSubject={chosen.length === 1 ? `Invoice ${chosen[0].number} — ${db.settings.company}` : `Invoices ${chosen.map(i => i.number).join(", ")} — ${db.settings.company}`}
       defaultBody={`Please find attached ${chosen.length === 1 ? "invoice " + chosen[0].number : `our ${chosen.length} invoices`}:\n${chosen.map(i => `  • ${i.number} — ${money(lineTotals(i.lineItems, i.taxRate).total)}${i.poNumber ? " · PO " + i.poNumber : ""}`).join("\n")}\n\nThank you for your business.\n\n${db.settings.company}\n${db.settings.companyPhone || ""}`}
-      buildAttachment={() => Promise.all(chosen.map(i => invoicePdf(i, db)))}
+      buildAttachment={() => Promise.all(chosen.map(i => invoicePdf(i, db)))} extras={agedExtras(db, chosen.map(i => i.customerId))}
       onSent={() => { if (!readOnly) actions.markInvoicePrinted(chosen.map(i => i.id), true); endSelect(); }}
       onClose={() => setBulkEmail(false)} toast={toast} />}
     {pay && <PaymentModal db={db} doc={pay} onClose={() => setPay(null)}

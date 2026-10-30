@@ -1,3 +1,4 @@
+import { agedExtras } from "../lib/agedAttachment.jsx";
 import { useEffect, useState } from "react";
 import { printOrShare, isIOS } from "../lib/printSupport.js";
 import { money, fmtDate } from "../lib/helpers.js";
@@ -37,7 +38,7 @@ export default function DocumentView({ kind, doc, contact, settings, onClose, on
     const t = setTimeout(() => { print(); if (!isIOS()) onClose?.(); }, 250);
     return () => clearTimeout(t);
   }, []);   // eslint-disable-line react-hooks/exhaustive-deps
-  if (kind === "invoice") return <InvoiceDoc inv={doc} contact={contact} settings={settings} onClose={onClose} print={print} db={db} toast={toast} onEdit={onEdit} />;
+  if (kind === "invoice") return <InvoiceDoc inv={doc} contact={contact} settings={settings} onClose={onClose} print={print} db={db} toast={toast} onEdit={onEdit} onEmailed={onEmailed} />;
   const t = lineTotals(doc.lineItems, doc.taxRate);
   const isQuote = kind === "quote";
   const isPO = kind === "po";
@@ -98,7 +99,7 @@ export default function DocumentView({ kind, doc, contact, settings, onClose, on
 // Always prints full pages: the items box is ruled to the bottom however few
 // lines there are, and lines that don't fit carry onto an identically framed
 // page. qty-0 lines are unbilled-phase reference lines: unit price, no amount.
-function InvoiceDoc({ inv, contact, settings, onClose, print, db, toast, onEdit }) {
+function InvoiceDoc({ inv, contact, settings, onClose, print, db, toast, onEdit, onEmailed }) {
   const [email, setEmail] = useState(false);
   const [busy, setBusy] = useState(false);
   // Save writes the same PDF the email attaches, named for the invoice.
@@ -132,7 +133,7 @@ function InvoiceDoc({ inv, contact, settings, onClose, print, db, toast, onEdit 
       defaultTo={emailFor(db, inv.customerId, "invoice", inv.contactPersonId)}
       defaultSubject={`${isCredit ? "Credit Memo" : "Invoice"} ${inv.number} — ${settings.company}`}
       defaultBody={`Please find attached ${isCredit ? "credit memo" : "invoice"} ${inv.number}.\n\nThank you for your business.\n\n${settings.company}\n${settings.companyPhone || ""}`}
-      buildAttachment={() => invoicePdf(inv, db)} onSent={onEmailed}
+      buildAttachment={() => invoicePdf(inv, db)} onSent={onEmailed} extras={agedExtras(db, [inv.customerId])}
       onClose={() => setEmail(false)} toast={toast} />}
     {pages.map((rows, pi) => {
       const last = pi === pages.length - 1;

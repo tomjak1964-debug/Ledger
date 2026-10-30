@@ -246,10 +246,10 @@ function RegisterReport({ db, from, to, partyId, rangeLabel: label, kind }) {
 function AgedReceivablesReport(p) { return <AgedReport {...p} kind="ar" />; }
 function AgedPayablesReport(p) { return <AgedReport {...p} kind="ap" />; }
 
-function AgedReport({ db, asOf, partyId, kind, rangeLabel: label }) {
+export function AgedReport({ db, asOf, partyId, kind, rangeLabel: label, initialDetail = false }) {
   const isAR = kind === "ar";
   // Summary: a line per customer / vendor. Detail: every outstanding item under it.
-  const [detail, setDetail] = useState(false);
+  const [detail, setDetail] = useState(initialDetail);
   const r0 = isAR ? agedReceivables(db, asOf) : agedPayables(db, asOf);
   const rows = partyId ? r0.rows.filter(x => x.key === partyId) : r0.rows;
   const totals = partyId

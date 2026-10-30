@@ -29,7 +29,10 @@ export function parseAddresses(text) {
 // fromChoice offers "From": the document type's own sender, or "me" — the same
 // company address under the signed-in person's name, with replies to their own
 // email (the mail service can only send from the company's verified domain).
-export default function EmailModal({ title, defaultTo, defaultSubject, defaultBody, buildAttachment, onClose, onSent, toast, docType, fromChoice }) {
+// extras: optional attachments offered as tickboxes, off until ticked —
+// [{ key, label, hint, build }] where build() returns { blob, filename }.
+export default function EmailModal({ title, defaultTo, defaultSubject, defaultBody, buildAttachment, onClose, onSent, toast, docType, fromChoice, extras }) {
+  const [picked, setPicked] = useState({});
   const [fromMe, setFromMe] = useState(false);
   const [to, setTo] = useState(defaultTo || "");
   const [cc, setCc] = useState("");
@@ -44,6 +47,7 @@ export default function EmailModal({ title, defaultTo, defaultSubject, defaultBo
     try {
       const att = buildAttachment ? await buildAttachment() : null;
       const list = Array.isArray(att) ? att : att ? [att] : [];
+      for (const x of (extras || []).filter(x => picked[x.key])) list.push(await x.build());
       const attachments = await Promise.all(list.map(async a => ({ filename: a.filename, content: await blobToBase64(a.blob) })));
       const html = body.split("\n").map(l => l.trim() === "" ? "<br/>" : `<p style="margin:0 0 2px">${l.replace(/</g, "&lt;")}</p>`).join("");
       const { data, error } = await supabase.functions.invoke("send-document", {
@@ -75,6 +79,9 @@ export default function EmailModal({ title, defaultTo, defaultSubject, defaultBo
     {bad.length > 0 && <p style={{ color: "var(--neg)", margin: "0 0 10px" }}>Not an email address: {bad.join(", ")}</p>}
     <Field label="Subject"><input className="input" value={subject} onChange={e => setSubject(e.target.value)} /></Field>
     <Field label="Message"><textarea className="input" style={{ minHeight: 120 }} value={body} onChange={e => setBody(e.target.value)} /></Field>
+    {(extras || []).map(x => <label key={x.key} style={{ display: "flex", gap: 8, alignItems: "baseline", margin: "0 0 10px", cursor: "pointer" }}>
+      <input type="checkbox" checked={!!picked[x.key]} onChange={e => setPicked({ ...picked, [x.key]: e.target.checked })} />
+      <span>{x.label}{x.hint && <span className="subtle" style={{ fontSize: 12.5 }}> — {x.hint}</span>}</span></label>)}
     <p className="subtle" style={{ margin: 0 }}>The document is attached automatically. Sending requires the email function to be set up (see app/supabase/README.md).</p>
   </Modal>;
 }

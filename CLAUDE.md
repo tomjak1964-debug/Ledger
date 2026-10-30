@@ -748,6 +748,13 @@ now offers); each report opened starts there. **Headings name who the report cov
 vendor filter heads its card, and every page of its PDF, with *Customer: X* / *Vendor: X*, or *All customers* /
 *All vendors* when none is picked (`partyLine` in `ReportsView`, passed into the card's `rangeLabel`).
 
+**Invoice emails can carry the customer's Aged Receivables** (`lib/agedAttachment.jsx`): every invoice email — the
+row's Email, Select → Email, Email on the open invoice, and Receivables' payment reminder — offers a tickbox *Attach Aged
+Receivables (detail) for <customer>*, with what they have open today; ticked, the email also carries that report as a
+PDF (`agedReceivablesPdf()` renders `AgedReport` in Detail, filtered to the customer, as of today, off-screen and runs
+`reportPdf()` on it — the same document Reports makes). Several customers on one email get a tickbox each. It rides on
+`EmailModal`'s `extras` ([{ key, label, hint, build }], off until ticked).
+
 **Printing on an iPad / iPhone** (`lib/printSupport.js`, `components/IOSPrintHost.jsx`): iOS ignores `window.print()`
 in a home-screen app, so every Print goes through `printOrShare(build)` — elsewhere it is the browser's print as before;
 on iOS it makes the document's PDF (`build`: the invoice's `invoicePdf()`, the report / quote / PO / proposal page via

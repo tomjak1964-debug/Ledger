@@ -1,3 +1,4 @@
+import { agedExtras } from "../lib/agedAttachment.jsx";
 import { useState } from "react";
 import { money, fmtDate, todayISO, daysBetween, nameOf } from "../lib/helpers.js";
 import { emailFor } from "../lib/people.js";
@@ -144,7 +145,7 @@ export default function ReceivablesView({ db, actions, toast, openDoc, readOnly 
       defaultTo={emailFor(db, remind.customerId, "invoice", remind.contactPersonId)}
       defaultSubject={`Payment reminder — invoice ${remind.number} (${db.settings.company})`}
       defaultBody={`Hello,\n\nA friendly reminder that invoice ${remind.number} for ${money(balance(remind))} was due ${fmtDate(remind.dueDate)} and is now ${daysBetween(remind.dueDate, todayISO())} days past due.\n\nPlease remit at your earliest convenience. If payment is already on the way, thank you and please disregard.\n\n${db.settings.company}\n${db.settings.companyPhone || ""}`}
-      buildAttachment={() => invoicePdf(remind, db)}
+      buildAttachment={() => invoicePdf(remind, db)} extras={agedExtras(db, [remind.customerId])}
       onClose={() => setRemind(null)} toast={toast} />}
     {pay && <PaymentModal doc={pay} onClose={() => setPay(null)}
       offerFor={d => discountOffer(db, pay, pay.customerId, d)}

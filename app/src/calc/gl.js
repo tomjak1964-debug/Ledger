@@ -55,8 +55,11 @@ export function journal(db, { close = true } = {}) {
   const cash = isCashBasis(db.settings);
   const out = [];
   const post = (date, source, memo, party, lines) => {
+    // A negative amount belongs on the other side (a credit memo's share of a
+    // receipt, a credit line on a bill): Dr −2,516 is Cr 2,516.
     const clean = lines.filter(l => Math.abs(l.debit || 0) > 0.005 || Math.abs(l.credit || 0) > 0.005)
-      .map(l => ({ account: l.account, debit: round2(l.debit), credit: round2(l.credit), ...(l.memo ? { memo: l.memo } : {}) }));
+      .map(l => { const net = round2((l.debit || 0) - (l.credit || 0));
+        return { account: l.account, debit: net > 0 ? net : 0, credit: net < 0 ? -net : 0, ...(l.memo ? { memo: l.memo } : {}) }; });
     if (clean.length) out.push({ date, source, memo, party, lines: clean });
   };
 
@@ -66,7 +69,10 @@ export function journal(db, { close = true } = {}) {
     const who = partyName(db, inv.customerId);
     const isCredit = inv.kind === "credit" || t.total < 0;
     if (cash) {
-      if (isCredit) return;                                 // nothing until cash moves
+      // A credit note recognizes nothing until cash moves: applied to an invoice
+      // (method Credit) it never does; netted into a customer's receipt or
+      // refunded, its cash share posts like a receipt with the sign turned —
+      // Dr income / Cr cash — so the receipt's rows add up to what the bank got.
       let cumSettled = 0, cumIncome = 0;
       [...(inv.payments || [])].sort((a, b) => (a.date || "").localeCompare(b.date || "")).forEach(p => {
         if (p.method === CREDIT_METHOD) return;             // a credit applied is not cash

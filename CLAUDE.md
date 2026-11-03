@@ -1071,6 +1071,16 @@ reference and date and add up to it (a transfer that paid several bills, or nett
 offers a **Close match** — a payment, receipt or expense within $25, or 2% when the payee's name is on the line,
 paired across the whole statement — as **Fix the books**: the row takes the bank's amount (a bill can be raised or
 lowered with it; unticked, the difference stays as a vendor credit or still owing) and is ticked cleared.
+**A credit memo netted into a receipt posts its cash** (`journal()`, cash basis): a credit note still recognizes nothing
+on its own, and a credit *applied* (method `Credit`) never moves cash — but a payment row on a credit note with any other
+method (the customer took the credit off what they sent, or it was refunded) posts as a receipt with the sign turned,
+Dr income / Cr cash. Before 2026-11-03 it posted nothing, so Venture's 7/10 receipt E1136 ($51,369.50 on six invoices,
+−$2,516.00 on VG260521-CR) read $2,516 more than the bank's $48,853.50 and the group match missed it (and July's income and
+checking were $2,516 high). `post()` now turns any negative amount to the other side. **Already in Ledger, dated
+otherwise:** a bank line nothing matched is offered *A receipt / payment already in Ledger, dated otherwise* — uncleared
+register rows (one receipt's rows grouped by reference and date) that add up to the line, dated within 90 days either
+side, after the statement too; picked, it is moved to the bank's date (a tick, on by default — each payment row, the
+expense or the entry) and cleared. It is the default when one exists.
 **Recurring lines are remembered** (`settings.bankRules`, keyed by `bankKey()` — the description's words without
 reference numbers, a masked account kept): each post, vendor or customer choice is saved on Apply and fills the
 same line next month ("filled in from last time"); checks are never remembered. Accounts 2600 Line of Credit and

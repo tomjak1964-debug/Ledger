@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { uid, todayISO, isoDate, money, fmtDate, sum, pickable } from "../lib/helpers.js";
 import { round2, billBalance, balance, applyOldestFirst } from "../calc/ledger.js";
 import { accountSettings, accountLabel, TYPE_GROUP, accountByNumber } from "../calc/accounts.js";
-import { reconcileState, matchStatement, suggestVendorPayment, suggestCustomerReceipt, openInvoices, bankKey } from "../calc/bankRecon.js";
+import { reconcileState, matchStatement, cashRegister, suggestVendorPayment, suggestCustomerReceipt, openInvoices, bankKey } from "../calc/bankRecon.js";
 import { AUTO_NUMBER } from "../lib/store.js";
 import { readStatementFile, parseStatement, parsePasted } from "../lib/bankStatement.js";
 import AccountSelect from "../components/AccountSelect.jsx";
@@ -297,21 +297,44 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
   // bankKey): the same transfer, the same rent, the same loan payment comes back
   // already filled in, as card merchants do.
   const rules = db.settings.bankRules || {};
+  // Already in Ledger, under another date: a receipt, payment, expense or entry
+  // nobody has cleared, whose rows (sharing a reference and a date, as one
+  // receipt does) add up to the bank line — offered for a line the books didn't
+  // match, in case it was entered as August instead of July. Any date within
+  // 90 days, after the statement too.
+  const clearedKeys = new Set((db.bankCleared || []).filter(c => String(c.account) === String(state.account)).map(c => c.itemKey));
+  const register = cashRegister(db, state.account).filter(it => !clearedKeys.has(it.key));
+  const bookedGroups = (() => {
+    const m = new Map();
+    register.forEach(it => {
+      const k = it.ref ? `${it.type}|${it.ref}|${it.date}` : it.key;
+      if (!m.has(k)) m.set(k, { key: k, date: it.date, type: it.type, ref: it.ref, party: it.party, memo: it.memo, items: [] });
+      m.get(k).items.push(it);
+    });
+    return [...m.values()].map(g => ({ ...g, amount: round2(sum(g.items, it => it.amount)) }));
+  })();
+  const bookedFor = (line, taken = new Set()) => bookedGroups.filter(g => Math.abs(g.amount - line.amount) < 0.005
+    && Math.abs((new Date(g.date) - new Date(line.date)) / 86400000) <= 90 && !g.items.some(it => taken.has(it.key)))
+    .sort((a, b) => Math.abs(new Date(a.date) - new Date(line.date)) - Math.abs(new Date(b.date) - new Date(line.date)));
   const load = (p) => {
     const inRange = p.lines.filter(l => l.date <= recon.statementDate);
     const matched = matchStatement(inRange, state.items);
     setParsed({ ...p, skippedLater: p.lines.length - inRange.length });
+    // Rows the statement already matched aren't offered again.
+    const taken = new Set(matched.flatMap(m => [...(m.group || (m.item ? [m.item] : [])), ...(m.near ? [m.near] : [])].map(it => it.key)));
     setRows(matched.map(m => {
+      const booked = !m.item && !m.near ? bookedFor(m.line, taken) : [];
       const cp = !m.item && cardPaid(m.line);
       const lp = !m.item && !m.near && !cp && loanNamed(m.line);
       const rule = !m.item && !m.near && !cp && !m.line.checkNo ? rules[bankKey(m.line.desc)] : null;
       const vp = !m.item && !cp && !lp && vendorPay(m.line);
       const cr = !m.item && !lp && suggestCustomerReceipt(db, m.line);
-      const base = { ...m, take: true, action: m.item ? "clear" : m.near ? "fix" : vp ? "vendor" : cr ? "customer" : "post",
+      const base = { ...m, take: true, action: m.item ? "clear" : m.near ? "fix" : booked.length ? "booked" : vp ? "vendor" : cr ? "customer" : "post",
+        bookedKey: booked[0]?.key || "", redate: true,
         customerId: cr ? cr.customerId : "", invoiceId: cr ? cr.invoiceId : "", invDesc: m.line.desc, invAccount: "", account: cp ? String(cp.card.account) : lp ? String(lp.account) : m.line.amount < 0 ? "" : "4300",
         payee: cp ? cp.card.name : lp ? lp.name : guessPayee(m.line.desc), recordAs: cp || lp ? "journal" : m.line.amount < 0 ? "expense" : "journal", cardPay: cp || null,
         vendorId: vp ? vp.vendorId : "", billId: vp ? vp.billId : "", billRef: yymmdd(m.line.date), billAccount: "", raiseDoc: false, remembered: !!rule };
-      if (!rule) return base;
+      if (!rule || booked.length) return base;
       // A rule fills in how it went last time; an open bill or invoice for this
       // exact amount still wins over a remembered "new one".
       const sameSide = (rule.action === "vendor" && m.line.amount < 0) || (rule.action === "customer" && m.line.amount > 0) || rule.action === "post";
@@ -343,6 +366,7 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
     return null;
   };
   const toPost = rows.filter(r => r.take && !r.item && r.action === "post");
+  const toBooked = rows.filter(r => r.take && !r.item && r.action === "booked" && r.bookedKey);
   const toVendor = rows.filter(r => r.take && !r.item && r.action === "vendor");
   // Written before Ledger started, cleared now: a December check (or deposit)
   // whose expense (or income) is already in last year's books. It is booked on
@@ -381,7 +405,7 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
     }
     return (r.invDesc || "").trim() ? "" : "Describe what the invoice was for";
   };
-  const canApply = rows.length > 0 && toPost.every(r => r.account) && toVendor.every(r => !vendorProblem(r)) && toCustomer.every(r => !customerProblem(r));
+  const canApply = rows.length > 0 && !rows.some(r => r.take && !r.item && r.action === "booked" && !r.bookedKey) && toPost.every(r => r.account) && toVendor.every(r => !vendorProblem(r)) && toCustomer.every(r => !customerProblem(r));
   const apply = async () => {
     setBusy(true);
     try {
@@ -408,6 +432,31 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
         if (!ok) { failed++; continue; }
         await actions.setCleared(recon, [{ ...it, amount: r.line.amount }], true);
         posted++;
+      }
+      // Already in Ledger under another date: put it on the bank's date (each
+      // receipt or payment row, the expense, or the entry) unless told not to,
+      // then clear it.
+      for (const r of toBooked) {
+        const g = bookedGroups.find(x => x.key === r.bookedKey);
+        if (!g) { failed++; continue; }
+        let ok = true;
+        if (r.redate && g.date !== r.line.date) {
+          for (const it of g.items) {
+            if (it.type === "receipt" || it.type === "payment") {
+              const f = findPayment(it);
+              ok = ok && !!f && !!await actions.updatePayment(it.type === "payment" ? "bill" : "invoice", f.doc.id, { ...f.p, date: r.line.date });
+            } else if (it.type === "expense") {
+              const e = db.expenses.find(x => x.id === it.sourceId);
+              ok = ok && !!e && !!await actions.saveExpense({ ...e, date: r.line.date });
+            } else if (it.type === "journal") {
+              const j = (db.journalEntries || []).find(x => x.id === it.sourceId);
+              ok = ok && !!j && !!await actions.saveJournalEntry({ ...j, date: r.line.date });
+            }
+          }
+        }
+        if (!ok) { failed++; continue; }
+        await actions.setCleared(recon, g.items.map(it => ({ ...it, date: r.redate ? r.line.date : it.date })), true);
+        cleared++;
       }
       // The account's opening-balance entry is no line on any statement, but the
       // first reconciliation has to count it cleared — the bank's balance starts there.
@@ -500,7 +549,7 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
   const postAccounts = (out) => out ? ["expense", "cos", "equity", "liability", "asset"] : ["income", "equity", "liability", "asset"];
   return <Modal title={"Import Statement — " + fmtDate(recon.statementDate)} onClose={onClose} wide
     foot={<>
-      <span className="subtle" style={{ marginRight: "auto" }}>{rows.length ? `${toClear.length} matched · ${toPost.length + toVendor.length + toCustomer.length + toPre.length + toFix.length} to post · ${rows.filter(r => !r.item && r.action === "skip").length} left alone` : ""}</span>
+      <span className="subtle" style={{ marginRight: "auto" }}>{rows.length ? `${toClear.length} matched · ${toPost.length + toVendor.length + toCustomer.length + toPre.length + toFix.length} to post${toBooked.length ? ` · ${toBooked.length} found under another date` : ""} · ${rows.filter(r => !r.item && r.action === "skip").length} left alone` : ""}</span>
       <button className="btn" onClick={onClose}>Cancel</button>
       <button className="btn primary" disabled={busy || !canApply} onClick={apply}>{busy ? "Working…" : "Apply"}</button></>}>
     {!parsed ? <>
@@ -535,6 +584,7 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
               : <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <select className="select" value={r.action} onChange={e => setRow(i, { action: e.target.value })}>
                   {r.near && <option value="fix">Fix the books — it was {money(Math.abs(r.line.amount))}, not {money(Math.abs(r.near.amount))}</option>}
+                  {bookedFor(r.line).length > 0 && <option value="booked">{r.line.amount > 0 ? "A receipt" : "A payment"} already in Ledger, dated otherwise</option>}
                   <option value="post">{r.line.amount < 0 ? "Post as money out" : "Post as money in"}</option>
                   {r.line.amount < 0 && <option value="vendor">Vendor bill payment (keeps the vendor's account and 1099)</option>}
                   {r.line.amount > 0 && <option value="customer">Customer receipt (keeps the customer's account)</option>}
@@ -552,6 +602,21 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
                     {isBill && f && diff < 0 && <label className="subtle" style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 12 }}>
                       <input type="checkbox" checked={r.raiseDoc} onChange={e => setRow(i, { raiseDoc: e.target.checked })} style={{ marginTop: 2 }} />
                       <span>The bill was {money(round2((Number(f.doc.amount) || 0) + diff))} too — lower it. Unticked, {money(-diff)} stays owing on the bill.</span></label>}
+                  </>;
+                })()}
+                {r.action === "booked" && (() => {
+                  const taken = new Set(rows.filter((x, j) => j !== i && x.action === "booked" && x.bookedKey).flatMap(x => (bookedGroups.find(g => g.key === x.bookedKey)?.items || []).map(it => it.key)));
+                  const cands = bookedFor(r.line, taken);
+                  const g = bookedGroups.find(x => x.key === r.bookedKey);
+                  return <>
+                    <select className="select" value={r.bookedKey} onChange={e => setRow(i, { bookedKey: e.target.value })}>
+                      <option value="">Pick it…</option>
+                      {cands.map(c => <option key={c.key} value={c.key}>{fmtDate(c.date)} · {c.party || c.memo}{c.ref ? " · #" + c.ref : ""}{c.items.length > 1 ? ` · ${c.items.length} rows` : ""} · {money(Math.abs(c.amount))}</option>)}
+                    </select>
+                    {g && g.date !== r.line.date && <label className="subtle" style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 12 }}>
+                      <input type="checkbox" checked={r.redate} onChange={e => setRow(i, { redate: e.target.checked })} style={{ marginTop: 2 }} />
+                      <span>It's dated {fmtDate(g.date)} in Ledger — change it to the bank's {fmtDate(r.line.date)}.</span></label>}
+                    {g && <span className="subtle" style={{ fontSize: 12 }}>Ticks it cleared on this statement.</span>}
                   </>;
                 })()}
                 {r.action === "pre" && <span className="subtle" style={{ fontSize: 12 }}>

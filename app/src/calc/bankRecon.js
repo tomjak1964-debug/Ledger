@@ -95,7 +95,23 @@ export function matchStatement(lines, items, { days = 10 } = {}) {
     out[i] = { line: ln, item: cands[0].it };
   });
   pass((it, ln) => { const a = checkNo(it.ref), b = ln.checkNo || checkNo(ln.desc); return a && b && a === b; });
-  pass((it, ln) => Math.abs(daysBetween(it.date, ln.date)) <= days);
+  // Same amount within the window: paired across the whole statement, not in
+  // the order the lines were read — a line that names the payee first, then the
+  // closest date. Read in order, an ATM withdrawal of $500 on 9/08 took the $500
+  // Venus payment of 9/09 and left the bank's own Venus line unmatched.
+  const named = (it, ln) => { const w = nameWords(it.party); const d = " " + String(ln.desc || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ") + " ";
+    return w.length > 0 && w.slice(0, 2).every(x => d.includes(" " + x + " ")); };
+  const same = [];
+  lines.forEach((ln, i) => {
+    if (out[i]) return;
+    free.forEach(f => {
+      if (f.used || Math.abs(Math.abs(f.it.amount) - Math.abs(ln.amount)) >= 0.005 || Math.sign(f.it.amount) !== Math.sign(ln.amount)) return;
+      const gap = Math.abs(daysBetween(f.it.date, ln.date));
+      if (gap <= days) same.push({ i, f, gap, byName: named(f.it, ln) });
+    });
+  });
+  same.sort((a, b) => (b.byName - a.byName) || (a.gap - b.gap) || (a.i - b.i));
+  for (const pr of same) if (!out[pr.i] && !pr.f.used) { pr.f.used = true; out[pr.i] = { line: lines[pr.i], item: pr.f.it }; }
   pass((it, ln) => !!(ln.checkNo || checkNo(ln.desc)) && checkNo(it.ref) === (ln.checkNo || checkNo(ln.desc)));   // a check that took a long time to clear
   // One bank line, several rows in the books: a transfer that paid several
   // bills (or netted a vendor credit) is one row per document here but one
@@ -123,8 +139,6 @@ export function matchStatement(lines, items, { days = 10 } = {}) {
   // payee's name is on the bank line; ten days either way. Pairs are chosen
   // across the whole statement — a named payee first, then the smallest
   // difference — so the first line read can't take another line's row.
-  const named = (it, ln) => { const w = nameWords(it.party); const d = " " + String(ln.desc || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ") + " ";
-    return w.length > 0 && w.slice(0, 2).every(x => d.includes(" " + x + " ")); };
   const pairs = [];
   lines.forEach((ln, i) => {
     if (out[i]) return;

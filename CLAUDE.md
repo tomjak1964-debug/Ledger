@@ -1042,7 +1042,9 @@ reference on a second line (joined to the description, so *Citi Autopay* reaches
 read, checked against the January 2026 statement (35 items, in/out to the cent).
 `matchStatement()` pairs each line with an outstanding item by amount and side — the same check number
 first, else the nearest date within ten days, else a check number on its own for a slow check — each item
-used once. Matched lines are ticked; the rest are **Not in Ledger** with a *Post to* account: money out to
+used once. Same-amount pairs within the window are chosen across the whole statement — a line naming the payee first, then the
+closest date — not in the order the lines were read: read in order, a $500 ATM withdrawal on 9/08 took the $500 Venus
+payment of 9/09 and left the bank's own Venus line unmatched (September 2026). Matched lines are ticked; the rest are **Not in Ledger** with a *Post to* account: money out to
 an expense-type account becomes an expense entry (payee guessed from the description), anything else — a
 distribution, a loan payment, interest, a transfer — a two-line journal entry, and the new item is ticked
 as cleared. A customer receipt the bank has but the books don't is left alone on purpose: it belongs in

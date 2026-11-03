@@ -202,6 +202,15 @@ const cardLine = l => ({ id: l.id || crypto.randomUUID(), date: l.date || "", de
   // A charge recorded as a vendor's bill payment (paid by card) instead of an expense.
   ...(l.vendorId ? { vendorId: l.vendorId, billId: l.billId || "", billRef: l.billRef || "" } : {}),
   ...(l.paymentId ? { paymentId: l.paymentId } : {}), ...(l.newBillId ? { newBillId: l.newBillId } : {}) });
+// Line of credit statements (migration 042).
+const loanLine = l => ({ id: l.id || crypto.randomUUID(), date: l.date || "", postDate: l.postDate || "", desc: l.desc ?? "", amount: num(l.amount), kind: l.kind || "",
+  ...(l.entryId ? { entryId: l.entryId, linked: !!l.linked } : {}) });
+export const loanStatementFromRow = r => ({ id: r.id, loanAccount: String(r.loan_account || ""), loanName: r.loan_name || "", closingDate: r.closing_date || "",
+  periodFrom: r.period_from || "", previousBalance: r.previous_balance == null ? null : num(r.previous_balance), newBalance: r.new_balance == null ? null : num(r.new_balance),
+  lines: (Array.isArray(r.lines) ? r.lines : []).map(loanLine), chargesEntryId: r.charges_entry_id || "", createdAt: r.created_at });
+export const loanStatementToRow = s => ({ id: s.id, loan_account: String(s.loanAccount), loan_name: s.loanName ?? "", closing_date: dateOrNull(s.closingDate),
+  period_from: dateOrNull(s.periodFrom), previous_balance: s.previousBalance == null || s.previousBalance === "" ? null : num(s.previousBalance),
+  new_balance: s.newBalance == null || s.newBalance === "" ? null : num(s.newBalance), lines: (s.lines || []).map(loanLine), charges_entry_id: idOrNull(s.chargesEntryId) });
 export const cardStatementToRow = s => ({ id: s.id, card_account: String(s.cardAccount), card_name: s.cardName ?? "", closing_date: dateOrNull(s.closingDate),
   period_from: dateOrNull(s.periodFrom), previous_balance: s.previousBalance == null || s.previousBalance === "" ? null : num(s.previousBalance),
   new_balance: s.newBalance == null || s.newBalance === "" ? null : num(s.newBalance), business_total: num(s.businessTotal), personal_total: num(s.personalTotal),

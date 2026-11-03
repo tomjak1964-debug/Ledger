@@ -35,6 +35,7 @@ import AccountsView from "./views/Accounts.jsx";
 import JournalEntriesView from "./views/JournalEntries.jsx";
 import BankReconciliationView from "./views/BankReconciliation.jsx";
 import CreditCardsView from "./views/CreditCards.jsx";
+import LineOfCreditView from "./views/LineOfCredit.jsx";
 import RateSheetDoc from "./components/RateSheetDoc.jsx";
 import BankingSheetDoc from "./components/BankingSheetDoc.jsx";
 
@@ -83,6 +84,7 @@ const NAV = [
       { k: "journal", label: "Journal Entries", icon: ICONS.reports },
       { k: "recon", label: "Bank Reconciliation", icon: ICONS.check },
       { k: "cards", label: "Credit Cards", icon: ICONS.money },
+      { k: "loans", label: "Line of Credit", icon: ICONS.money },
       { k: "settings", label: "Settings", icon: ICONS.settings },
     ]
   },
@@ -103,6 +105,7 @@ const TITLES = {
   journal: ["Journal Entries", "What you book to the ledger by hand — payroll, adjustments, depreciation"],
   recon: ["Bank Reconciliation", "Tick what cleared the bank until the statement and the books agree"],
   cards: ["Credit Cards", "Import each card's statement, split business from personal, and post it"],
+  loans: ["Line of Credit", "Import each statement — draws, payments, interest and fees go on the books"],
   reports: ["Reports", "P&L, sales tax, customers, and statements"],
   proposals: ["Proposals", "Fixture and system proposals — priced, tracked, and documented"],
   bankingSheet: ["Banking Info", "How customers pay you — ACH, wire and check — on your letterhead: email, print or save"],
@@ -257,6 +260,7 @@ export default function App({ session }) {
         {activeView === "journal" && <JournalEntriesView {...props} />}
         {activeView === "recon" && <BankReconciliationView {...props} />}
         {activeView === "cards" && <CreditCardsView {...props} />}
+        {activeView === "loans" && <LineOfCreditView {...props} />}
         {activeView === "settings" && <SettingsView {...props} />}
       </div>
     </div>

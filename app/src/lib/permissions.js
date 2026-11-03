@@ -56,6 +56,7 @@ export const NAV_AREA = {
   journal: "settings",
   recon: "settings",
   cards: "settings",
+  loans: "settings",
 };
 
 export const isAdminRole = (role) => role === "owner" || role === "admin";

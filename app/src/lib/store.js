@@ -14,6 +14,7 @@ import * as A from "./adapters.js";
 import { dueDateFor } from "./terms.js";
 import { CREDIT_METHOD } from "./credits.js";
 import { uid, todayISO, addDays, pad4, money, sum } from "./helpers.js";
+import { planLoanStatement } from "./loanStatement.js";
 import { defaultSettings, sampleData } from "./seed.js";
 import { proposalConfig, phaseAmount, billsOnPo } from "../calc/proposals.js";
 import { proposalSpecs, proposalBudget } from "../calc/jobs.js";
@@ -36,7 +37,7 @@ const th = (res) => { if (res.error) throw res.error; return res.data; };
 
 async function fetchAll() {
   const [settings, sequences, contacts, catalog, quotes, qli, sos, soli, invoices, invli, payments, bills, expenses,
-    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments, pos, poli, accounts, journal, recons, cleared, jobCosts, serviceReports, cardStatements, bankInfo, emailLog] = await Promise.all([
+    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments, pos, poli, accounts, journal, recons, cleared, jobCosts, serviceReports, cardStatements, bankInfo, emailLog, loanStatements] = await Promise.all([
     supabase.from("settings").select("*").maybeSingle(),
     supabase.from("org_sequences").select("*"),
     supabase.from("contacts").select("*").order("created_at"),
@@ -74,6 +75,7 @@ async function fetchAll() {
     supabase.from("bank_info").select("*").maybeSingle(),
     // Every email sent through Ledger (migration 040) — the Correspondence report.
     supabase.from("email_log").select("*").order("sent_at", { ascending: false }).limit(5000),
+    supabase.from("loan_statements").select("*").order("closing_date", { ascending: false }),   // migration 042
   ]);
   return {
     settingsRow: th(settings), sequences: th(sequences),
@@ -100,7 +102,8 @@ async function fetchAll() {
     serviceReports: serviceReports && !serviceReports.error ? (serviceReports.data || []) : [],   // migration 029
     cardStatements: cardStatements && !cardStatements.error ? (cardStatements.data || []) : [],   // migration 031
     bankInfo: bankInfo && !bankInfo.error ? (bankInfo.data?.data || null) : null,                 // migration 037
-    emailLog: emailLog && !emailLog.error ? (emailLog.data || []) : [],                         // migration 040
+    emailLog: emailLog && !emailLog.error ? (emailLog.data || []) : [],
+    loanStatements: loanStatements && !loanStatements.error ? (loanStatements.data || []) : [],   // migration 042                         // migration 040
   };
 }
 
@@ -145,6 +148,7 @@ function assemble(raw) {
     jobCosts: (raw.jobCosts || []).map(A.jobCostFromRow),
     serviceReports: (raw.serviceReports || []).map(A.serviceReportFromRow),
     cardStatements: (raw.cardStatements || []).map(A.cardStatementFromRow),
+    loanStatements: (raw.loanStatements || []).map(A.loanStatementFromRow),
   };
 }
 
@@ -1501,6 +1505,64 @@ export function useLedger(session, onError) {
         } catch (_) { /* reported below */ }
         return fail(e);
       }
+    },
+    // A line of credit statement (System → Line of Credit, migration 042): one
+    // entry per payment or draw — or a link to the one already on the books —
+    // and one for the interest and fees charged to the line
+    // (planLoanStatement() in lib/loanStatement.js). A refused part takes the rest back.
+    async postLoanStatement(st) {
+      const written = [];
+      try {
+        const d0 = dbRef.current;
+        const acct = accountSettings(d0.settings);
+        const loan = (acct.loans || []).find(l => String(l.account) === String(st.loanAccount));
+        if (!loan) throw new Error("Pick the line of credit this statement is for.");
+        if (!st.closingDate) throw new Error("Enter the statement's closing date.");
+        if ((d0.loanStatements || []).some(x => x.loanAccount === String(loan.account) && x.closingDate === st.closingDate))
+          throw new Error(`The ${loan.name} statement closing ${st.closingDate} has already been posted.`);
+        const plan = planLoanStatement(d0, loan, st);
+        const lock = acct.lockDate;
+        const dates = [...plan.cash.filter(c => c.entry).map(c => c.entry.date), ...(plan.chargesEntry ? [plan.chargesEntry.date] : [])];
+        if (lock && dates.some(d => d && d <= lock)) throw new Error(`The books are locked through ${lock}. Move the lock date in Settings → Accounts to post this statement.`);
+        const entryOf = {};
+        for (const c of plan.cash) {
+          if (c.existing) { entryOf[c.line.id] = { entryId: c.existing.id, linked: true }; continue; }
+          const je = await actions.saveJournalEntry({ id: uid(), _new: true, ...c.entry, lines: c.entry.lines.map(l => ({ ...l, id: uid() })) });
+          if (!je) throw new Error(`The entry for ${c.line.desc} (${money(Math.abs(c.line.amount))}) wasn't saved.`);
+          written.push(je.id); entryOf[c.line.id] = { entryId: je.id, linked: false };
+        }
+        let chargesEntryId = "";
+        if (plan.chargesEntry) {
+          const je = await actions.saveJournalEntry({ id: uid(), _new: true, ...plan.chargesEntry, lines: plan.chargesEntry.lines.map(l => ({ ...l, id: uid() })) });
+          if (!je) throw new Error("The interest and fees entry wasn't saved.");
+          written.push(je.id); chargesEntryId = je.id;
+        }
+        const row = { ...st, id: st.id || uid(), loanAccount: String(loan.account), loanName: loan.name, chargesEntryId,
+          lines: st.lines.map(l => ({ ...l, ...(entryOf[l.id] || (chargesEntryId && ["interest", "fee", "credit"].includes(l.kind) ? { entryId: chargesEntryId, linked: false } : {})) })) };
+        th(await supabase.from("loan_statements").insert(A.loanStatementToRow(row)));
+        setDb(d => ({ ...d, loanStatements: [row, ...(d.loanStatements || [])] }));
+        return row;
+      } catch (e) {
+        try {
+          for (const id of written) await supabase.from("journal_entries").delete().eq("id", id);
+          setDb(d => ({ ...d, journalEntries: (d.journalEntries || []).filter(j => !written.includes(j.id)) }));
+        } catch (_) { /* reported below */ }
+        return fail(e);
+      }
+    },
+    // Unpost: the entries the statement wrote go (a linked one stays — it was
+    // there before), and it can be imported again.
+    async deleteLoanStatement(st) {
+      try {
+        const ids = [...new Set([...(st.lines || []).filter(l => l.entryId && !l.linked).map(l => l.entryId), st.chargesEntryId].filter(Boolean))];
+        const lock = accountSettings(dbRef.current.settings).lockDate;
+        const dates = (dbRef.current.journalEntries || []).filter(j => ids.includes(j.id)).map(j => j.date);
+        if (lock && dates.some(d => d && d <= lock)) throw new Error(`The books are locked through ${lock}. Move the lock date in Settings → Accounts to unpost this statement.`);
+        th(await supabase.from("loan_statements").delete().eq("id", st.id));
+        for (const id of ids) th(await supabase.from("journal_entries").delete().eq("id", id));
+        setDb(d => ({ ...d, loanStatements: (d.loanStatements || []).filter(x => x.id !== st.id), journalEntries: (d.journalEntries || []).filter(j => !ids.includes(j.id)) }));
+        return true;
+      } catch (e) { return fail(e); }
     },
     // Unpost a statement: its expenses and entries go, and it can be imported again.
     async deleteCardStatement(st) {

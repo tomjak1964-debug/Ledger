@@ -276,6 +276,15 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
     const stmt = st || (db.cardStatements || []).filter(s => s.cardAccount === String(card.account) && s.closingDate <= line.date).sort((a, b) => b.closingDate.localeCompare(a.closingDate))[0];
     return { card, stmt };
   };
+  // A line of credit payment or draw the books don't have yet (its statement
+  // isn't imported): a line naming the line of credit (Line of Credit → Set Up's
+  // bank statement words) posts against its account. Importing the statement
+  // first puts it on the books, and it simply matches.
+  const loans = acct.loans || [];
+  const loanNamed = (line) => {
+    const desc = (line.desc || "").toUpperCase();
+    return loans.find(c => (c.match || "").split(/[,;]/).map(w => w.trim().toUpperCase()).filter(Boolean).some(w => desc.includes(w))) || null;
+  };
   // A payment to a vendor the books don't have: an open bill for exactly this
   // amount, else a vendor whose name the statement line carries. Recording it
   // as that vendor's bill payment — not a bare expense — keeps the vendor's
@@ -294,12 +303,13 @@ export function ImportStatementModal({ db, actions, toast, recon, state, onClose
     setParsed({ ...p, skippedLater: p.lines.length - inRange.length });
     setRows(matched.map(m => {
       const cp = !m.item && cardPaid(m.line);
+      const lp = !m.item && !m.near && !cp && loanNamed(m.line);
       const rule = !m.item && !m.near && !cp && !m.line.checkNo ? rules[bankKey(m.line.desc)] : null;
-      const vp = !m.item && !cp && vendorPay(m.line);
-      const cr = !m.item && suggestCustomerReceipt(db, m.line);
+      const vp = !m.item && !cp && !lp && vendorPay(m.line);
+      const cr = !m.item && !lp && suggestCustomerReceipt(db, m.line);
       const base = { ...m, take: true, action: m.item ? "clear" : m.near ? "fix" : vp ? "vendor" : cr ? "customer" : "post",
-        customerId: cr ? cr.customerId : "", invoiceId: cr ? cr.invoiceId : "", invDesc: m.line.desc, invAccount: "", account: cp ? String(cp.card.account) : m.line.amount < 0 ? "" : "4300",
-        payee: cp ? cp.card.name : guessPayee(m.line.desc), recordAs: cp ? "journal" : m.line.amount < 0 ? "expense" : "journal", cardPay: cp || null,
+        customerId: cr ? cr.customerId : "", invoiceId: cr ? cr.invoiceId : "", invDesc: m.line.desc, invAccount: "", account: cp ? String(cp.card.account) : lp ? String(lp.account) : m.line.amount < 0 ? "" : "4300",
+        payee: cp ? cp.card.name : lp ? lp.name : guessPayee(m.line.desc), recordAs: cp || lp ? "journal" : m.line.amount < 0 ? "expense" : "journal", cardPay: cp || null,
         vendorId: vp ? vp.vendorId : "", billId: vp ? vp.billId : "", billRef: yymmdd(m.line.date), billAccount: "", raiseDoc: false, remembered: !!rule };
       if (!rule) return base;
       // A rule fills in how it went last time; an open bill or invoice for this

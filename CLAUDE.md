@@ -1339,3 +1339,15 @@ reference implementation and offline fallback.
 - When adding a module, mirror an existing one (list `card` + `table` + `Empty` + modal/inline editor).
 - Prefer building with stated assumptions over long clarifying rounds; call out assumptions in your summary.
 - If a change spans the whole file or starts the backend split, sketch the plan before large edits.
+
+---
+
+## Standards
+
+This app follows the HomeServer app development standards, `docs/STANDARDS.md` (v1.0, 2026-11-05; synced from
+HomeServer `templates/app/STANDARDS.md` by `scripts/sync-standards.sh` — don't edit the copy here, propose changes
+to Tom). Before building or changing a menu, page header, document/report, list, form, button, dialog, toast,
+upload, phone/email display, permission or Excel feature, read the matching section and use its reference code.
+Every PR says "Standards: followed" or names the exception.
+**Exceptions agreed for this app:** none.
+**Known gaps (adopted when that area is next touched):** Back button; `DocActions` on Reports and quote/PO; portal `DocumentView`; open rows on tap; `fetchAll` for growable tables; audit_log policy; global search opens the record; xlsx instead of CSV (or a BOM); call links; distinct menu icons; load IBM Plex Mono; trim CLAUDE.md (1,341 lines) to the skeleton.

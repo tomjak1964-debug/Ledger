@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { uid, money, todayISO, fmtDate, isoDate } from "../lib/helpers.js";
+import { uid, money, todayISO, fmtDate, isoDate, openAfter } from "../lib/helpers.js";
 import { Ico, ICONS, Field, PasswordInput } from "../components/ui.jsx";
 import ChangePassword from "../components/ChangePassword.jsx";
 import RateSheetDoc from "../components/RateSheetDoc.jsx";
@@ -159,7 +159,7 @@ function BackupsCard({ s, set, saveAll, actions, toast, readOnly }) {
   const bool = (v) => v ? "1" : "0";
   const loadFiles = async () => { const list = await actions.listBackups(); if (list) setFiles(list); };
   useEffect(() => { loadFiles(); }, []);
-  const download = async (path) => { const url = await actions.backupUrl(path); if (url) window.open(url, "_blank"); };
+  const download = (path) => openAfter(() => actions.backupUrl(path));
   const size = n => n < 1024 ? n + " B" : n < 1048576 ? Math.round(n / 1024) + " KB" : (n / 1048576).toFixed(1) + " MB";
   const runNow = async () => {
     setBusy(true);

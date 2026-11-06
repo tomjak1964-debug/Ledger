@@ -10,6 +10,16 @@ export const daysBetween = (a, b) => Math.round((new Date(b + "T00:00:00") - new
 export const money = (n) => (n < 0 ? "-" : "") + "$" + Math.abs(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export const fmtDate = (iso) => iso ? new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
 export const cls = (...a) => a.filter(Boolean).join(" ");
+// Open a URL that has to be fetched first (a signed link) in a new tab. The tab
+// opens at once, while the tap still counts, then is pointed at the URL: an
+// iPhone blocks a window.open that comes after an await (standards S5.2).
+export async function openAfter(getUrl) {
+  const w = window.open("", "_blank");
+  let url = null;
+  try { url = await getUrl(); } finally { if (!url) w?.close(); }
+  if (!url) return;
+  if (w) w.location.href = url; else window.open(url, "_blank");
+}
 export const sum = (arr, f) => arr.reduce((t, x) => t + (f ? f(x) : x), 0);
 export const pad4 = (n) => String(n).padStart(4, "0");
 export const nameOf = (db, id) => { const c = db.contacts.find(x => x.id === id); return c ? c.name : "—"; };

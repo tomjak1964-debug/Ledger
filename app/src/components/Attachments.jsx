@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { Ico, ICONS } from "./ui.jsx";
+import { openAfter } from "../lib/helpers.js";
 
 // Reusable file list for any record (invoice, bill, expense, sales order).
 // Files live in the private Storage bucket; clicking one opens a short-lived
@@ -17,7 +18,7 @@ export default function Attachments({ db, actions, toast, parentType, parentId, 
     setBusy(false);
     if (ok) toast(ok + " file" + (ok > 1 ? "s" : "") + " attached");
   };
-  const open = async (att) => { const url = await actions.attachmentUrl(att); if (url) window.open(url, "_blank"); };
+  const open = (att) => openAfter(() => actions.attachmentUrl(att));
   const del = async (att) => { if (confirm("Delete " + att.filename + "?") && await actions.deleteAttachment(att)) toast("Deleted"); };
   const size = n => n < 1024 ? n + " B" : n < 1048576 ? Math.round(n / 1024) + " KB" : (n / 1048576).toFixed(1) + " MB";
 

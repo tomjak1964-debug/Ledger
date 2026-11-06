@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import IOSPrintHost from "./components/IOSPrintHost.jsx";
 import { useUpdateNudge } from "./lib/version.js";
 import RevisionFoot from "./components/RevisionFoot.jsx";
@@ -134,11 +134,18 @@ export default function App({ session }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [navOpen]);
   // toast("msg") or toast("msg", { actionLabel, onAction }) for an Undo button;
-  // { ms } holds a message up longer than the default (errors worth reading).
+  // { ms } holds a message up longer than the default; { error: true } shows it
+  // red with ✕ (a message starting "⚠" or "Couldn't" counts as an error too).
+  // Each toast clears the last one's timer, so an older toast never hides a
+  // newer one early (standards S4.7).
+  const toastTimer = useRef(null);
   const toast = useCallback((m, opts) => {
     const t = { text: m, ...(opts || {}) };
+    if (t.error === undefined) t.error = /^(⚠|Couldn't)/.test(String(m));
+    if (t.error) t.text = String(m).replace(/^⚠\uFE0F?\s*/, "");
+    clearTimeout(toastTimer.current);
     setToastMsg(t);
-    setTimeout(() => setToastMsg(null), t.ms || (t.onAction ? 8000 : 2600));
+    toastTimer.current = setTimeout(() => setToastMsg(null), t.ms || (t.onAction ? 8000 : t.error ? 8000 : 2600));
   }, []);
   useUpdateNudge(toast);
   const { db, loading, loadError, actions } = useLedger(session, toast);
@@ -276,9 +283,9 @@ export default function App({ session }) {
       autoPrint={doc.autoPrint} onClose={() => setDoc(null)} db={db} toast={toast}
       onEdit={doc.kind === "invoice" && canWrite(member, "invoices") ? () => { setEditRequest({ kind: "invoice", id: doc.doc.id }); setDoc(null); go("invoices"); } : undefined} />}
     <IOSPrintHost toast={toast} />
-    {toastMsg && <div className="toast"><Ico d={ICONS.check} size={16} />{toastMsg.text}
+    {toastMsg && <div className={cls("toast", toastMsg.error && "error")} role="status"><Ico d={toastMsg.error ? ICONS.x : ICONS.check} size={16} />{toastMsg.text}
       {toastMsg.onAction && <button className="link-btn" style={{ color: "#7FB0FF", marginLeft: 10, fontWeight: 600 }}
-        onClick={() => { toastMsg.onAction(); setToastMsg(null); }}>{toastMsg.actionLabel || "Undo"}</button>}
+        onClick={() => { clearTimeout(toastTimer.current); toastMsg.onAction(); setToastMsg(null); }}>{toastMsg.actionLabel || "Undo"}</button>}
     </div>}
   </div>;
 }

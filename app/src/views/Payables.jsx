@@ -475,7 +475,7 @@ function BillLinesEditor({ db, bill, onChange }) {
   lines.forEach(l => { const k = l.salesOrderId || ""; byJob[k] = round2((byJob[k] || 0) + lineAmt(l)); });
   const jobKeys = Object.keys(byJob);
   return <div style={{ marginBottom: 12 }}>
-    <div style={{ overflowX: "auto" }}><table className="li-table">
+    <div style={{ overflowX: "auto", overflowY: "hidden" }}><table className="li-table">
       <thead><tr><th style={{ minWidth: 200 }}>Description</th><th style={{ minWidth: 190 }}>Job / Cost Category</th><th style={{ minWidth: 170 }}>Account</th>
         <th className="num" style={{ width: 70 }}>Qty</th><th className="num" style={{ width: 110 }}>Unit Price</th><th className="num" style={{ width: 100 }}>Amount</th><th></th></tr></thead>
       <tbody>{lines.map(l => <tr key={l.id}>

@@ -1,10 +1,10 @@
-# App development standards (v1.0, 2026-11-05)
+# App development standards (v1.1, 2026-11-08)
 
 How every app in `~/src` is built, so menus, documents, lists, forms and actions look and behave the same
 everywhere. Written from a read-only survey of Ledger, Golf League, MMMO, HOA Manager, Resale Shop, GateA and
 Wedding Planner plus the HomeServer app template (`App Standards Survey.md` has the evidence, file by file).
 
-**Status:** v1.0, agreed by Tom on 2026-11-05 (all eight decisions below as proposed). It is to live in HomeServer
+**Status:** v1.1 (2026-11-08). v1.0 agreed by Tom on 2026-11-05 (all eight decisions below as proposed); v1.1 adds decision 9. It is to live in HomeServer
 `templates/app/STANDARDS.md`, be copied into each app as `docs/STANDARDS.md`, and the reference code it names is to be
 copied into `templates/app` (HomeServer session).
 
@@ -17,6 +17,7 @@ copied into `templates/app` (HomeServer session).
 6. **Permissions:** fail closed: anything not explicitly granted is hidden (S5.4).
 7. **Button wording:** sentence case everywhere ("Add contact", "Save"); Ledger's Title Case changes gradually (S4.5).
 8. **Golf / MMMO:** keep their dark, tabbed phone look as an allowed variant (S1.1).
+9. **Password fields** (2026-11-08): show/hide with an **eye icon**, not the words Show/Hide (S1.4).
 
 ## How to use this (for Claude sessions)
 
@@ -55,7 +56,10 @@ reload mid-use set `AUTO_UPDATE = false` (Golf, MMMO) and get the "Update to Rev
 **Anything being edited carries `data-editing`** (see S4.8).
 
 **S1.4 Sign-in and passwords.** Template sign-in with the centred brand block (Wedding). Every password field is a
-`PasswordInput` with Show/Hide (Ledger/Resale). "Forgot password" only when the app can send email; otherwise say
+`PasswordInput` with an **eye toggle** (decision 9): an icon-only button inside the box at the right, `eye` while
+hidden and `eyeOff` while shown, `aria-label`/`title` "Show password"/"Hide password", `aria-pressed`; `type` switches
+between password and text, keeping what's typed; hover tint only under `@media (hover:hover)` so it doesn't stick
+after a tap on phones. *Reference:* Wedding `ui.jsx PasswordInput` + `.pw-wrap/.pw-eye` (Rev 1.33), template. "Forgot password" only when the app can send email; otherwise say
 "Ask an admin for a new password". Change password = the template's `ChangePassword` modal from the menu foot. Menu foot
 order: name · role, then email + Sign out, then Change password. Minimum password length 10.
 
@@ -84,6 +88,7 @@ Fixed meanings:
 | Import / Upload | `upload` | Settings | `settings` |
 | Search | `search` | Sign out | `logout` |
 | More actions | `more` (⋯) | Attachment | `clip` |
+| Show password | `eye` | Hide password | `eyeOff` (eye, struck through) |
 
 Apps add domain icons (`cake`, `cart`) but never reuse an action key for something else. **No emoji as UI icons**
 (emoji as content, e.g. GateA categories, are fine). Toolbar buttons are icon + label; icon-only buttons (rows,
@@ -314,5 +319,6 @@ copies. Apps adopt it when that area is next touched.
 ---
 
 ## Changelog
+- v1.1 (2026-11-08): password fields show/hide with an eye icon, not words (decision 9, S1.4); `eye`/`eyeOff` added to the S1.7 icon table. Reference: Wedding Rev 1.33. Ledger, Resale and HOA switch from Show/Hide words when that area is next touched.
 - v1.0 (2026-11-05): Tom agreed the eight decisions as proposed.
 - v0.1 (2026-11-05): first draft from the survey of 7 apps + template.

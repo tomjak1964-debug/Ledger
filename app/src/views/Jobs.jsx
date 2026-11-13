@@ -100,7 +100,7 @@ export default function JobsView({ db, actions, toast, readOnly }) {
                     <td><label style={{ display: "flex", alignItems: "center", gap: 6, cursor: li.invoiced || li.closed || readOnly ? "default" : "pointer" }}>
                       <input type="checkbox" checked={!!li.ready} disabled={li.invoiced || li.closed || readOnly}
                         onChange={e => toggleReady(so, li, e.target.checked)} />
-                      {li.ready ? "Ready" : ""}
+                      {li.ready ? (li.invoiced ? "Complete" : "Ready") : ""}
                     </label></td>
                     <td style={{ whiteSpace: "pre-line" }}>{li.desc}</td>
                     <td className="num mono">{li.qty} {li.unit}</td>

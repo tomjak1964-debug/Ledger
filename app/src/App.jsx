@@ -7,6 +7,7 @@ import { supabase } from "./lib/supabaseClient.js";
 import { useLedger } from "./lib/store.js";
 import { cls } from "./lib/helpers.js";
 import { invoiceStatus, paid, billBalance } from "./calc/ledger.js";
+import { isCreditMemo } from "./lib/credits.js";
 import { NAV_AREA, currentMember, canRead, canWrite, isAdminRole } from "./lib/permissions.js";
 import { Ico, ICONS, Modal, BrandMark } from "./components/ui.jsx";
 import DocumentView from "./components/DocumentView.jsx";
@@ -125,7 +126,8 @@ export default function App({ session }) {
   const [menuOut, setMenuOut] = useState(true);
   const [history, setHistory] = useState([]);
   const [pwOpen, setPwOpen] = useState(false);
-  // A document's Edit button asks a list page to open its editor on one record.
+  // A document's Edit button asks a list page to open its editor on one record;
+  // its Copy button asks for the editor on a new draft copied from it ({ copy: true }).
   const [editRequest, setEditRequest] = useState(null);   // anyone can change their own password, Settings or not
   useEffect(() => {
     if (!navOpen) return;
@@ -281,7 +283,8 @@ export default function App({ session }) {
       onPrinted={doc.onPrinted}
       onEmailed={doc.kind === "invoice" ? () => actions.markInvoicePrinted(doc.doc.id, true) : undefined}
       autoPrint={doc.autoPrint} onClose={() => setDoc(null)} db={db} toast={toast}
-      onEdit={doc.kind === "invoice" && canWrite(member, "invoices") ? () => { setEditRequest({ kind: "invoice", id: doc.doc.id }); setDoc(null); go("invoices"); } : undefined} />}
+      onEdit={doc.kind === "invoice" && canWrite(member, "invoices") ? () => { setEditRequest({ kind: "invoice", id: doc.doc.id }); setDoc(null); go("invoices"); } : undefined}
+      onCopy={doc.kind === "invoice" && canWrite(member, "invoices") && !isCreditMemo(doc.doc) ? () => { setEditRequest({ kind: "invoice", id: doc.doc.id, copy: true }); setDoc(null); go("invoices"); } : undefined} />}
     <IOSPrintHost toast={toast} />
     {toastMsg && <div className={cls("toast", toastMsg.error && "error")} role="status"><Ico d={toastMsg.error ? ICONS.x : ICONS.check} size={16} />{toastMsg.text}
       {toastMsg.onAction && <button className="link-btn" style={{ color: "#7FB0FF", marginLeft: 10, fontWeight: 600 }}

@@ -7,7 +7,7 @@ import { remittancesPdf } from "../lib/remittance.js";
 import { nextCheckNumber, checkNumberTaken, remitEmail } from "../lib/checks.js";
 import { useFilters } from "../components/useFilters.jsx";
 import { dueDateFor, termsLabelFor, discountOffer } from "../lib/terms.js";
-import { Ico, ICONS, Badge, Empty, Modal, Field, SortTh, useTableSort, AutoTextarea } from "../components/ui.jsx";
+import { Ico, ICONS, Badge, Empty, Modal, Field, SortTh, useTableSort, AutoTextarea, ActionMenu, MenuItem } from "../components/ui.jsx";
 import PaymentModal from "../components/PaymentModal.jsx";
 import Attachments from "../components/Attachments.jsx";
 import { openCheckPdf } from "../lib/checkPrint.js";
@@ -20,6 +20,32 @@ import { expenseAccountOfBill, accountLabel, accountSettings } from "../calc/acc
 
 // The date a bill was settled — the last payment on it.
 const paidDate = (b) => (b.payments || []).map(p => p.date).filter(Boolean).sort().pop() || "";
+
+// Copy a bill (standards S2.10): a new bill from the same vendor with the same
+// amount or lines (description, qty, price, account, job and cost category),
+// expense account and notes, dated today with the due date from the vendor's
+// terms, and the next BILL- number when it is saved. Nothing is written until
+// Save. Never copied: payments, attachments, the purchase order it was billed
+// from, and the vendor's invoice # (Ref) — it must be unique per vendor, so the
+// new bill's own Ref is typed in. A job that has since closed is dropped.
+export function copyBillDraft(db, b) {
+  const date = todayISO();
+  const openJob = id => (id && db.salesOrders.some(s => s.id === id && s.status === "open") ? id : "");
+  const job = openJob(b.salesOrderId);
+  return {
+    id: uid(), number: db.settings.billPrefix + "-" + String(db.settings.counters.bill).padStart(4, "0"),
+    _new: true, _copyOf: b.number,
+    vendorId: b.vendorId || "", date, dueDate: dueDateFor(db, b.vendorId, date),
+    amount: b.amount, ref: "", notes: b.notes || "", expenseAccount: b.expenseAccount || "",
+    salesOrderId: job, costCategory: job ? b.costCategory || "" : "", purchaseOrderId: "",
+    lines: (b.lines || []).map(l => {
+      const lineJob = openJob(l.salesOrderId);
+      return { id: uid(), desc: l.desc || "", qty: l.qty, unitPrice: l.unitPrice, account: l.account || "",
+        salesOrderId: lineJob, costCategory: lineJob ? l.costCategory || "" : "" };
+    }),
+    payments: [],
+  };
+}
 
 export default function PayablesView({ db, actions, toast, readOnly, go }) {
   const [emailRemit, setEmailRemit] = useState(null); // {bill, payment}
@@ -55,7 +81,11 @@ export default function PayablesView({ db, actions, toast, readOnly, go }) {
     status: b => billStatus(b), paid: b => paidDate(b), amount: b => Number(b.amount) || 0, balance: b => billBalance(b),
   });
 
-  const save = async (bill) => { if (await actions.saveBill(bill)) { setEdit(null); toast("Bill saved"); } };
+  const save = async (draft) => {
+    const { _copyOf, ...bill } = draft;   // _copyOf only names the original for the toast
+    const saved = await actions.saveBill(bill);
+    if (saved) { setEdit(null); toast(_copyOf ? `Copied ${_copyOf} to ${saved.number}` : "Bill saved"); }
+  };
   const del = async (id) => {
     if (!confirm("Delete this bill?")) return;
     const rec = db.bills.find(b => b.id === id);
@@ -117,7 +147,10 @@ export default function PayablesView({ db, actions, toast, readOnly, go }) {
                 {!readOnly && bal > 0.005 && <button className="btn sm" onClick={() => setPay(b)}><Ico d={ICONS.money} size={14} />Pay</button>}
                 {(b.payments || []).length > 0 && <button className="btn ghost icon" title="Payments · print / email remittance" onClick={() => setPay(b)}><Ico d={ICONS.mail} size={15} /></button>}
                 {!readOnly && <button className="btn ghost icon" onClick={() => setEdit({ ...b })} title="Edit"><Ico d={ICONS.edit} size={15} /></button>}
-                {!readOnly && <button className="btn ghost icon" onClick={() => del(b.id)} title="Delete"><Ico d={ICONS.trash} size={15} /></button>}
+                {!readOnly && <ActionMenu title="More actions">{close => <>
+                  <MenuItem onClick={() => { close(); setEdit(copyBillDraft(db, b)); }}>Copy</MenuItem>
+                  <MenuItem danger onClick={() => { close(); del(b.id); }}>Delete</MenuItem>
+                </>}</ActionMenu>}
               </td>
             </tr>;
           })}</tbody></table>}
@@ -128,15 +161,15 @@ export default function PayablesView({ db, actions, toast, readOnly, go }) {
         && (x.ref || "").trim().toLowerCase() === refTrim.toLowerCase());
       const err = !edit.vendorId ? "Select a vendor." : !refTrim ? "Vendor invoice # (Ref) is required." : dup ? `Already entered as ${dup.number} for this vendor.` : "";
       const itemized = (edit.lines || []).length > 0;
-      return <Modal wide={itemized} title={edit._new ? "New Vendor Bill" : "Edit " + edit.number} onClose={() => setEdit(null)}
+      return <Modal wide={itemized} title={edit._copyOf ? "Copy of " + edit._copyOf : edit._new ? "New Vendor Bill" : "Edit " + edit.number} onClose={() => setEdit(null)}
       foot={<><button className="btn" onClick={() => setEdit(null)}>Cancel</button>
         <button className="btn primary" disabled={!!err} onClick={() => save(edit)}>Save Bill</button></>}>
-      <div className="row">
+      <div className="row" data-editing="1">
         <Field label="Vendor" hint={edit.vendorId ? termsLabelFor(db, edit.vendorId) : undefined}>
           <select className="select" value={edit.vendorId}
             onChange={e => setEdit({ ...edit, vendorId: e.target.value, dueDate: dueDateFor(db, e.target.value, edit.date) })}>
           <option value="">Select vendor…</option>{pickable(vendors, edit.vendorId).map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select></Field>
-        <Field label="Vendor Ref / Inv #" hint="Required — the vendor's invoice number">
+        <Field label="Vendor Ref / Inv #" hint={edit._copyOf ? "Required — this bill's own vendor invoice number" : "Required — the vendor's invoice number"}>
           <input className="input" value={edit.ref} onChange={e => setEdit({ ...edit, ref: e.target.value })}
             style={(!refTrim || dup) ? { borderColor: "var(--neg)" } : undefined} /></Field>
       </div>

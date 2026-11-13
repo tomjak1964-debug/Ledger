@@ -1,10 +1,10 @@
-# App development standards (v1.1, 2026-11-08)
+# App development standards (v1.2, 2026-11-12)
 
 How every app in `~/src` is built, so menus, documents, lists, forms and actions look and behave the same
 everywhere. Written from a read-only survey of Ledger, Golf League, MMMO, HOA Manager, Resale Shop, GateA and
 Wedding Planner plus the HomeServer app template (`App Standards Survey.md` has the evidence, file by file).
 
-**Status:** v1.1 (2026-11-08). v1.0 agreed by Tom on 2026-11-05 (all eight decisions below as proposed); v1.1 adds decision 9. It is to live in HomeServer
+**Status:** v1.2 (2026-11-12). v1.0 agreed by Tom on 2026-11-05 (all eight decisions below as proposed); v1.1 adds decision 9, v1.2 decision 10. It is to live in HomeServer
 `templates/app/STANDARDS.md`, be copied into each app as `docs/STANDARDS.md`, and the reference code it names is to be
 copied into `templates/app` (HomeServer session).
 
@@ -18,6 +18,8 @@ copied into `templates/app` (HomeServer session).
 7. **Button wording:** sentence case everywhere ("Add contact", "Save"); Ledger's Title Case changes gradually (S4.5).
 8. **Golf / MMMO:** keep their dark, tabbed phone look as an allowed variant (S1.1).
 9. **Password fields** (2026-11-08): show/hide with an **eye icon**, not the words Show/Hide (S1.4).
+10. **Copy** (2026-11-12): invoices, bills and other transactional documents have a **Copy** action with the `copy`
+    icon, in the document toolbar after Edit and in the row ⋯ menu (S2.2, S2.10).
 
 ## How to use this (for Claude sessions)
 
@@ -89,6 +91,7 @@ Fixed meanings:
 | Search | `search` | Sign out | `logout` |
 | More actions | `more` (⋯) | Attachment | `clip` |
 | Show password | `eye` | Hide password | `eyeOff` (eye, struck through) |
+| Copy (duplicate) | `copy` (two sheets) | | |
 
 Apps add domain icons (`cake`, `cart`) but never reuse an action key for something else. **No emoji as UI icons**
 (emoji as content, e.g. GateA categories, are fine). Toolbar buttons are icon + label; icon-only buttons (rows,
@@ -108,8 +111,8 @@ Reports keep the open report in the address (`?report=key`).
 (make it portal).
 
 **S2.2 Document toolbar.** Ledger `DocActions`, always this order:
-**Close** (back icon) · [document options] · **Edit** · **Email** · **Save ▾** (PDF / Excel / Word, each showing its
-file name) · **Print** (primary, right). A button appears only if the document supports it. While a file is being
+**Close** (back icon) · [document options] · **Edit** · **Copy** · **Email** · **Save ▾** (PDF / Excel / Word, each
+showing its file name) · **Print** (primary, right). A button appears only if the document supports it. While a file is being
 made the button says "Preparing…" and is disabled. Labels stay on phones; the bar wraps.
 
 **S2.3 Print = make the PDF, then print the PDF.** Never `window.print()` of the app page (keep print CSS only as a
@@ -147,6 +150,23 @@ scroll sideways as a named exception. The PDF is always laid out at computer wid
 
 **S2.9 Email.** An Email button in `DocActions` opens Ledger's `EmailModal`, attaching the **same** PDF Save and Print
 make; sends through a server function (Resend), logs every send. Until an app has email, the iPhone Share sheet covers it.
+
+
+**S2.10 Copy a document** (decision 10). Invoices, bills, and other transactional documents a person may want to
+repeat (quotes, purchase orders, proposals) have **Copy** (icon `copy`, label "Copy"): in `DocActions` after Edit,
+and in the list row's `⋯ ActionMenu` (S3.4). Shown only to people who can create that kind of document.
+- Copy makes a **new draft** of the same kind: same party, line items (description, quantity, rate, account/category,
+  tax), terms, memo/notes and reference fields; a **new number** from the normal sequence; **today's date**, with the
+  due date recalculated from the terms.
+- **Never copied:** payments and applied credits, balances, status (the copy starts as draft/unpaid, not sent,
+  not approved), sent/email log, attachments, audit history, links to the original's source (e.g. its sales order),
+  void/locked flags.
+- The copy **opens straight in the editor** (carrying `data-editing`); nothing is saved until **Save**, so Cancel
+  leaves no trace. If an app must save first to reserve the number, Cancel deletes that draft. On save: toast
+  "Copied INV-0042 to INV-0057" (S4.7).
+- No confirm dialog (nothing is changed). Copying a voided or paid document is allowed; the copy is a fresh draft.
+- In a closed period (locked books) the copy gets today's date, so it isn't blocked by the lock.
+*Reference:* Ledger invoices and bills (2026-11-12).
 
 ---
 
@@ -319,6 +339,7 @@ copies. Apps adopt it when that area is next touched.
 ---
 
 ## Changelog
+- v1.2 (2026-11-12): **Copy** for invoices, bills and similar documents (decision 10, new S2.10): `copy` icon, toolbar after Edit and in the row ⋯ menu, a new draft with today's date and a new number, never payments/status/attachments; `copy` added to the S1.7 icon table and S2.2. Reference: Ledger invoices and bills; HOA Manager adopts it for its invoices and bills.
 - v1.1 (2026-11-08): password fields show/hide with an eye icon, not words (decision 9, S1.4); `eye`/`eyeOff` added to the S1.7 icon table. Reference: Wedding Rev 1.33. Ledger, Resale and HOA switch from Show/Hide words when that area is next touched.
 - v1.0 (2026-11-05): Tom agreed the eight decisions as proposed.
 - v0.1 (2026-11-05): first draft from the survey of 7 apps + template.

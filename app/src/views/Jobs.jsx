@@ -98,9 +98,10 @@ export default function JobsView({ db, actions, toast, readOnly }) {
                 <table><thead><tr><th style={{ width: 90 }}>Ready</th><th>Description</th><th className="num">Qty</th><th>Status</th></tr></thead>
                   <tbody>{lines.map(li => <tr key={li.id} style={li.closed ? { opacity: 0.55 } : {}}>
                     <td><label style={{ display: "flex", alignItems: "center", gap: 6, cursor: li.invoiced || li.closed || readOnly ? "default" : "pointer" }}>
-                      <input type="checkbox" checked={!!li.ready} disabled={li.invoiced || li.closed || readOnly}
+                      {/* An invoiced line is done whether or not it was ticked first: ticked, "Complete". */}
+                      <input type="checkbox" checked={!!li.ready || !!li.invoiced} disabled={li.invoiced || li.closed || readOnly}
                         onChange={e => toggleReady(so, li, e.target.checked)} />
-                      {li.ready ? (li.invoiced ? "Complete" : "Ready") : ""}
+                      {li.invoiced ? "Complete" : li.ready ? "Ready" : ""}
                     </label></td>
                     <td style={{ whiteSpace: "pre-line" }}>{li.desc}</td>
                     <td className="num mono">{li.qty} {li.unit}</td>

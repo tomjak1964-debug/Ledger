@@ -5,7 +5,8 @@ import { emailFor } from "../lib/people.js";
 import { lineTotals, balance, invoiceStatus } from "../calc/ledger.js";
 import { AUTO_NUMBER } from "../lib/store.js";
 import { useFilters } from "../components/useFilters.jsx";
-import { Ico, ICONS, Badge, Empty, Field, Modal, SortTh, useTableSort } from "../components/ui.jsx";
+import { Ico, ICONS, Badge, Empty, Field, Modal, SortTh, useTableSort, ActionMenu, MenuItem } from "../components/ui.jsx";
+import { isCreditMemo } from "../lib/credits.js";
 import PaymentModal from "../components/PaymentModal.jsx";
 import { dueDateFor, termsLabelFor, discountOffer } from "../lib/terms.js";
 import LineItemsEditor from "../components/LineItemsEditor.jsx";
@@ -17,6 +18,26 @@ import PdfView from "../components/PdfView.jsx";
 import { saveBlob } from "../lib/saveFile.js";
 import AccountSelect from "../components/AccountSelect.jsx";
 import { incomeAccountOf, accountLabel } from "../calc/accounts.js";
+
+// Copy an invoice (standards S2.10): a new draft for the same customer with the
+// same lines, tax, PO reference, notes and income account, dated today, its due
+// date from the customer's terms and its number left on (auto) — the normal
+// sequence numbers it when it is saved. Nothing is written until Save, so
+// Cancel leaves no trace. Never copied: payments and applied credits (so no
+// balance), the Sent flag and email log, attachments (they hang off the old
+// id), and the source links — sales order, quote, proposal phase.
+export function copyInvoiceDraft(db, inv) {
+  const date = todayISO();
+  return {
+    id: uid(), number: AUTO_NUMBER, _new: true, _copyOf: inv.number, kind: "invoice",
+    salesOrderId: "", quoteId: "", proposalId: "",
+    customerId: inv.customerId || "", contactPersonId: inv.contactPersonId || "", poNumber: inv.poNumber || "",
+    date, dueDate: dueDateFor(db, inv.customerId, date),
+    lineItems: (inv.lineItems || []).map(li => ({ id: uid(), desc: li.desc ?? "", qty: li.qty, unit: li.unit ?? "", unitPrice: li.unitPrice })),
+    taxRate: inv.taxRate, notes: inv.notes || "", incomeAccount: inv.incomeAccount || "",
+    printed: false, payments: [],
+  };
+}
 
 export default function InvoicesView({ db, actions, toast, openDoc, readOnly, editRequest, clearEditRequest }) {
   const [pay, setPay] = useState(null);
@@ -30,7 +51,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
   useEffect(() => {
     if (editRequest?.kind !== "invoice") return;
     const inv = db.invoices.find(i => i.id === editRequest.id);
-    if (inv) setEdit({ ...inv });
+    if (inv) setEdit(editRequest.copy ? copyInvoiceDraft(db, inv) : { ...inv });
     clearEditRequest?.();
   }, [editRequest]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [email, setEmail] = useState(null);
@@ -64,10 +85,12 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
       lineItems: [{ id: uid(), desc: "", qty: 1, unit: "", unitPrice: 0 }], taxRate: db.settings.taxRate, notes: "", payments: []
     });
   };
-  const save = async (inv) => {
+  const save = async (draft) => {
+    const { _copyOf, ...inv } = draft;   // _copyOf only names the original for the toast
     const saved = await actions.saveInvoice(inv);
-    if (saved) { setEdit(null); toast(inv._new ? "Invoice created" : "Invoice saved"); }
+    if (saved) { setEdit(null); toast(_copyOf ? `Copied ${_copyOf} to ${saved.number}` : inv._new ? "Invoice created" : "Invoice saved"); }
   };
+  const copy = (inv) => setEdit(copyInvoiceDraft(db, inv));
 
   const unprintedCount = db.invoices.filter(i => !i.printed).length;
   const base = db.invoices.slice().reverse().filter(i => (!unprintedOnly || !i.printed) && f.keep(i.date, i.customerId));
@@ -211,7 +234,10 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
                 <button className="btn ghost icon" title="Print" onClick={() => openDoc("invoice", inv, { autoPrint: true })}><Ico d={ICONS.print} size={16} /></button>
                 <button className="btn ghost icon" title={"Save " + inv.number + ".pdf"} onClick={() => saveInvoice(inv)}><Ico d={ICONS.download} size={16} /></button>
                 {!readOnly && <button className="btn ghost icon" title="Edit" onClick={() => setEdit({ ...inv })}><Ico d={ICONS.edit} size={16} /></button>}
-                {!readOnly && <button className="btn ghost icon" onClick={() => del(inv.id)} title="Delete"><Ico d={ICONS.trash} size={15} /></button>}
+                {!readOnly && <ActionMenu title="More actions">{close => <>
+                  {!isCreditMemo(inv) && <MenuItem onClick={() => { close(); copy(inv); }}>Copy</MenuItem>}
+                  <MenuItem danger onClick={() => { close(); del(inv.id); }}>Delete</MenuItem>
+                </>}</ActionMenu>}
               </td>
             </tr>;
           })}</tbody></table>}
@@ -300,7 +326,7 @@ function InvoiceEditor({ invoice, customers, catalog, onCancel, onSave, db, acti
   return <div data-editing="1">
     <div className="toolbar">
       <button className="btn ghost" onClick={onCancel}><Ico d={ICONS.back} size={16} />Back</button>
-      <h2 style={{ fontSize: 18, marginLeft: 4 }}>{inv._new ? "New Invoice" : "Edit " + inv.number} <span className="mono subtle" style={{ fontSize: 14 }}>{inv.number}</span></h2>
+      <h2 style={{ fontSize: 18, marginLeft: 4 }}>{inv._copyOf ? "Copy of " + inv._copyOf : inv._new ? "New Invoice" : "Edit " + inv.number} <span className="mono subtle" style={{ fontSize: 14 }}>{inv.number}</span></h2>
       <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
         <button className="btn" onClick={onCancel}>Cancel</button>
         <button className="btn primary" disabled={saving || !!numErr} onClick={save}><Ico d={ICONS.check} size={15} />{saving ? "Saving…" : "Save Invoice"}</button>

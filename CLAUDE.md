@@ -838,6 +838,17 @@ ACH* sets them all; a vendor paid two ways in one run is flagged before recordin
 many checks will print. (A row left on the old Check default turned one of four ACH payments into check #4869 on
 2026-10-16 — `data-fixes/2026-10-16_barnum_check_4869_to_ach.sql`.)
 
+**Copy an invoice or bill (Rev 1.87, standards S2.10 — Ledger is the reference):** **Copy** sits after Edit on an open
+invoice (`DocActions` `onCopy`, wired in `App.jsx` as an `editRequest` with `copy: true`) and in each invoice and bill
+row's ⋯ menu (with Delete), for people who can write Invoices / Payables; credit memos have no Copy. It opens the normal
+editor on a new draft built by `copyInvoiceDraft()` (`views/Invoices.jsx`) or `copyBillDraft()` (`views/Payables.jsx`):
+same party, lines (fresh ids), tax, notes, PO / income or expense account (a bill keeps its job and cost category while
+the job is still open), **today's date**, due date from the party's terms, and a new number — invoices `(auto)`, bills the
+next `BILL-` — claimed by `saveInvoice` / `saveBill` on Save. Nothing is written before Save, so Cancel leaves nothing.
+Never copied: payments and applied credits, the Sent flag, attachments, the source sales order / quote / proposal (or a
+bill's purchase order), and a bill's vendor Ref (unique per vendor, so the copy's is typed in). Save toasts
+"Copied INV-… to INV-…" / "Copied BILL-0042 to BILL-0057". `_copyOf` is a transient field, stripped before the store sees it.
+
 **The actions are on the list row too.** Invoices, Proposals and the electronic rows of Vendors & Purchases →
 Payments each carry View · Email · Print · Save · Edit right on the row, so nothing needs opening first: Print
 opens the document and goes straight to the printer dialog (`openDoc(…, { autoPrint })`, `ProposalDoc`'s

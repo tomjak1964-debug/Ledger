@@ -7,7 +7,7 @@ import { uid, money, fmtDate, todayISO, nameOf, cls, pickable } from "../lib/hel
 import { packageById, packageForCustomer, packageDefaults, packagesOf, standardsLine, mesFor, SCOPE_ITEMS, scheduleFor, softwareOnly, SOFTWARE_ONLY_PHASES } from "../calc/fixtureScope.js";
 import { termsLabelFor } from "../lib/terms.js";
 import ReductionRow from "../components/ReductionRow.jsx";
-import { personName, emailFor, proposalAttn, proposalPerson, contactNameFor, remitVendor, peopleOf } from "../lib/people.js";
+import { personName, emailFor, proposalAttn, proposalPerson, contactNameFor, remitVendor, peopleOf, ccChoices } from "../lib/people.js";
 import { proposalConfig, priceProposal, ioBlocks, phaseAmount, SPEC_FIELDS, DEFAULT_PHASES, defaultProposalCustomer } from "../calc/proposals.js";
 import { Ico, ICONS, Badge, Empty, Field, MenuItem, ActionMenu, Modal, SortTh, useTableSort, blankZero } from "../components/ui.jsx";
 import { downloadProposalDocx, proposalDocxBlob, proposalFileStem } from "../lib/proposalDocx.js";
@@ -393,7 +393,7 @@ export default function ProposalsView({ db, actions, toast, readOnly }) {
       })} />}
     {bulkEmail && <EmailModal docType="proposal"
       title={`Email · ${plural(chosen.length)}`}
-      defaultTo={emailTo()}
+      defaultTo={emailTo()} ccChoices={ccChoices(db, chosen.map(p => p.customerId))}
       defaultSubject={chosen.length === 1
         ? `Proposal ${chosen[0].number}${revLabel(chosen[0]) ? " " + revLabel(chosen[0]) : ""} — ${[chosen[0].jobNumber, chosen[0].description].filter(Boolean).join(" – ")}`
         : `Proposals ${chosen.map(p => p.number).join(", ")}`}
@@ -782,7 +782,7 @@ function ProposalDoc({ p, db, onClose, toast, onEdit, auto, onEmailed }) {
       saves={[{ label: "Save PDF", hint: proposalFileStem(p) + ".pdf", run: savePdf }, { label: "Save Word", hint: proposalFileStem(p) + ".docx", run: word }]} />
     {email && <EmailModal docType="proposal"
       title={"Email · " + p.number}
-      defaultTo={c.person?.email || emailFor(db, p.customerId, "proposal")}
+      defaultTo={c.person?.email || emailFor(db, p.customerId, "proposal")} ccChoices={ccChoices(db, [p.customerId])}
       defaultSubject={`Proposal ${p.number}${revLabel(p) ? " " + revLabel(p) : ""} — ${[p.jobNumber, p.description].filter(Boolean).join(" – ")}`}
       defaultBody={`${c.salutation.replace(/:$/, ",")}\n\nPlease find attached proposal ${p.number} for ${p.description || "the machine"}.\n\nRegards,\n${c.cfg.signer || s.company}`}
       buildAttachment={() => proposalDocxBlob(p, db)}

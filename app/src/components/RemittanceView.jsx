@@ -12,7 +12,7 @@ import EmailModal from "./EmailModal.jsx";
 // Email (to the vendor's remittance contact), Print (the printer dialog for
 // the PDF itself), Save (the PDF, named "<Vendor> Remittance - <Ref>") and
 // Edit (the payment). args: { payment, vendor, lines, settings }.
-export default function RemittanceView({ args, onClose, onEdit, toast, autoPrint }) {
+export default function RemittanceView({ args, onClose, onEdit, toast, autoPrint, ccChoices }) {
   const { blob, filename } = useMemo(() => remittancePdf(args), [args]);
   const url = useMemo(() => URL.createObjectURL(blob), [blob]);
   useEffect(() => () => URL.revokeObjectURL(url), [url]);
@@ -37,7 +37,7 @@ export default function RemittanceView({ args, onClose, onEdit, toast, autoPrint
       saves={[{ label: "Save PDF", hint: filename, run: () => saveBlob(blob, filename) }]} />
     {email && <EmailModal docType="remittance"
       title={"Email Remittance · " + (vendor?.name || "")}
-      defaultTo={remitEmail(vendor)}
+      defaultTo={remitEmail(vendor)} ccChoices={ccChoices}
       defaultSubject={`Remittance advice — ${money(payment.amount)} from ${s.company}`}
       defaultBody={`Please find attached remittance advice for our payment of ${money(payment.amount)} dated ${fmtDate(payment.date)}${payment.ref ? ` (reference ${payment.ref})` : ""}.\n\n${s.company}`}
       buildAttachment={() => Promise.resolve({ blob, filename })}

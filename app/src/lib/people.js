@@ -65,3 +65,22 @@ export function proposalPerson(db, p, customer) {
   if (typed) return people.find(x => [x.name, personName(x)].some(n => (n || "").trim().toLowerCase() === typed)) || null;
   return preferredPerson(db, customer, "proposal");
 }
+
+// Everyone at these companies an email could also be copied to: each contact
+// with an email, then the company's own email — for the email dialog's
+// "Also copy" ticks (EmailModal's ccChoices). The dialog leaves out whoever is
+// already in To.
+export function ccChoices(db, contactIds) {
+  const out = [], seen = new Set();
+  [...new Set((contactIds || []).filter(Boolean))].forEach(id => {
+    const c = (db.contacts || []).find(x => x.id === id);
+    const add = (email, name, note) => {
+      const e = (email || "").trim(); if (!e || seen.has(e.toLowerCase())) return;
+      seen.add(e.toLowerCase()); out.push({ email: e, name: name || e, note: note || "" });
+    };
+    peopleOf(db, id).forEach(p => add(p.email, personName(p), p.title));
+    if (c) add(c.email, c.name, "company email");
+    if (c?.remitEmail) add(c.remitEmail, c.name, "remittance email");
+  });
+  return out;
+}

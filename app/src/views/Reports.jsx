@@ -2,7 +2,7 @@ import { Fragment, useState, useRef } from "react";
 import { printOrShare, isIOS } from "../lib/printSupport.js";
 import { saveBlob } from "../lib/saveFile.js";
 import { reportPdf } from "../lib/reportPdf.js";
-import { emailFor } from "../lib/people.js";
+import { emailFor, ccChoices } from "../lib/people.js";
 import PdfView from "../components/PdfView.jsx";
 import EmailModal from "../components/EmailModal.jsx";
 import { money, fmtDate, todayISO, daysBetween, nameOf } from "../lib/helpers.js";
@@ -151,7 +151,7 @@ export default function ReportsView({ db, toast }) {
     </div>
     {pdfView && <PdfView blob={pdfView.blob} filename={pdfView.filename} autoPrint onClose={() => setPdfView(null)} />}
     {emailing && rpt && <EmailModal docType="invoice" title={"Email · " + rpt.label}
-      defaultTo={partyId ? emailFor(db, partyId, "invoice") : ""}
+      defaultTo={partyId ? emailFor(db, partyId, "invoice") : ""} ccChoices={partyId ? ccChoices(db, [partyId]) : []}
       defaultSubject={`${rpt.label}${partyName ? " — " + partyName : ""} · ${label} — ${db.settings.company || ""}`}
       defaultBody={`Hello,\n\nPlease find attached our ${rpt.label.toLowerCase()}${partyName ? " for " + partyName : ""} (${label.replace(/^As of/, "as of")}).\n\nRegards,\n${db.settings.company || ""}\n${db.settings.companyPhone || ""}`}
       buildAttachment={buildPdf} onClose={() => setEmailing(false)} toast={toast || (() => {})} />}

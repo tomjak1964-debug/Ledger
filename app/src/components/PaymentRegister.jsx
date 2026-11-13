@@ -1,6 +1,6 @@
 import { Fragment, useState } from "react";
 import { money, fmtDate, nameOf, sum } from "../lib/helpers.js";
-import { remitVendor } from "../lib/people.js";
+import { remitVendor, ccChoices } from "../lib/people.js";
 import { round2 } from "../calc/ledger.js";
 import { receiptGroups } from "../calc/reports.js";
 import { checkNumberTaken, normRef, remitEmail } from "../lib/checks.js";
@@ -105,7 +105,7 @@ export default function PaymentRegister({ db, actions, toast, readOnly, kind }) 
     const args = remitArgs(emailGroup);
     return <EmailModal docType="remittance"
       title={"Email Remittance · " + (args.vendor?.name || "")}
-      defaultTo={remitEmail(args.vendor)}
+      defaultTo={remitEmail(args.vendor)} ccChoices={ccChoices(db, [args.vendor?.id])}
       defaultSubject={`Remittance advice — ${money(args.payment.amount)} from ${db.settings.company}`}
       defaultBody={`Please find attached remittance advice for our payment of ${money(args.payment.amount)} dated ${fmtDate(args.payment.date)}${args.payment.ref ? ` (reference ${args.payment.ref})` : ""}.\n\n${db.settings.company}`}
       buildAttachment={() => Promise.resolve(remittancePdf(args))}
@@ -122,7 +122,7 @@ export default function PaymentRegister({ db, actions, toast, readOnly, kind }) 
     {editModal}
     {groupModal}
     {emailModal}
-    {viewGroup && <RemittanceView args={remitArgs(viewGroup.g)} autoPrint={viewGroup.print} toast={toast} onClose={() => setViewGroup(null)}
+    {viewGroup && <RemittanceView args={remitArgs(viewGroup.g)} ccChoices={ccChoices(db, [remitArgs(viewGroup.g).vendor?.id])} autoPrint={viewGroup.print} toast={toast} onClose={() => setViewGroup(null)}
       onEdit={readOnly ? undefined : () => { const g = viewGroup.g; setViewGroup(null); setEditGroup(g); }} />}
   </div>;
 }

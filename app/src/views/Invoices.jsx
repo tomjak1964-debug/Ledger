@@ -1,7 +1,7 @@
 import { agedExtras } from "../lib/agedAttachment.jsx";
 import { useState, useEffect } from "react";
 import { uid, money, fmtDate, todayISO, addDays, nameOf, pickable } from "../lib/helpers.js";
-import { emailFor } from "../lib/people.js";
+import { emailFor, ccChoices } from "../lib/people.js";
 import { lineTotals, balance, invoiceStatus } from "../calc/ledger.js";
 import { AUTO_NUMBER } from "../lib/store.js";
 import { useFilters } from "../components/useFilters.jsx";
@@ -237,7 +237,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
       onCloseLine={async (lineId, closed) => { if (await actions.setLineClosed(invoiceSO.id, lineId, closed)) toast(closed ? "Line closed" : "Line reopened"); }} />}
     {email && <EmailModal docType="invoice"
       title={"Email · " + email.number}
-      defaultTo={emailFor(db, email.customerId, "invoice", email.contactPersonId)}
+      defaultTo={emailFor(db, email.customerId, "invoice", email.contactPersonId)} ccChoices={ccChoices(db, [email.customerId])}
       defaultSubject={`Invoice ${email.number} — ${db.settings.company}`}
       defaultBody={`Please find attached invoice ${email.number}.\n\nThank you for your business.\n\n${db.settings.company}\n${db.settings.companyPhone || ""}`}
       buildAttachment={() => invoicePdf(email, db)} extras={agedExtras(db, [email.customerId])}
@@ -248,7 +248,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
       onClose={() => { setPrintSet(null); endSelect(); }} />}
     {bulkEmail && <EmailModal docType="invoice"
       title={`Email · ${plural(chosen.length)}`}
-      defaultTo={emailTo()}
+      defaultTo={emailTo()} ccChoices={ccChoices(db, chosen.map(i => i.customerId))}
       defaultSubject={chosen.length === 1 ? `Invoice ${chosen[0].number} — ${db.settings.company}` : `Invoices ${chosen.map(i => i.number).join(", ")} — ${db.settings.company}`}
       defaultBody={`Please find attached ${chosen.length === 1 ? "invoice " + chosen[0].number : `our ${chosen.length} invoices`}:\n${chosen.map(i => `  • ${i.number} — ${money(lineTotals(i.lineItems, i.taxRate).total)}${i.poNumber ? " · PO " + i.poNumber : ""}`).join("\n")}\n\nThank you for your business.\n\n${db.settings.company}\n${db.settings.companyPhone || ""}`}
       buildAttachment={() => Promise.all(chosen.map(i => invoicePdf(i, db)))} extras={agedExtras(db, chosen.map(i => i.customerId))}

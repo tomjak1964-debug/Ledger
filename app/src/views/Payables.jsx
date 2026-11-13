@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { uid, money, fmtDate, todayISO, addDays, nameOf, sum, pickable } from "../lib/helpers.js";
-import { remitVendor } from "../lib/people.js";
+import { remitVendor, ccChoices } from "../lib/people.js";
 import { paid, billStatus, agingBuckets, round2, billBalance, applyAgainst } from "../calc/ledger.js";
 import { checksPdf } from "../lib/checkPrint.js";
 import { remittancesPdf } from "../lib/remittance.js";
@@ -15,7 +15,7 @@ import { remittancePdf } from "../lib/remittance.js";
 import RemittanceView from "../components/RemittanceView.jsx";
 import EmailModal from "../components/EmailModal.jsx";
 import AccountSelect from "../components/AccountSelect.jsx";
-import JobCostPicker, { JobSelect, CostCategorySelect, jobOptionLabel } from "../components/JobCostPicker.jsx";
+import { JobSelect, CostCategorySelect, jobOptionLabel } from "../components/JobCostPicker.jsx";
 import { expenseAccountOfBill, accountLabel, accountSettings } from "../calc/accounts.js";
 
 // The date a bill was settled — the last payment on it.
@@ -64,7 +64,7 @@ export default function PayablesView({ db, actions, toast, readOnly, go }) {
   const startNew = () => {
     const n = db.settings.billPrefix + "-" + String(db.settings.counters.bill).padStart(4, "0");
     const vendorId = pickable(vendors)[0]?.id || "";
-    setEdit({ id: uid(), number: n, _new: true, vendorId, date: todayISO(), dueDate: dueDateFor(db, vendorId, todayISO()), amount: 0, ref: "", notes: "", salesOrderId: "", payments: [] });
+    setEdit(withLines({ id: uid(), number: n, _new: true, vendorId, date: todayISO(), dueDate: dueDateFor(db, vendorId, todayISO()), amount: 0, ref: "", notes: "", salesOrderId: "", payments: [] }));
   };
 
   return <div>
@@ -116,7 +116,7 @@ export default function PayablesView({ db, actions, toast, readOnly, go }) {
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                 {!readOnly && bal > 0.005 && <button className="btn sm" onClick={() => setPay(b)}><Ico d={ICONS.money} size={14} />Pay</button>}
                 {(b.payments || []).length > 0 && <button className="btn ghost icon" title="Payments · print / email remittance" onClick={() => setPay(b)}><Ico d={ICONS.mail} size={15} /></button>}
-                {!readOnly && <button className="btn ghost icon" onClick={() => setEdit({ ...b })} title="Edit"><Ico d={ICONS.edit} size={15} /></button>}
+                {!readOnly && <button className="btn ghost icon" onClick={() => setEdit(withLines(b))} title="Edit"><Ico d={ICONS.edit} size={15} /></button>}
                 {!readOnly && <button className="btn ghost icon" onClick={() => del(b.id)} title="Delete"><Ico d={ICONS.trash} size={15} /></button>}
               </td>
             </tr>;
@@ -127,8 +127,7 @@ export default function PayablesView({ db, actions, toast, readOnly, go }) {
       const dup = db.bills.find(x => x.id !== edit.id && x.vendorId === edit.vendorId
         && (x.ref || "").trim().toLowerCase() === refTrim.toLowerCase());
       const err = !edit.vendorId ? "Select a vendor." : !refTrim ? "Vendor invoice # (Ref) is required." : dup ? `Already entered as ${dup.number} for this vendor.` : "";
-      const itemized = (edit.lines || []).length > 0;
-      return <Modal wide={itemized} title={edit._new ? "New Vendor Bill" : "Edit " + edit.number} onClose={() => setEdit(null)}
+      return <Modal wide title={edit._new ? "New Vendor Bill" : "Edit " + edit.number} onClose={() => setEdit(null)}
       foot={<><button className="btn" onClick={() => setEdit(null)}>Cancel</button>
         <button className="btn primary" disabled={!!err} onClick={() => save(edit)}>Save Bill</button></>}>
       <div className="row">
@@ -146,23 +145,10 @@ export default function PayablesView({ db, actions, toast, readOnly, go }) {
           onChange={e => setEdit({ ...edit, date: e.target.value, dueDate: dueDateFor(db, edit.vendorId, e.target.value) })} /></Field>
         <Field label="Due Date" hint={edit.vendorId ? "From " + termsLabelFor(db, edit.vendorId) : undefined}>
           <input className="input" type="date" value={edit.dueDate} onChange={e => setEdit({ ...edit, dueDate: e.target.value })} /></Field>
-        <Field label="Amount" hint={itemized ? "The total of the lines" : undefined}>
-          {itemized
-            ? <input className="input mono" readOnly value={money(billLinesTotal(edit.lines))} />
-            : <input className="input mono" type="number" step="any" value={edit.amount} onChange={e => setEdit({ ...edit, amount: e.target.value })} />}</Field>
+        <Field label="Amount" hint="The total of the lines below">
+          <input className="input mono" readOnly value={money(billLinesTotal(edit.lines))} /></Field>
       </div>
-      {itemized
-        ? <BillLinesEditor db={db} bill={edit} onChange={lines => setEdit({ ...edit, lines, amount: billLinesTotal(lines) })} />
-        : <>
-          <Field label="Expense Account" hint={edit.expenseAccount ? "Where this bill posts" : "Default: " + (accountLabel(db, expenseAccountOfBill(db, edit)) || "none set — see Settings → Accounts")}>
-            <AccountSelect db={db} value={edit.expenseAccount} onChange={v => setEdit({ ...edit, expenseAccount: v })} groups={["expense", "cos", "liability", "asset"]} blank="— vendor's default —" /></Field>
-          <JobCostPicker db={db} salesOrderId={edit.salesOrderId} costCategory={edit.costCategory}
-            hint="Attribute this bill to a sales order for job costing" onChange={patch => setEdit({ ...edit, ...patch })} />
-          <button className="btn sm" style={{ marginBottom: 12 }} onClick={() => setEdit({ ...edit, lines: [
-            { id: uid(), desc: "", qty: 1, unitPrice: Number(edit.amount) || "", account: edit.expenseAccount || "", salesOrderId: edit.salesOrderId || "", costCategory: edit.costCategory || "" }] })}>
-            <Ico d={ICONS.plus} size={14} />Enter Line Items</button>
-          <span className="subtle" style={{ marginLeft: 8, fontSize: 12.5 }}>To match the vendor's invoice line by line, each line to its own job and account.</span>
-        </>}
+      <BillLinesEditor db={db} bill={edit} onChange={lines => setEdit({ ...edit, lines, amount: billLinesTotal(lines) })} />
       <Field label="Notes"><textarea className="input" value={edit.notes} onChange={e => setEdit({ ...edit, notes: e.target.value })} /></Field>
       {edit._new
         ? <p className="subtle" style={{ margin: "8px 0 0" }}>Save the bill first to attach receipts.</p>
@@ -192,11 +178,11 @@ export default function PayablesView({ db, actions, toast, readOnly, go }) {
         }
       }} />}
     {payRun && <PayBillsModal db={db} actions={actions} toast={toast} onClose={() => setPayRun(false)} />}
-    {viewRemit && <RemittanceView args={viewRemit} toast={toast} onClose={() => setViewRemit(null)}
+    {viewRemit && <RemittanceView args={viewRemit} ccChoices={ccChoices(db, [viewRemit.vendor?.id])} toast={toast} onClose={() => setViewRemit(null)}
       onEdit={go ? () => { setViewRemit(null); setPay(null); go("payments"); } : undefined} />}
     {emailRemit && <EmailModal docType="remittance"
       title={"Email Remittance · " + (nameOf(db, emailRemit.bill.vendorId))}
-      defaultTo={remitEmail(remitVendor(db, db.contacts.find(c => c.id === emailRemit.bill.vendorId)))}
+      defaultTo={remitEmail(remitVendor(db, db.contacts.find(c => c.id === emailRemit.bill.vendorId)))} ccChoices={ccChoices(db, [emailRemit.bill.vendorId])}
       defaultSubject={`Payment remittance — ${db.settings.company}`}
       defaultBody={`Please find attached remittance advice for our payment of ${money(emailRemit.payment.amount)} dated ${emailRemit.payment.date}.\n\n${db.settings.company}`}
       buildAttachment={() => Promise.resolve(remittancePdf(remitArgs(emailRemit.bill, emailRemit.payment)))}
@@ -376,7 +362,7 @@ function PayBillsModal({ db, actions, toast, onClose }) {
   </Modal>
   {emailRun && <EmailModal docType="remittance"
     title={"Email Remittance · " + (emailRun.vendor?.name || "")}
-    defaultTo={remitEmail(emailRun.vendor)}
+    defaultTo={remitEmail(emailRun.vendor)} ccChoices={ccChoices(db, [emailRun.vendor?.id])}
     defaultSubject={`Remittance advice — ${money(emailRun.payment.amount)} from ${db.settings.company}`}
     defaultBody={`Please find attached remittance advice for our payment of ${money(emailRun.payment.amount)} dated ${fmtDate(emailRun.payment.date)}${emailRun.payment.ref ? ` (reference ${emailRun.payment.ref})` : ""}.\n\n${db.settings.company}`}
     buildAttachment={() => Promise.resolve(remittancePdf(emailRun))}
@@ -462,6 +448,11 @@ function PayBillsModal({ db, actions, toast, onClose }) {
    posts to (blank: the bill's / vendor's default) and the job and cost category
    it is a cost of, so one invoice can carry material or services for several
    jobs. A new line starts on the job and category of the line above it. */
+// The editor always works in lines: a new bill starts on one, and a bill
+// entered as a single amount opens as one line carrying its amount, account,
+// job and category — saved, it is the same bill, now itemized.
+const withLines = b => ((b.lines || []).length ? { ...b, lines: b.lines.map(l => ({ ...l })) } : { ...b, lines: [{ id: uid(), desc: "", qty: 1,
+  unitPrice: Number(b.amount) || "", account: b.expenseAccount || "", salesOrderId: b.salesOrderId || "", costCategory: b.costCategory || "" }] });
 const lineAmt = l => round2((l.qty === "" || l.qty == null ? 1 : Number(l.qty) || 0) * (Number(l.unitPrice) || 0));
 const billLinesTotal = lines => round2((lines || []).reduce((t, l) => t + lineAmt(l), 0));
 
@@ -487,7 +478,7 @@ function BillLinesEditor({ db, bill, onChange }) {
         <td><input className="input mono" type="number" step="any" value={l.qty} onChange={e => set(l.id, { qty: e.target.value })} style={{ textAlign: "right" }} /></td>
         <td><input className="input mono" type="number" step="any" value={l.unitPrice} onChange={e => set(l.id, { unitPrice: e.target.value })} style={{ textAlign: "right" }} /></td>
         <td className="num mono">{money(lineAmt(l))}</td>
-        <td><button className="btn ghost icon" title="Remove line" onClick={() => remove(l.id)}><Ico d={ICONS.trash} size={15} /></button></td>
+        <td>{lines.length > 1 && <button className="btn ghost icon" title="Remove line" onClick={() => remove(l.id)}><Ico d={ICONS.trash} size={15} /></button>}</td>
       </tr>)}</tbody>
     </table></div>
     <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap", marginTop: 8 }}>
@@ -497,6 +488,5 @@ function BillLinesEditor({ db, bill, onChange }) {
         <div style={{ fontWeight: 600, color: "var(--ink)", marginTop: 2 }}>Bill total <span className="mono">{money(billLinesTotal(lines))}</span></div>
       </div>
     </div>
-    <p className="subtle" style={{ margin: "6px 0 0", fontSize: 12.5 }}>Remove every line to go back to a single amount.</p>
   </div>;
 }

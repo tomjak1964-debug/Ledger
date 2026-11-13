@@ -2,7 +2,7 @@ import { agedExtras } from "../lib/agedAttachment.jsx";
 import { useEffect, useState } from "react";
 import { printOrShare, isIOS } from "../lib/printSupport.js";
 import { money, fmtDate } from "../lib/helpers.js";
-import { emailFor, contactNameFor } from "../lib/people.js";
+import { emailFor, contactNameFor, ccChoices } from "../lib/people.js";
 import { lineTotals, paid, balance } from "../calc/ledger.js";
 import { invoicePages } from "../lib/invoiceLayout.js";
 import { termsLabel } from "../lib/terms.js";
@@ -130,7 +130,7 @@ function InvoiceDoc({ inv, contact, settings, onClose, print, db, toast, onEdit,
       saves={db ? [{ label: "Save PDF", hint: inv.number + ".pdf", run: savePdf }] : []} />
     {email && <EmailModal docType="invoice"
       title={"Email · " + inv.number}
-      defaultTo={emailFor(db, inv.customerId, "invoice", inv.contactPersonId)}
+      defaultTo={emailFor(db, inv.customerId, "invoice", inv.contactPersonId)} ccChoices={ccChoices(db, [inv.customerId])}
       defaultSubject={`${isCredit ? "Credit Memo" : "Invoice"} ${inv.number} — ${settings.company}`}
       defaultBody={`Please find attached ${isCredit ? "credit memo" : "invoice"} ${inv.number}.\n\nThank you for your business.\n\n${settings.company}\n${settings.companyPhone || ""}`}
       buildAttachment={() => invoicePdf(inv, db)} onSent={onEmailed} extras={agedExtras(db, [inv.customerId])}

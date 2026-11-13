@@ -31,7 +31,9 @@ export function parseAddresses(text) {
 // email (the mail service can only send from the company's verified domain).
 // extras: optional attachments offered as tickboxes, off until ticked —
 // [{ key, label, hint, build }] where build() returns { blob, filename }.
-export default function EmailModal({ title, defaultTo, defaultSubject, defaultBody, buildAttachment, onClose, onSent, toast, docType, fromChoice, extras }) {
+// ccChoices: the company's other contacts ([{ email, name, note }] from
+// ccChoices() in lib/people.js), offered as ticks that add them to CC.
+export default function EmailModal({ title, defaultTo, defaultSubject, defaultBody, buildAttachment, onClose, onSent, toast, docType, fromChoice, extras, ccChoices }) {
   const [picked, setPicked] = useState({});
   const [fromMe, setFromMe] = useState(false);
   const [to, setTo] = useState(defaultTo || "");
@@ -76,6 +78,22 @@ export default function EmailModal({ title, defaultTo, defaultSubject, defaultBo
       <input className="input" value={to} onChange={e => setTo(e.target.value)} placeholder="name@company.com, other@company.com" /></Field>
     <Field label="CC" hint="Optional — copies go to these addresses">
       <input className="input" value={cc} onChange={e => setCc(e.target.value)} placeholder="name@company.com" /></Field>
+    {(() => {
+      const inTo = new Set(toList.ok.map(a => a.toLowerCase()));
+      const offer = (ccChoices || []).filter(p => !inTo.has(p.email.toLowerCase()));
+      if (!offer.length) return null;
+      const inCc = new Set(ccList.ok.map(a => a.toLowerCase()));
+      const flip = (email, on) => {
+        const rest = ccList.ok.filter(a => a.toLowerCase() !== email.toLowerCase());
+        setCc((on ? [...rest, email] : rest).join(", "));
+      };
+      return <div style={{ margin: "-4px 0 12px" }}>
+        <div className="subtle" style={{ fontSize: 12, marginBottom: 4 }}>Also copy (CC):</div>
+        {offer.map(p => <label key={p.email} style={{ display: "flex", gap: 8, alignItems: "baseline", cursor: "pointer", fontSize: 13.5, marginBottom: 2 }}>
+          <input type="checkbox" checked={inCc.has(p.email.toLowerCase())} onChange={e => flip(p.email, e.target.checked)} />
+          <span>{p.name !== p.email ? <>{p.name} <span className="subtle">&lt;{p.email}&gt;</span></> : p.email}{p.note && <span className="subtle"> · {p.note}</span>}</span></label>)}
+      </div>;
+    })()}
     {bad.length > 0 && <p style={{ color: "var(--neg)", margin: "0 0 10px" }}>Not an email address: {bad.join(", ")}</p>}
     <Field label="Subject"><input className="input" value={subject} onChange={e => setSubject(e.target.value)} /></Field>
     <Field label="Message"><textarea className="input" style={{ minHeight: 120 }} value={body} onChange={e => setBody(e.target.value)} /></Field>

@@ -3,19 +3,26 @@ import { money, fmtDate, nameOf } from "../lib/helpers.js";
 import { Ico, ICONS, Badge, Empty, SortTh, useTableSort } from "../components/ui.jsx";
 import { jobNumberOf, jobDescriptionOf } from "../calc/jobs.js";
 import JobCostsModal from "../components/JobCostsModal.jsx";
+import { useFilters } from "../components/useFilters.jsx";
 
 // A job = a Sales Order. Track progress by marking line items ready (work done).
 // Marking un-invoiced items ready raises a task for an invoicer to bill them.
 // Costs that have no bill, expense or time entry of their own are booked here.
 export default function JobsView({ db, actions, toast, readOnly }) {
-  const [open, setOpen] = useState(null);   // expanded SO id
+  const [open, setOpen] = useState(() => new Set());   // expanded SO ids
+  const toggle = id => setOpen(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const [costsFor, setCostsFor] = useState(null);   // SO whose job costs are open
   const [showClosed, setShowClosed] = useState(false);
   const closedCount = db.salesOrders.filter(s => s.status !== "open").length;
-  // A PO filter shows every job on that customer PO, closed ones too.
-  const [poQ, setPoQ] = useState("");
-  const poMatch = s => !poQ.trim() || (s.poNumber || "").toLowerCase().includes(poQ.trim().toLowerCase());
-  const jobs = db.salesOrders.filter(s => (showClosed || poQ.trim() || s.status === "open") && poMatch(s));
+  // The customer and date filter every list has; the search box finds a job by
+  // SO #, job #, description, customer or PO — closed jobs too, so every job on
+  // one customer PO shows, billed or not.
+  const f = useFilters({ partyKind: "customer", contacts: db.contacts });
+  const [q, setQ] = useState("");
+  const needle = q.trim().toLowerCase();
+  const matches = s => !needle || [s.number, jobNumberOf(db, s), jobDescriptionOf(db, s), nameOf(db, s.customerId), s.poNumber]
+    .some(x => String(x || "").toLowerCase().includes(needle));
+  const jobs = db.salesOrders.filter(s => (showClosed || needle || s.status === "open") && matches(s) && f.keep(s.date, s.customerId));
   // Available = ready to invoice: marked ready and not yet billed or closed.
   const availableOf = so => (so.lineItems || []).filter(li => li.ready && !li.invoiced && !li.closed).length;
   const invoicedOf = so => (so.lineItems || []).filter(li => li.invoiced).length;
@@ -32,14 +39,19 @@ export default function JobsView({ db, actions, toast, readOnly }) {
     if (await actions.setLineReady(so.id, li.id, ready)) toast(ready ? "Marked ready" : "Marked not ready");
   };
 
+  const allOpen = jobRows.length > 0 && jobRows.every(so => open.has(so.id));
   return <div>
+    {f.bar()}
     <div className="card">
       <div className="card-head"><h3>{showClosed ? "Jobs" : "Active Jobs"}</h3>
-        <input className="input mono" style={{ maxWidth: 190, marginLeft: 14 }} value={poQ} onChange={e => setPoQ(e.target.value)} placeholder="Filter by PO #" />
+        <input className="input" style={{ maxWidth: 280, marginLeft: 14 }} value={q} onChange={e => setQ(e.target.value)}
+          placeholder="Search jobs — SO, job #, description, PO…" title="Finds closed jobs too" />
+        {jobRows.length > 0 && <button className="btn sm" style={{ marginLeft: 8 }} onClick={() => setOpen(allOpen ? new Set() : new Set(jobRows.map(so => so.id)))}>
+          <Ico d={ICONS.arrow} size={14} />{allOpen ? "Collapse All" : "Expand All"}</button>}
         {closedCount > 0 && <label className="subtle" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
           <input type="checkbox" checked={showClosed} onChange={e => setShowClosed(e.target.checked)} />Show closed ({closedCount})</label>}</div>
       {jobs.length === 0
-        ? <Empty icon={ICONS.job} title="No active jobs" msg="Jobs are your open sales orders. Mark line items ready as the work is completed — that flags them for invoicing." />
+        ? <Empty icon={ICONS.job} title={needle || f.active ? "No jobs match" : "No active jobs"} msg={needle || f.active ? "Nothing matches that search or filter — clear it to see every job." : "Jobs are your open sales orders. Mark line items ready as the work is completed — that flags them for invoicing."} />
         : <table><thead><tr>
           <SortTh label="SO #" col="number" sort={sort} onSort={onSort} />
           <SortTh label="Job #" col="job" sort={sort} onSort={onSort} />
@@ -59,9 +71,9 @@ export default function JobsView({ db, actions, toast, readOnly }) {
             // The bar fills as lines are billed; the available share shows ahead of it.
             const pctInv = total ? (invoiced / total) * 100 : 0;
             const pctAvail = total ? (available / total) * 100 : 0;
-            const isOpen = open === so.id;
+            const isOpen = open.has(so.id);
             return <Fragment key={so.id}>
-              <tr className="clickable" onClick={() => setOpen(isOpen ? null : so.id)}>
+              <tr className="clickable" onClick={() => toggle(so.id)}>
                 <td className="doc-id">{so.number}</td>
                 <td className="mono">{jobNumberOf(db, so) || <span className="subtle">—</span>}</td>
                 <td>{jobDescriptionOf(db, so) || <span className="subtle">—</span>}</td>

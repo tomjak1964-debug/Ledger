@@ -48,7 +48,11 @@ reach the database, by design.
   their name with replies to their sign-in email. All three are
   aliases in the TMJ Engineering mailbox at Turbify, so replies arrive. An unknown type is refused; no type, or a per-type setting not set yet, uses
   `EMAIL_FROM`. Every `<EmailModal>` passes its `docType`.
-  **Several recipients and CC:** the dialog's To and CC each take any number of addresses separated by commas
+  **CC the company's other contacts:** every email dialog addressed to a customer or vendor (invoices, reminders,
+proposals, reports filtered to a customer, remittances) lists the company's other contacts with an email — and its own
+company / remittance email — as *Also copy (CC)* ticks (`ccChoices(db, ids)` in `lib/people.js`, `EmailModal`'s
+`ccChoices`); To still opens on the preferred person, whoever is in To isn't offered, and ticking writes the address into
+CC. **Several recipients and CC:** the dialog's To and CC each take any number of addresses separated by commas
   (semicolons or spaces work too); `parseAddresses()` names any that aren't addresses and Send waits until they're
   fixed. The function takes `to` / `cc` as a list or a string (an older copy sends one string), re-checks every
   address, drops duplicates (and a CC that's already a To) and caps an email at 20 recipients.
@@ -544,8 +548,9 @@ proposal still becomes **its own sales order** (its own job — job number, budg
 the same PO, and invoices go out **one per job**, each showing the PO. Select mode on Proposals has **Mark Won…**
 (`WinOnPoModal`): one PO number for the ticked proposals, listed with the PO total; refused across customers, and
 won / superseded ones are skipped. A won proposal's row menu has **Change PO…** (`setProposalPo()` — the proposal and
-its sales order; issued invoices keep theirs). Sales Orders and Jobs have a **PO filter**; on Sales Orders it shows the
-PO's total and what's left to invoice, and on Jobs it includes closed jobs.
+its sales order; issued invoices keep theirs). Sales Orders has a **PO filter** that shows the
+PO's total and what's left to invoice; on Jobs the search box (SO #, job #, description, customer or PO) finds it, closed jobs
+included. **Jobs** also has the customer / date filter bar every list has and **Expand All / Collapse All**.
 
 **Emailing a proposal submits it:** a draft emailed from its row, from the open proposal, or with others from
 Select → Email is marked **Submitted** once the email goes (`markEmailed()` in `views/Proposals.jsx`, from
@@ -796,7 +801,10 @@ above the MICR clear band.
 drive it. Forms live in the settings jsonb (`settings.forms`, `settings.formFor`) — no migration.
 Invoices and remittances keep their standard renderers; they are listed so every document type names its form.
 
-**Itemized vendor bills** (migration 041, `bills.lines` jsonb — `[{ id, desc, qty, unitPrice, amount, account,
+**The bill editor always works in lines** (since Rev 1.86): a new bill opens on one line (qty × unit price), and the
+bill's Amount is the read-only total of its lines; a bill entered as a single amount opens as one line carrying its
+amount, account, job and category (`withLines()` in `views/Payables.jsx`) and saves itemized — the same bill. The last
+line can't be removed. **Itemized vendor bills** (migration 041, `bills.lines` jsonb — `[{ id, desc, qty, unitPrice, amount, account,
 salesOrderId, costCategory }]`): **Enter Line Items** in the bill editor turns a bill into the vendor's invoice line by
 line, each line with its own expense account (blank = the bill's / vendor's default) and its own **job and cost
 category**, so one invoice can carry material or services for several jobs; a new line starts on the job above it, and

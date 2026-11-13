@@ -24,11 +24,11 @@ export function useTableSort(rows, accessors, initial) {
 // A clickable, sortable column header. `col` is the accessor key. The label
 // wraps (to three lines at most — .th-label in styles.css) when the table is
 // squeezed, so a long heading never decides the width of a narrow column.
-export function SortTh({ label, col, sort, onSort, num, style }) {
+export function SortTh({ label, col, sort, onSort, num, style, ...rest }) {
   const active = sort.key === col;
-  return <th className={num ? "num" : ""} onClick={() => onSort(col)}
+  return <th {...rest} className={num ? "num" : ""} onClick={() => onSort(col)}
     style={{ cursor: "pointer", userSelect: "none", ...style }} title="Sort">
-    <span className="th-label">{label}<span style={{ opacity: active ? 0.9 : 0.25, fontSize: 11, whiteSpace: "nowrap" }}> {active ? (sort.dir === "asc" ? "▲" : "▼") : "↕"}</span></span>
+    <span className="th-label">{label}<span className="sort-ind" style={{ opacity: active ? 0.9 : 0.25, fontSize: 11, whiteSpace: "nowrap" }}> {active ? (sort.dir === "asc" ? "▲" : "▼") : "↕"}</span></span>
   </th>;
 }
 

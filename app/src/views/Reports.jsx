@@ -250,6 +250,10 @@ export function AgedReport({ db, asOf, partyId, kind, rangeLabel: label, initial
   const isAR = kind === "ar";
   // Summary: a line per customer / vendor. Detail: every outstanding item under it.
   const [detail, setDetail] = useState(initialDetail);
+  // Detail in colour — Current green, 1–30 yellow, over 30 red — or black and
+  // white as it always was. Remembered on this device.
+  const [color, setColorState] = useState(() => { try { return localStorage.getItem("agedColor") !== "bw"; } catch { return true; } });
+  const setColor = v => { setColorState(v); try { localStorage.setItem("agedColor", v ? "color" : "bw"); } catch { /* private mode */ } };
   const r0 = isAR ? agedReceivables(db, asOf) : agedPayables(db, asOf);
   const rows = partyId ? r0.rows.filter(x => x.key === partyId) : r0.rows;
   const totals = partyId
@@ -274,20 +278,41 @@ export function AgedReport({ db, asOf, partyId, kind, rangeLabel: label, initial
       [...agedRows.map(x => [nameOf(db, x.key), ...cols.map(([k]) => x[k].toFixed(2)), x.total.toFixed(2)]),
       ["TOTAL", ...cols.map(([k]) => totals[k].toFixed(2)), totals.total.toFixed(2)]]);
   const cell = (k, v) => <td key={k} className="num" style={k !== "cur" && v > 0 ? { color: "var(--neg)" } : {}}>{Math.abs(v) > 0.005 ? money(v) : "—"}</td>;
+  // The colour of each bucket — on screen from the palette, in the PDF as hex
+  // (lib/reportPdf.js reads data-pdf-fill / data-pdf-text).
+  const tone = k => k === "cur" ? "pos" : k === "d30" ? "warn" : "neg";
+  const TONE = { pos: { text: "#197A56", wash: "#E4F3EC", head: "#197A56", headText: "#FFFFFF" },
+    warn: { text: "#9A6B12", wash: "#FBF0DA", head: "#F2C94C", headText: "#13233B" },
+    neg: { text: "#B23A2E", wash: "#FBE8E5", head: "#B23A2E", headText: "#FFFFFF" } };
+  const colorHead = k => !color ? {} : { style: { color: `var(--${tone(k)})`, background: `var(--${tone(k)}-wash)` },
+    "data-pdf-fill": TONE[tone(k)].head, "data-pdf-text": TONE[tone(k)].headText };
+  const colorCell = (k, v, bold) => {
+    const has = Math.abs(v) > 0.005;
+    if (!color) return bold ? <td key={k} className="num" style={{ fontWeight: bold }}>{bold === 700 || has ? money(v) : "—"}</td> : cell(k, v);
+    const t = TONE[tone(k)];
+    return <td key={k} className="num" style={{ fontWeight: bold || undefined, color: has ? `var(--${tone(k)})` : undefined, background: has && !bold ? `var(--${tone(k)}-wash)` : undefined }}
+      {...(has ? { "data-pdf-text": t.text, ...(bold ? {} : { "data-pdf-fill": t.wash }) } : {})}>{bold === 700 || has ? money(v) : "—"}</td>;
+  };
+  // Two heading rows: a two-word heading puts each word on its own line.
+  const two = l => { const w = String(l).split(" "); return w.length < 2 ? l : <>{w.slice(0, -1).join(" ")}<br />{w[w.length - 1]}</>; };
   return <ReportCard title={title} rangeLabel={label || "As of " + fmtDate(asOf)}
     right={<>
       <div className="pill-tabs no-print">
         <button className={detail ? "" : "on"} onClick={() => setDetail(false)}>Summary</button>
         <button className={detail ? "on" : ""} onClick={() => setDetail(true)}>Detail</button>
       </div>
+      {detail && <div className="pill-tabs no-print" title="How the detail shows and prints">
+        <button className={color ? "on" : ""} onClick={() => setColor(true)}>Color</button>
+        <button className={color ? "" : "on"} onClick={() => setColor(false)}>Black &amp; White</button>
+      </div>}
       <button className="btn sm no-print" onClick={exportCSV}>Export CSV</button></>}>
     {rows.length === 0
       ? <Empty icon={isAR ? ICONS.ar : ICONS.ap} title="Nothing outstanding" msg={isAR ? "No customer owed you money on this date." : "You owed no vendor bills on this date."} />
       : detail
-      ? <table><thead><tr>
-        <SortTh label={who} col="who" sort={sort} onSort={onSort} />
-        <th>{docLabel}</th><th>Date</th><th>Due</th><th className="num">Days Overdue</th>
-        {cols.map(([k, l]) => <SortTh key={k} label={l} col={k} sort={sort} onSort={onSort} num />)}
+      ? <table className="two-row-head"><thead><tr>
+        <SortTh label={two(who)} col="who" sort={sort} onSort={onSort} />
+        <th>{two(docLabel)}</th><th>Date</th><th>Due</th><th className="num">{two("Days Overdue")}</th>
+        {cols.map(([k, l]) => <SortTh key={k} label={l} col={k} sort={sort} onSort={onSort} num {...colorHead(k)} />)}
         <SortTh label="Balance" col="total" sort={sort} onSort={onSort} num /></tr></thead>
         <tbody>
           {agedRows.map(x => [
@@ -296,24 +321,25 @@ export function AgedReport({ db, asOf, partyId, kind, rangeLabel: label, initial
               <td className="doc-id">{d.number || "—"}{d.balance < 0 && <span className="subtle" style={{ fontWeight: 400 }}> · credit</span>}</td>
               <td className="subtle nowrap">{fmtDate(d.date)}</td>
               <td className="subtle nowrap">{fmtDate(d.due)}</td>
-              <td className="num" style={d.days > 0 ? { color: "var(--neg)" } : {}}>{d.days > 0 ? d.days : "—"}</td>
-              {cols.map(([k]) => cell(k, d.bucket === k ? d.balance : 0))}
+              <td className="num" style={color ? { color: `var(--${tone(d.bucket)})`, fontWeight: 600 } : d.days > 0 ? { color: "var(--neg)" } : {}}
+                {...(color ? { "data-pdf-text": TONE[tone(d.bucket)].text } : {})}>{d.days > 0 ? d.days : "—"}</td>
+              {cols.map(([k]) => colorCell(k, d.bucket === k ? d.balance : 0))}
               <td className="num">{money(d.balance)}</td>
             </tr>),
             <tr key={x.key + "-sub"} style={{ background: "var(--canvas)" }}>
               <td colSpan={5} style={{ fontWeight: 600 }}>{nameOf(db, x.key)} total</td>
-              {cols.map(([k]) => <td key={k} className="num" style={{ fontWeight: 600 }}>{Math.abs(x[k]) > 0.005 ? money(x[k]) : "—"}</td>)}
+              {cols.map(([k]) => colorCell(k, x[k], 600))}
               <td className="num" style={{ fontWeight: 700 }}>{money(x.total)}</td>
             </tr>,
           ])}
           <tr>
             <td colSpan={5} style={{ fontWeight: 700 }}>Total</td>
-            {cols.map(([k]) => <td key={k} className="num" style={{ fontWeight: 700 }}>{money(totals[k])}</td>)}
+            {cols.map(([k]) => colorCell(k, totals[k], 700))}
             <td className="num" style={{ fontWeight: 700 }}>{money(totals.total)}</td>
           </tr>
         </tbody></table>
-      : <table><thead><tr>
-        <SortTh label={who} col="who" sort={sort} onSort={onSort} />
+      : <table className="two-row-head"><thead><tr>
+        <SortTh label={two(who)} col="who" sort={sort} onSort={onSort} />
         {cols.map(([k, l]) => <SortTh key={k} label={l} col={k} sort={sort} onSort={onSort} num />)}
         <SortTh label="Total" col="total" sort={sort} onSort={onSort} num /></tr></thead>
         <tbody>

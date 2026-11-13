@@ -657,7 +657,12 @@ Venture Global's code was set to VG on 2026-10-18; most other customers have non
 **Aged Receivables / Aged Payables** (`agedReceivables()` / `agedPayables()` → `agedBy()` in `calc/reports.js`, `AgedReport`
 in `views/Reports.jsx`): **Summary** is a line per customer / vendor in Current · 1–30 · 31–60 · 61–90 · 90+; **Detail**
 lists every outstanding document under its party (number, date, due, days overdue, the amount in its bucket, balance)
-with a subtotal per party; CSV exports the view on screen. Balances as of the report date subtract cash **and
+with a subtotal per party; CSV exports the view on screen. Headings sit on **two rows** (`table.two-row-head`: a two-word heading such as *Days / Overdue* takes a line
+per word, nothing clamped). **Color / Black & White** (Detail, remembered per device in `localStorage.agedColor`): in
+colour the bucket headings and amounts are shaded — Current green, 1–30 yellow, over 30 red — and the Days Overdue
+figure takes its bucket's colour; the PDF carries the same through `data-pdf-fill` / `data-pdf-text` on a cell, which
+`reportPdf()` reads. Black & White is the report as it was. `SortTh`'s ↕ arrow is `.sort-ind` and stays out of every
+report PDF (the PDF font drew it as junk). Balances as of the report date subtract cash **and
 discounts** (`settledAsOf`), and an unapplied credit note counts as a negative in Current, so the A/R total is what
 Receivables shows open (checked equal, 35 items, 2026-10-24).
 

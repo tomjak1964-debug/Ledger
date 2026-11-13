@@ -28,7 +28,7 @@ async function logo() {
 // A cell's words without its on-screen controls; line breaks kept.
 function textOf(el) {
   const c = el.cloneNode(true);
-  c.querySelectorAll(".no-print, button, input, select, svg").forEach(n => n.remove());
+  c.querySelectorAll(".no-print, .sort-ind, button, input, select, svg").forEach(n => n.remove());
   c.querySelectorAll("br").forEach(n => n.replaceWith("\n"));
   c.querySelectorAll("div").forEach(n => n.insertAdjacentText("beforebegin", "\n"));
   return c.textContent.split("\n").map(l => l.replace(/\s+/g, " ").trim()).filter(Boolean).join("\n");
@@ -94,7 +94,7 @@ export async function reportPdf(root, { title, subtitle = "", filter = "", setti
       html: table, startY: y, margin: { top: TOP, bottom: BOTTOM, left: M, right: M },
       theme: "striped", showHead: "everyPage",
       styles: { font: "helvetica", fontSize: wide ? 7.5 : 8.5, cellPadding: { top: 3.5, bottom: 3.5, left: 4, right: 4 }, textColor: [30, 41, 59], overflow: "linebreak", valign: "middle" },
-      headStyles: { fillColor: NAVY, textColor: 255, fontStyle: "bold", fontSize: wide ? 7 : 7.5 },
+      headStyles: { fillColor: NAVY, textColor: 255, fontStyle: "bold", fontSize: wide ? 7 : 7.5, valign: "bottom" },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       didParseCell: d => {
         const el = d.cell.raw;
@@ -103,10 +103,15 @@ export async function reportPdf(root, { title, subtitle = "", filter = "", setti
         const cs = getComputedStyle(el);
         if (el.classList.contains("num") || cs.textAlign === "right" || cs.textAlign === "end") d.cell.styles.halign = "right";
         else if (cs.textAlign === "center") d.cell.styles.halign = "center";
+        // A cell can ask for a colour of its own (data-pdf-fill / data-pdf-text,
+        // hex), the way the colour version of Aged Receivables marks its buckets.
+        const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+        if (el.dataset.pdfFill) d.cell.styles.fillColor = hex(el.dataset.pdfFill);
+        if (el.dataset.pdfText) d.cell.styles.textColor = hex(el.dataset.pdfText);
         if (d.section === "body") {
           if ((parseInt(cs.fontWeight, 10) || 400) >= 600) d.cell.styles.fontStyle = "bold";
           const tr = el.parentElement;
-          if (tr && (tr.style.background || tr.style.backgroundColor)) d.cell.styles.fillColor = GREY;
+          if (tr && (tr.style.background || tr.style.backgroundColor) && !el.dataset.pdfFill) d.cell.styles.fillColor = GREY;
           if (el.classList.contains("doc-id")) d.cell.styles.font = "courier";
         }
       },

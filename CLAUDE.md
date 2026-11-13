@@ -801,7 +801,7 @@ above the MICR clear band.
 drive it. Forms live in the settings jsonb (`settings.forms`, `settings.formFor`) — no migration.
 Invoices and remittances keep their standard renderers; they are listed so every document type names its form.
 
-**The bill editor always works in lines** (since Rev 1.86): a new bill opens on one line (qty × unit price), and the
+**The bill editor always works in lines** (since Rev 1.88): a new bill opens on one line (qty × unit price), and the
 bill's Amount is the read-only total of its lines; a bill entered as a single amount opens as one line carrying its
 amount, account, job and category (`withLines()` in `views/Payables.jsx`) and saves itemized — the same bill. The last
 line can't be removed. **Itemized vendor bills** (migration 041, `bills.lines` jsonb — `[{ id, desc, qty, unitPrice, amount, account,
@@ -845,6 +845,17 @@ paid); changing one row moves that vendor's other ticked rows that were on the s
 ACH* sets them all; a vendor paid two ways in one run is flagged before recording, and a *This run:* line says how
 many checks will print. (A row left on the old Check default turned one of four ACH payments into check #4869 on
 2026-10-16 — `data-fixes/2026-10-16_barnum_check_4869_to_ach.sql`.)
+
+**Copy an invoice or bill (Rev 1.87, standards S2.10 — Ledger is the reference):** **Copy** sits after Edit on an open
+invoice (`DocActions` `onCopy`, wired in `App.jsx` as an `editRequest` with `copy: true`) and in each invoice and bill
+row's ⋯ menu (with Delete), for people who can write Invoices / Payables; credit memos have no Copy. It opens the normal
+editor on a new draft built by `copyInvoiceDraft()` (`views/Invoices.jsx`) or `copyBillDraft()` (`views/Payables.jsx`):
+same party, lines (fresh ids), tax, notes, PO / income or expense account (a bill keeps its job and cost category while
+the job is still open), **today's date**, due date from the party's terms, and a new number — invoices `(auto)`, bills the
+next `BILL-` — claimed by `saveInvoice` / `saveBill` on Save. Nothing is written before Save, so Cancel leaves nothing.
+Never copied: payments and applied credits, the Sent flag, attachments, the source sales order / quote / proposal (or a
+bill's purchase order), and a bill's vendor Ref (unique per vendor, so the copy's is typed in). Save toasts
+"Copied INV-… to INV-…" / "Copied BILL-0042 to BILL-0057". `_copyOf` is a transient field, stripped before the store sees it.
 
 **The actions are on the list row too.** Invoices, Proposals and the electronic rows of Vendors & Purchases →
 Payments each carry View · Email · Print · Save · Edit right on the row, so nothing needs opening first: Print
@@ -1347,3 +1358,15 @@ reference implementation and offline fallback.
 - When adding a module, mirror an existing one (list `card` + `table` + `Empty` + modal/inline editor).
 - Prefer building with stated assumptions over long clarifying rounds; call out assumptions in your summary.
 - If a change spans the whole file or starts the backend split, sketch the plan before large edits.
+
+---
+
+## Standards
+
+This app follows the HomeServer app development standards, `docs/STANDARDS.md` (v1.0, 2026-11-05; synced from
+HomeServer `templates/app/STANDARDS.md` by `scripts/sync-standards.sh` — don't edit the copy here, propose changes
+to Tom). Before building or changing a menu, page header, document/report, list, form, button, dialog, toast,
+upload, phone/email display, permission or Excel feature, read the matching section and use its reference code.
+Every PR says "Standards: followed" or names the exception.
+**Exceptions agreed for this app:** none.
+**Known gaps (adopted when that area is next touched):** Back button; `DocActions` on Reports and quote/PO; portal `DocumentView`; open rows on tap; `fetchAll` for growable tables; audit_log policy; global search opens the record; xlsx instead of CSV (or a BOM); call links; distinct menu icons; load IBM Plex Mono; trim CLAUDE.md (1,341 lines) to the skeleton.

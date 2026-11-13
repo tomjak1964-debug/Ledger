@@ -13,7 +13,7 @@ import EmailModal from "./EmailModal.jsx";
 import { invoicePdf } from "../lib/invoicePdf.js";
 import { saveBlob, pagesToPdf } from "../lib/saveFile.js";
 
-export default function DocumentView({ kind, doc, contact, settings, onClose, onPrinted, onEmailed, autoPrint, db, toast, onEdit }) {
+export default function DocumentView({ kind, doc, contact, settings, onClose, onPrinted, onEmailed, autoPrint, db, toast, onEdit, onCopy }) {
   // While a document overlay is open, flag the body so print hides the app
   // content behind it (otherwise the list page prints along with the document),
   // and make the tab title the document number: Print / Save PDF offers the
@@ -38,7 +38,7 @@ export default function DocumentView({ kind, doc, contact, settings, onClose, on
     const t = setTimeout(() => { print(); if (!isIOS()) onClose?.(); }, 250);
     return () => clearTimeout(t);
   }, []);   // eslint-disable-line react-hooks/exhaustive-deps
-  if (kind === "invoice") return <InvoiceDoc inv={doc} contact={contact} settings={settings} onClose={onClose} print={print} db={db} toast={toast} onEdit={onEdit} onEmailed={onEmailed} />;
+  if (kind === "invoice") return <InvoiceDoc inv={doc} contact={contact} settings={settings} onClose={onClose} print={print} db={db} toast={toast} onEdit={onEdit} onCopy={onCopy} onEmailed={onEmailed} />;
   const t = lineTotals(doc.lineItems, doc.taxRate);
   const isQuote = kind === "quote";
   const isPO = kind === "po";
@@ -99,7 +99,7 @@ export default function DocumentView({ kind, doc, contact, settings, onClose, on
 // Always prints full pages: the items box is ruled to the bottom however few
 // lines there are, and lines that don't fit carry onto an identically framed
 // page. qty-0 lines are unbilled-phase reference lines: unit price, no amount.
-function InvoiceDoc({ inv, contact, settings, onClose, print, db, toast, onEdit, onEmailed }) {
+function InvoiceDoc({ inv, contact, settings, onClose, print, db, toast, onEdit, onCopy, onEmailed }) {
   const [email, setEmail] = useState(false);
   const [busy, setBusy] = useState(false);
   // Save writes the same PDF the email attaches, named for the invoice.
@@ -126,7 +126,7 @@ function InvoiceDoc({ inv, contact, settings, onClose, print, db, toast, onEdit,
   const pages = invoicePages(doc.lineItems);
   const notes = inv.notes || settings.invoiceNotes;
   return <div className="doc-screen">
-    <DocActions onClose={onClose} onEdit={onEdit} onEmail={db ? () => setEmail(true) : undefined} onPrint={print} busy={busy}
+    <DocActions onClose={onClose} onEdit={onEdit} onCopy={onCopy} onEmail={db ? () => setEmail(true) : undefined} onPrint={print} busy={busy}
       saves={db ? [{ label: "Save PDF", hint: inv.number + ".pdf", run: savePdf }] : []} />
     {email && <EmailModal docType="invoice"
       title={"Email · " + inv.number}

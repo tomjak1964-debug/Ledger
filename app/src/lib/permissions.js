@@ -25,7 +25,8 @@ export const AREAS = [
   { key: "settings", label: "Settings & Users" },
 ];
 
-// Nav key → access area. null means "always available" (e.g. the dashboard).
+// Nav key → access area. null means "always available" (e.g. the dashboard);
+// a page missing here is hidden from everyone, admins included — add it.
 // Tasks are gated by 'invoices' — the invoice tasks are for invoice-authorized
 // users to act on.
 export const NAV_AREA = {
@@ -67,11 +68,17 @@ export function currentMember(db, session) {
 }
 
 // Resolved access level for one area: admins → "write"; otherwise the stored
-// level, defaulting to "none".
+// level. Fails closed (standards S5.4): only an explicit null area is open to
+// everyone (the dashboard); an unknown area — a page left out of NAV_AREA — or
+// an area missing from a member's permissions is "none", and a viewer is
+// capped at "read". The database's my_perm() (migration 007) agrees.
 export function permLevel(member, area) {
-  if (!area) return "write";                 // ungated (dashboard)
-  if (member && isAdminRole(member.role)) return "write";
-  return (member && member.permissions && member.permissions[area]) || "none";
+  if (area === null) return "write";         // explicitly ungated (dashboard)
+  if (!area || !member) return "none";
+  if (isAdminRole(member.role)) return "write";
+  const level = member.permissions?.[area];
+  if (level !== "read" && level !== "write") return "none";
+  return member.role === "viewer" ? "read" : level;
 }
 
 export const canRead = (member, area) => permLevel(member, area) !== "none";

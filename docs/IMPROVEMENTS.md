@@ -28,7 +28,7 @@ list, not the conversation.
 
 ## 4. Everyday polish
 - [x] **Global search opens the record** (Rev 1.95) (invoice, bill, proposal, SO, contact) instead of just the page.
-- [ ] **Excel (.xlsx) exports** instead of CSV.
+- [x] **Excel (.xlsx) exports** instead of CSV (Rev 1.96).
 - [ ] **Back button / DocActions toolbar** consistency on Reports, quotes and purchase orders (standards gaps).
 - [ ] **Recurring invoices and bills.**
 

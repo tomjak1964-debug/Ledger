@@ -1,13 +1,10 @@
-import { todayISO } from "../lib/helpers.js";
 
-/* ---------- CSV export ---------- */
-export function downloadCSV(name, header, rows) {
-  const esc = v => { const s = String(v ?? ""); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  const csv = [header, ...rows].map(r => r.map(esc).join(",")).join("\r\n");
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-  a.download = name + "-" + todayISO() + ".csv";
-  a.click();
+/* ---------- Export ----------
+   Every report and list export is an Excel workbook now (lib/excel.js, app
+   standards S3.11) — the name stays for the many callers. `title` names the
+   filters in force (the report's range / party) on the sheet's first line. */
+export function downloadCSV(name, header, rows, title = "") {
+  import("../lib/excel.js").then(m => m.downloadXlsx(name, header, rows, { title }));
 }
 
 export function ReportCard({ title, rangeLabel, right, children }) {

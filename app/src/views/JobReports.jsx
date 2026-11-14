@@ -12,7 +12,7 @@ const dash = <span className="subtle">—</span>;
 const amt = v => (Math.abs(v) > 0.005 ? money(v) : dash);
 const Toggle = ({ checked, onChange, children }) => <label className="subtle no-print" style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer", marginLeft: 12 }}>
   <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} />{children}</label>;
-const CsvButton = ({ onClick }) => <button className="btn sm no-print" style={{ marginLeft: 8 }} onClick={onClick}><Ico d={ICONS.download || ICONS.print} size={14} />CSV</button>;
+const CsvButton = ({ onClick }) => <button className="btn sm no-print" style={{ marginLeft: 8 }} onClick={onClick}><Ico d={ICONS.download || ICONS.print} size={14} />Excel</button>;
 
 /* ================= Sales Orders (Accounts Receivable) ================= */
 
@@ -41,7 +41,7 @@ export function SalesOrderReport({ db, from, to, partyId, rangeLabel }) {
       x.unbilled.forEach(li => rows.push(["", "  To invoice: " + (li.desc || "").split("\n")[0], "", "", lineTotals([li], x.so.taxRate).total.toFixed(2), "", "", "", "", ""]));
     });
     rows.push(["TOTAL", "", "", "", r.totals.amount.toFixed(2), r.totals.extras.toFixed(2), "", r.totals.leftToInvoice.toFixed(2), r.totals.outstanding.toFixed(2), r.totals.paid.toFixed(2)]);
-    downloadCSV("sales-orders", head, rows);
+    downloadCSV("sales-orders", head, rows, rangeLabel);
   };
 
   return <ReportCard title="Sales Orders" rangeLabel={rangeLabel} right={<>
@@ -143,7 +143,7 @@ export function JobTrackingReport({ db, from, to, partyId, rangeLabel }) {
   const exportCSV = () => downloadCSV("job-tracking",
     ["Job Number", "PO Number", "PO Amount", "Sales Order", "Proposal", "Description", "Status", "Left to Invoice", "Milestones"],
     sorted.map(x => [x.job, x.po, x.amount.toFixed(2), x.soNumber, x.proposalNumber, x.description,
-      statusText(x), x.leftToInvoice.toFixed(2), x.milestones.map(m => `${m.label} ${m.amount.toFixed(2)} [${m.state === "open" ? "not invoiced" : m.state}]`).join("; ")]));
+      statusText(x), x.leftToInvoice.toFixed(2), x.milestones.map(m => `${m.label} ${m.amount.toFixed(2)} [${m.state === "open" ? "not invoiced" : m.state}]`).join("; ")]), rangeLabel);
 
   return <ReportCard title="Job Tracking" rangeLabel={rangeLabel} right={<>
     <span style={{ marginLeft: 12 }}><StatusToggle value={statusFilter} onChange={setStatusFilter} /></span>
@@ -196,7 +196,7 @@ export function ProposalsReport({ db, from, to, partyId, rangeLabel }) {
 
   const exportCSV = () => downloadCSV("proposals",
     ["Proposal", "Job #", "Customer", "Description", "Type", "Date", "Status", "Total"],
-    sorted.map(x => [x.number + revText(x), x.job, x.customer, x.description, x.type, x.date, x.status, x.total.toFixed(2)]));
+    sorted.map(x => [x.number + revText(x), x.job, x.customer, x.description, x.type, x.date, x.status, x.total.toFixed(2)]), rangeLabel);
 
   return <ReportCard title="Proposals" rangeLabel={rangeLabel} right={<>
     <span style={{ marginLeft: 12 }}><StatusToggle value={statusFilter} onChange={setStatusFilter}
@@ -260,7 +260,7 @@ export function JobCostingReport({ db, from, to, partyId, rangeLabel }) {
     sorted.map(x => [x.job, x.po, x.amount.toFixed(2), x.soNumber, x.proposalNumber, x.description,
       ...JOB_SPEC_FIELDS.map(f => specVal(x.specs[f.key])), ...BUDGET_LINES.map(b => x.budgetBy[b.key].toFixed(2)), x.budgetTotal.toFixed(2),
       ...COST_CATEGORIES.map(c => x.actual[c.key].toFixed(2)), x.material.toFixed(2), x.hours, x.totalCost.toFixed(2), x.engProfit.toFixed(2), x.profit.toFixed(2),
-      x.margin == null ? "" : x.margin.toFixed(1)]));
+      x.margin == null ? "" : x.margin.toFixed(1)]), rangeLabel);
 
   const ident = x => <>
     <td className="mono" style={{ fontWeight: 600 }}>{x.job || dash}</td>

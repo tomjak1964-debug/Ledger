@@ -195,7 +195,7 @@ function RegisterReport({ db, from, to, partyId, rangeLabel: label, kind }) {
     detail
       ? regRows.flatMap(g => g.lines.map(l =>
         [g.ref || "", nameOf(db, g.partyId), g.date, g.method, g.amount.toFixed(2), l.number, l.docDate, l.amount.toFixed(2)]))
-      : r.rows.map(g => [g.ref || "", nameOf(db, g.partyId), g.date, g.method, g.count, g.amount.toFixed(2)]));
+      : r.rows.map(g => [g.ref || "", nameOf(db, g.partyId), g.date, g.method, g.count, g.amount.toFixed(2)]), label);
 
   return <>
     <div className="grid" style={{ gridTemplateColumns: "repeat(2,1fr)", marginBottom: 16 }}>
@@ -207,7 +207,7 @@ function RegisterReport({ db, from, to, partyId, rangeLabel: label, kind }) {
         <button className={detail ? "" : "on"} onClick={() => setDetail(false)}>Summary</button>
         <button className={detail ? "on" : ""} onClick={() => setDetail(true)}>Detail</button>
       </div>
-      <button className="btn sm no-print" onClick={exportCSV}>Export CSV</button></>}>
+      <button className="btn sm no-print" onClick={exportCSV}>Export Excel</button></>}>
       {r.rows.length === 0
         ? <Empty icon={ICONS.money} title={"No " + L.one + "s in this range"} msg={"Widen the date range or clear the " + L.party.toLowerCase() + " filter."} />
         : <table><thead><tr>
@@ -280,11 +280,11 @@ export function AgedReport({ db, asOf, partyId, kind, rangeLabel: label, initial
     ? downloadCSV((isAR ? "aged-receivables" : "aged-payables") + "-detail",
       [who, docLabel, "Date", "Due", "Days Overdue", ...cols.map(([, l]) => l), "Balance"],
       [...agedRows.flatMap(x => x.docs.map(d => [nameOf(db, x.key), d.number, d.date, d.due, d.days, ...cols.map(([k]) => (d.bucket === k ? d.balance.toFixed(2) : "")), d.balance.toFixed(2)])),
-      ["TOTAL", "", "", "", "", ...cols.map(([k]) => totals[k].toFixed(2)), totals.total.toFixed(2)]])
+      ["TOTAL", "", "", "", "", ...cols.map(([k]) => totals[k].toFixed(2)), totals.total.toFixed(2)]], label)
     : downloadCSV(isAR ? "aged-receivables" : "aged-payables",
       [who, ...cols.map(([, l]) => l), "Total"],
       [...agedRows.map(x => [nameOf(db, x.key), ...cols.map(([k]) => x[k].toFixed(2)), x.total.toFixed(2)]),
-      ["TOTAL", ...cols.map(([k]) => totals[k].toFixed(2)), totals.total.toFixed(2)]]);
+      ["TOTAL", ...cols.map(([k]) => totals[k].toFixed(2)), totals.total.toFixed(2)]], label);
   const cell = (k, v) => <td key={k} className="num" style={k !== "cur" && v > 0 ? { color: "var(--neg)" } : {}}>{Math.abs(v) > 0.005 ? money(v) : "—"}</td>;
   // The colour of each bucket — on screen from the palette, in the PDF as hex
   // (lib/reportPdf.js reads data-pdf-fill / data-pdf-text).
@@ -313,7 +313,7 @@ export function AgedReport({ db, asOf, partyId, kind, rangeLabel: label, initial
         <button className={color ? "on" : ""} onClick={() => setColor(true)}>Color</button>
         <button className={color ? "" : "on"} onClick={() => setColor(false)}>Black &amp; White</button>
       </div>}
-      <button className="btn sm no-print" onClick={exportCSV}>Export CSV</button></>}>
+      <button className="btn sm no-print" onClick={exportCSV}>Export Excel</button></>}>
     {rows.length === 0
       ? <Empty icon={isAR ? ICONS.ar : ICONS.ap} title="Nothing outstanding" msg={isAR ? "No customer owed you money on this date." : "You owed no vendor bills on this date."} />
       : detail
@@ -375,7 +375,7 @@ function IncomeExpense({ db, from, to, rangeLabel: label }) {
   const exportCSV = () => downloadCSV("income-expense",
     ["Month", "Income", "Expenses", "Bill Payments", "Net"],
     [...flowRows.map(x => [mLabel(x.month), x.income.toFixed(2), x.expenses.toFixed(2), x.billsPaid.toFixed(2), x.net.toFixed(2)]),
-    ["TOTAL", r.totals.income.toFixed(2), r.totals.expenses.toFixed(2), r.totals.billsPaid.toFixed(2), r.totals.net.toFixed(2)]]);
+    ["TOTAL", r.totals.income.toFixed(2), r.totals.expenses.toFixed(2), r.totals.billsPaid.toFixed(2), r.totals.net.toFixed(2)]], label);
   return <>
     <div className="grid" style={{ gridTemplateColumns: "repeat(3,1fr)", marginBottom: 16 }}>
       <div className="stat"><div className="lbl">Income</div><div className="val mono pos">{money(r.totals.income)}</div><div className="meta">payments received</div></div>
@@ -383,7 +383,7 @@ function IncomeExpense({ db, from, to, rangeLabel: label }) {
       <div className="stat"><div className="lbl">Net</div><div className={"val mono " + (r.totals.net >= 0 ? "pos" : "neg")}>{money(r.totals.net)}</div><div className="meta">cash basis</div></div>
     </div>
     <ReportCard title="Income / Expense by Month" rangeLabel={label}
-      right={<button className="btn sm no-print" onClick={exportCSV}>Export CSV</button>}>
+      right={<button className="btn sm no-print" onClick={exportCSV}>Export Excel</button>}>
       {r.rows.length === 0
         ? <Empty icon={ICONS.reports} title="Nothing in this range" msg="No payments or expenses fall in the selected dates." />
         : <table><thead><tr>
@@ -417,9 +417,9 @@ function ProfitLoss({ db, from, to, rangeLabel: label }) {
     [["Income — payments received", r.income.toFixed(2)],
     ...r.categories.map(([c, v]) => ["Expense — " + c, (-v).toFixed(2)]),
     ["Vendor bill payments", (-r.billsPaid).toFixed(2)],
-    ["Net profit", r.net.toFixed(2)]]);
+    ["Net profit", r.net.toFixed(2)]], label);
   return <ReportCard title="Profit & Loss (cash basis)" rangeLabel={label}
-    right={<button className="btn sm no-print" onClick={exportCSV}>Export CSV</button>}>
+    right={<button className="btn sm no-print" onClick={exportCSV}>Export Excel</button>}>
     <table><tbody>
       <tr><td style={{ fontWeight: 600 }}>Income</td><td className="num" style={{ fontWeight: 600 }}>{money(r.income)}</td></tr>
       <tr><td className="subtle" style={{ paddingLeft: 28 }}>Customer payments received</td><td className="num subtle">{money(r.income)}</td></tr>
@@ -445,7 +445,7 @@ function SalesTax({ db, from, to, partyId, rangeLabel: label }) {
   });
   const exportCSV = () => downloadCSV("sales-tax",
     ["Invoice", "Customer", "Date", "Status", "Subtotal", "Tax", "Total"],
-    taxRows.map(({ inv, sub: s, tax: t, total }) => [inv.number, nameOf(db, inv.customerId), inv.date, invoiceStatus(inv), s.toFixed(2), t.toFixed(2), total.toFixed(2)]));
+    taxRows.map(({ inv, sub: s, tax: t, total }) => [inv.number, nameOf(db, inv.customerId), inv.date, invoiceStatus(inv), s.toFixed(2), t.toFixed(2), total.toFixed(2)]), label);
   return <>
     <div className="grid" style={{ gridTemplateColumns: "repeat(3,1fr)", marginBottom: 16 }}>
       <div className="stat"><div className="lbl">Taxable Sales (invoiced)</div><div className="val mono">{money(sub)}</div></div>
@@ -453,7 +453,7 @@ function SalesTax({ db, from, to, partyId, rangeLabel: label }) {
       <div className="stat"><div className="lbl">Tax Collected (cash)</div><div className="val mono pos">{money(partyId ? 0 : r0.taxCollected)}</div><div className="meta">{partyId ? "all customers only" : "from payments received in range"}</div></div>
     </div>
     <ReportCard title="Invoices in Range" rangeLabel={label}
-      right={<button className="btn sm no-print" onClick={exportCSV}>Export CSV</button>}>
+      right={<button className="btn sm no-print" onClick={exportCSV}>Export Excel</button>}>
       {rows.length === 0
         ? <Empty icon={ICONS.inv} title="No invoices in this range" msg="Change the date range or customer above." />
         : <table><thead><tr>
@@ -482,9 +482,9 @@ function SalesByCustomer({ db, from, to, partyId, rangeLabel: label }) {
   });
   const exportCSV = () => downloadCSV("sales-by-customer",
     ["Customer", "Invoices", "Invoiced", "Collected", "Open Balance"],
-    custRows.map(r => [nameOf(db, r.customerId), r.count, r.invoiced.toFixed(2), r.collected.toFixed(2), r.balance.toFixed(2)]));
+    custRows.map(r => [nameOf(db, r.customerId), r.count, r.invoiced.toFixed(2), r.collected.toFixed(2), r.balance.toFixed(2)]), label);
   return <ReportCard title="Sales by Customer" rangeLabel={label}
-    right={<button className="btn sm no-print" onClick={exportCSV}>Export CSV</button>}>
+    right={<button className="btn sm no-print" onClick={exportCSV}>Export Excel</button>}>
     {rows.length === 0
       ? <Empty icon={ICONS.contacts} title="No sales in this range" msg="Change the date range or customer above." />
       : <table><thead><tr>
@@ -508,9 +508,9 @@ function ExpenseReport({ db, from, to, rangeLabel: label }) {
   });
   const exportCSV = () => downloadCSV("expenses-by-category",
     ["Category", "Entries", "Total"],
-    [...expRows.map(x => [x.category, x.count, x.total.toFixed(2)]), ["TOTAL", r.count, r.total.toFixed(2)]]);
+    [...expRows.map(x => [x.category, x.count, x.total.toFixed(2)]), ["TOTAL", r.count, r.total.toFixed(2)]], label);
   return <ReportCard title="Expenses by Category" rangeLabel={label}
-    right={<button className="btn sm no-print" onClick={exportCSV}>Export CSV</button>}>
+    right={<button className="btn sm no-print" onClick={exportCSV}>Export Excel</button>}>
     {r.rows.length === 0
       ? <Empty icon={ICONS.exp} title="No expenses in this range" msg="Change the date range above." />
       : <table><thead><tr>
@@ -570,7 +570,7 @@ function GeneralLedgerReport({ db, from, to, rangeLabel: label }) {
     r.blocks.flatMap(b => [
       [b.account.number, b.account.name, from || "", "Opening balance", "", "", "", b.opening.toFixed(2)],
       ...b.rows.map(x => [b.account.number, b.account.name, x.date, x.memo, x.party, x.debit ? x.debit.toFixed(2) : "", x.credit ? x.credit.toFixed(2) : "", x.balance.toFixed(2)]),
-    ]));
+    ]), label);
   return <>
     <div className="toolbar no-print" style={{ marginBottom: 12 }}>
       <span className="subtle">Account</span>
@@ -578,7 +578,7 @@ function GeneralLedgerReport({ db, from, to, rangeLabel: label }) {
         <option value="">All accounts with activity</option>
         {chart.map(a => <option key={a.number} value={a.number}>{a.number} · {a.name}</option>)}
       </select>
-      <button className="btn sm" style={{ marginLeft: "auto" }} onClick={exportCSV}>Export CSV</button>
+      <button className="btn sm" style={{ marginLeft: "auto" }} onClick={exportCSV}>Export Excel</button>
     </div>
     {r.blocks.length === 0
       ? <div className="card"><Empty icon={ICONS.catalog} title="Nothing posted in this range" msg="Invoices, bills, expenses, payments and journal entries post to the ledger as they are entered. Widen the date range above." /></div>
@@ -611,7 +611,7 @@ function TrialBalanceReport({ db, asOf }) {
   const balanced = Math.abs(r.debits - r.credits) < 0.01;
   return <ReportCard title="Trial Balance" rangeLabel={"As of " + fmtDate(asOf)}
     right={<><span className={"badge " + (balanced ? "green" : "red")}><span className="dot"></span>{balanced ? "In balance" : "Out of balance"}</span>
-      <button className="btn sm no-print" onClick={exportCSV}>Export CSV</button></>}>
+      <button className="btn sm no-print" onClick={exportCSV}>Export Excel</button></>}>
     {r.rows.length === 0
       ? <Empty icon={ICONS.catalog} title="Nothing posted yet" msg="The trial balance fills in as invoices, bills, expenses and payments are entered." />
       : <table><thead><tr>
@@ -659,7 +659,7 @@ export function BalanceSheetReport({ db, asOf }) {
   const empty = r.sections.every(s => !s.rows.length) && Math.abs(r.netIncome) < 0.005;
   return <ReportCard title={"Balance Sheet" + (db.settings.company ? " — " + db.settings.company : "")} rangeLabel={"As of " + fmtDate(asOf)}
     right={<><span className={"badge " + (r.balanced ? "green" : "red")}><span className="dot"></span>{r.balanced ? "In balance" : "Out of balance"}</span>
-      <button className="btn sm no-print" onClick={exportCSV}>Export CSV</button></>}>
+      <button className="btn sm no-print" onClick={exportCSV}>Export Excel</button></>}>
     {empty
       ? <Empty icon={ICONS.reports} title="Nothing posted yet" msg="The balance sheet fills in as invoices, bills, expenses, payments and journal entries are entered." />
       : <table><thead><tr><th></th><th className="num">{fmtDate(asOf)}</th></tr></thead>
@@ -706,10 +706,10 @@ function IncomeStatementReport({ db, from, to, rangeLabel: label }) {
      ["Gross Profit", r.gross.period.toFixed(2), pct(r.pct.period(r.gross.period)), r.gross.ytd.toFixed(2), pct(r.pct.ytd(r.gross.ytd))],
      ["Expenses"], ...r.expenses.map(x => [x.account.name, x.period.toFixed(2), pct(r.pct.period(x.period)), x.ytd.toFixed(2), pct(r.pct.ytd(x.ytd))]),
      ["Total Expenses", r.totExp.period.toFixed(2), "", r.totExp.ytd.toFixed(2), ""],
-     ["Net Income", r.net.period.toFixed(2), pct(r.pct.period(r.net.period)), r.net.ytd.toFixed(2), pct(r.pct.ytd(r.net.ytd))]]);
+     ["Net Income", r.net.period.toFixed(2), pct(r.pct.period(r.net.period)), r.net.ytd.toFixed(2), pct(r.pct.ytd(r.net.ytd))]], label);
   const ytdLabel = r.ytdFrom ? `${fmtDate(r.ytdFrom)} – ${fmtDate(r.end)}` : "Year to date";
   return <ReportCard title={"Income Statement" + (db.settings.company ? " — " + db.settings.company : "")} rangeLabel={label}
-    right={<button className="btn sm no-print" onClick={exportCSV}>Export CSV</button>}>
+    right={<button className="btn sm no-print" onClick={exportCSV}>Export Excel</button>}>
     {!chartLoaded(db) && <div className="card-body subtle" style={{ paddingBottom: 0 }}>Reading the built-in TMJ chart. Load it under System → Chart of Accounts to rename accounts or add your own.</div>}
     <table><thead><tr><th></th><th className="num">{label}</th><th className="num">%</th><th className="num">{ytdLabel}</th><th className="num">%</th></tr></thead>
       <tbody>
@@ -738,7 +738,7 @@ function ReconciliationSummary({ db, from, to }) {
   }, { key: "date", dir: "desc" });
   const exportCSV = () => downloadCSV("reconciliations", ["Statement Date", "Account", "Status", "Statement Balance", "Cleared Balance", "Difference", "Outstanding Items", "Outstanding Deposits", "Outstanding Payments", "Book Balance"],
     rows.map(({ r, s }) => [r.statementDate, accountLabel(db, r.account), r.status, r.statementBalance.toFixed(2), s.clearedTotal.toFixed(2), s.difference.toFixed(2), s.outstanding.length, s.outstandingDeposits.toFixed(2), s.outstandingPayments.toFixed(2), s.bookBalance.toFixed(2)]));
-  return <ReportCard title="Reconciliation Summary" rangeLabel={rangeLabel(from, to)} right={<button className="btn sm no-print" onClick={exportCSV}>Export CSV</button>}>
+  return <ReportCard title="Reconciliation Summary" rangeLabel={rangeLabel(from, to)} right={<button className="btn sm no-print" onClick={exportCSV}>Export Excel</button>}>
     {rows.length === 0
       ? <Empty icon={ICONS.check} title="No statements reconciled in this range" msg="Reconcile a statement under System → Bank Reconciliation and it appears here." />
       : <table><thead><tr>
@@ -791,7 +791,7 @@ function Vendor1099Report({ db, to, partyId, partyLine }) {
         <button className={detail ? "" : "on"} onClick={() => setDetail(false)}>Summary</button>
         <button className={detail ? "on" : ""} onClick={() => setDetail(true)}>Detail</button>
       </div>
-      <button className="btn sm no-print" onClick={exportCSV}>Export CSV</button></>}>
+      <button className="btn sm no-print" onClick={exportCSV}>Export Excel</button></>}>
       {rows.length === 0
         ? <Empty icon={ICONS.contacts} title={emptyTitle} msg={emptyMsg} />
         : <table><thead><tr>
@@ -846,7 +846,7 @@ function CorrespondenceReport({ db, from, to, rangeLabel: label }) {
   const sent = rows.filter(e => e.status === "sent").length;
   const exportCSV = () => downloadCSV("correspondence",
     ["Sent", "By", "From", "To", "CC", "Type", "Subject", "Attachments", "Status", "Error"],
-    sorted.map(e => [when(e.sentAt), e.byName || e.byEmail, e.from, e.to.join("; "), e.cc.join("; "), DOC_TYPES[e.docType] || e.docType, e.subject, e.attachments.join("; "), e.status, e.error]));
+    sorted.map(e => [when(e.sentAt), e.byName || e.byEmail, e.from, e.to.join("; "), e.cc.join("; "), DOC_TYPES[e.docType] || e.docType, e.subject, e.attachments.join("; "), e.status, e.error]), label);
   return <>
     <div className="grid" style={{ gridTemplateColumns: "repeat(3,1fr)", marginBottom: 16 }}>
       <div className="stat"><div className="lbl">Emails sent</div><div className="val mono">{sent}</div><div className="meta">in this range</div></div>
@@ -859,7 +859,7 @@ function CorrespondenceReport({ db, from, to, rangeLabel: label }) {
         <button className={detail ? "" : "on"} onClick={() => setDetail(false)}>Summary</button>
         <button className={detail ? "on" : ""} onClick={() => setDetail(true)}>Detail</button>
       </div>
-      <button className="btn sm no-print" onClick={exportCSV}>Export CSV</button></>}>
+      <button className="btn sm no-print" onClick={exportCSV}>Export Excel</button></>}>
       {rows.length === 0
         ? <Empty icon={ICONS.mail} title="No emails in this range" msg={(db.emailLog || []).length ? "Nothing sent from Ledger matches these dates or that search." : "Emails sent from Ledger are recorded from now on — invoices, statements, proposals, remittances, the rate sheet and the banking sheet."} />
         : <table><thead><tr>

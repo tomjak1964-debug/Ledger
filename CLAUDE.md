@@ -1299,6 +1299,13 @@ an invoice or credit memo, quote or PO opens in its document viewer; a bill, sal
 editor and a proposal its document, on its own page — through `editRequest` ({ kind: "bill" | "salesOrder" | "proposal" |
 "contact", id }), which each of those views picks up and clears. A read-only user gets the page, not a bill or SO editor.
 
+**Exports are Excel** (`lib/excel.js`, standards S3.11, Rev 1.96): every report and list export button (*Export Excel*)
+writes a `.xlsx` with ExcelJS, loaded only on export — the rows on screen as sorted and filtered, a title line naming the
+list and its filters (the report's range / customer or vendor), a navy heading row frozen with autofilter, money as
+numbers to two places, whole numbers as numbers, ISO dates as dates, everything else (INV-…, 0042) as text; named
+`<List> YYYY-MM-DD.xlsx`. `downloadCSV(name, header, rows, title)` in `components/reportKit.jsx` keeps its name for its
+callers and now makes the workbook.
+
 **Sortable lists:** every list view — Quotes, Sales Orders, Invoices, Receivables, Payables,
 Purchase Orders, Expenses, Customers, Vendors, Catalog, Jobs, Tasks, Proposals, Fixture Rates, Job Costing,
 Time Tracking, the Payments/Receipts register, and the report tables — sorts on any column heading,

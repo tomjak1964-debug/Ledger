@@ -4,8 +4,8 @@ import { canRead } from "../lib/permissions.js";
 import { Ico, ICONS } from "./ui.jsx";
 
 // Top-bar search across the main records. Only searches areas the user can read.
-// Ctrl/Cmd+K focuses it; picking a result jumps to that record's view.
-export default function GlobalSearch({ db, member, go }) {
+// Ctrl/Cmd+K focuses it; picking a result opens that record (openRecord in App).
+export default function GlobalSearch({ db, member, go, openRecord }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const ref = useRef();
@@ -24,17 +24,17 @@ export default function GlobalSearch({ db, member, go }) {
   const results = [];
   if (s) {
     const hit = (...f) => f.filter(Boolean).some(x => String(x).toLowerCase().includes(s));
-    const push = (view, label, sub, kind) => results.push({ view, label, sub, kind });
-    if (can("quotes")) db.quotes.forEach(x => hit(x.number, nameOf(db, x.customerId)) && push("quotes", x.number, nameOf(db, x.customerId), "Quote"));
-    if (can("salesOrders")) db.salesOrders.forEach(x => hit(x.number, x.poNumber, nameOf(db, x.customerId)) && push("salesOrders", x.number, nameOf(db, x.customerId), "Sales Order"));
-    if (can("invoices") || can("receivables")) db.invoices.forEach(x => hit(x.number, x.poNumber, nameOf(db, x.customerId)) && push("invoices", x.number, nameOf(db, x.customerId), "Invoice"));
-    if (can("payables")) db.bills.forEach(x => hit(x.number, x.ref, nameOf(db, x.vendorId)) && push("payables", x.number, nameOf(db, x.vendorId), "Bill"));
-    if (can("payables")) (db.purchaseOrders || []).forEach(x => hit(x.number, nameOf(db, x.vendorId)) && push("purchaseOrders", x.number, nameOf(db, x.vendorId), "PO"));
-    if (can("proposals")) db.proposals.forEach(x => hit(x.number, x.jobNumber, x.description, nameOf(db, x.customerId)) && push("proposals", x.number, x.description || nameOf(db, x.customerId), "Proposal"));
-    if (can("contacts")) db.contacts.forEach(x => hit(x.name, x.email, x.contact, ...(db.contactPeople || []).filter(p => p.contactId === x.id).flatMap(p => [p.name, p.email])) && push(x.type === "vendor" ? "vendors" : "customers", x.name, x.type, x.type === "vendor" ? "Vendor" : "Customer"));
+    const push = (view, label, sub, kind, open) => results.push({ view, label, sub, kind, open });
+    if (can("quotes")) db.quotes.forEach(x => hit(x.number, nameOf(db, x.customerId)) && push("quotes", x.number, nameOf(db, x.customerId), "Quote", ["quote", x]));
+    if (can("salesOrders")) db.salesOrders.forEach(x => hit(x.number, x.poNumber, nameOf(db, x.customerId)) && push("salesOrders", x.number, nameOf(db, x.customerId), "Sales Order", ["salesOrder", x]));
+    if (can("invoices") || can("receivables")) db.invoices.forEach(x => hit(x.number, x.poNumber, nameOf(db, x.customerId)) && push("invoices", x.number, nameOf(db, x.customerId), x.kind === "credit" ? "Credit Memo" : "Invoice", ["invoice", x]));
+    if (can("payables")) db.bills.forEach(x => hit(x.number, x.ref, nameOf(db, x.vendorId)) && push("payables", x.number, nameOf(db, x.vendorId), "Bill", ["bill", x]));
+    if (can("payables")) (db.purchaseOrders || []).forEach(x => hit(x.number, nameOf(db, x.vendorId)) && push("purchaseOrders", x.number, nameOf(db, x.vendorId), "PO", ["po", x]));
+    if (can("proposals")) db.proposals.forEach(x => hit(x.number, x.jobNumber, x.description, nameOf(db, x.customerId)) && push("proposals", x.number, x.description || nameOf(db, x.customerId), "Proposal", ["proposal", x]));
+    if (can("contacts")) db.contacts.forEach(x => hit(x.name, x.email, x.contact, ...(db.contactPeople || []).filter(p => p.contactId === x.id).flatMap(p => [p.name, p.email])) && push(x.type === "vendor" ? "vendors" : "customers", x.name, x.type, x.type === "vendor" ? "Vendor" : "Customer", ["contact", x]));
   }
   const shown = results.slice(0, 12);
-  const pick = (r) => { setOpen(false); setQ(""); go(r.view); };
+  const pick = (r) => { setOpen(false); setQ(""); if (r.open && openRecord) openRecord(...r.open); else go(r.view); };
 
   return <div ref={ref} style={{ position: "relative" }}>
     <div className="search" style={{ minWidth: 210 }}>

@@ -151,9 +151,17 @@ export function buildProposalContent(p, db) {
 
 const emptySpecs = () => Object.fromEntries(SPEC_FIELDS.map(([k]) => [k, 0]));
 
-export default function ProposalsView({ db, actions, toast, readOnly }) {
+export default function ProposalsView({ db, actions, toast, readOnly, editRequest, clearEditRequest }) {
   const [edit, setEdit] = useState(null);
   const [doc, setDoc] = useState(null);
+  // Opened from the top-bar search on one record (App's openRecord → editRequest).
+  useEffect(() => {
+    if (editRequest?.kind !== "proposal") return;
+    const rec = db.proposals.find(x => x.id === editRequest.id);
+    if (rec) setDoc({ p: rec });
+    clearEditRequest?.();
+  }, [editRequest]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   const [phasesFor, setPhasesFor] = useState(null);
   const [copyOf, setCopyOf] = useState(null);   // the proposal being copied
   const [search, setSearch] = useState("");

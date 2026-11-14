@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { uid, cls } from "../lib/helpers.js";
 import { Ico, ICONS, Empty, Modal, Field, SortTh, useTableSort, blankZero } from "../components/ui.jsx";
 import { termsLabel } from "../lib/terms.js";
@@ -9,10 +9,18 @@ import { PREF_FIELD, PREF_LABEL, PREF_KINDS, PREFIXES, personName, contactNameFo
 // One page per side of the ledger: Customers (under Customers & Sales) and
 // Vendors (under Vendors & Purchases). Both are contacts rows; `type` picks
 // the side and the form shows only the fields that side uses.
-export default function ContactsView({ db, actions, toast, readOnly, type = "customer" }) {
+export default function ContactsView({ db, actions, toast, readOnly, type = "customer", editRequest, clearEditRequest }) {
   const tab = type;
   const noun = tab === "customer" ? "Customer" : "Vendor";
   const [edit, setEdit] = useState(null);
+  // Opened from the top-bar search on one record (App's openRecord → editRequest).
+  useEffect(() => {
+    if (editRequest?.kind !== "contact") return;
+    const rec = db.contacts.find(x => x.id === editRequest.id);
+    if (rec) setEdit({ ...rec });
+    clearEditRequest?.();
+  }, [editRequest]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   const [showInactive, setShowInactive] = useState(false);
   const all = db.contacts.filter(c => c.type === tab);
   const inactiveCount = all.filter(c => c.active === false).length;

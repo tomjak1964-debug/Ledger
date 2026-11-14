@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { uid, money, fmtDate, todayISO, nameOf, pickable } from "../lib/helpers.js";
 import { lineTotals } from "../calc/ledger.js";
 import { AUTO_NUMBER } from "../lib/store.js";
@@ -8,9 +8,17 @@ import LineItemsEditor from "../components/LineItemsEditor.jsx";
 import Attachments from "../components/Attachments.jsx";
 import InvoiceFromSOModal from "../components/InvoiceFromSOModal.jsx";
 
-export default function SalesOrdersView({ db, actions, toast, openDoc, readOnly }) {
+export default function SalesOrdersView({ db, actions, toast, openDoc, readOnly, editRequest, clearEditRequest }) {
   const [invoiceSO, setInvoiceSO] = useState(null);
   const [edit, setEdit] = useState(null);
+  // Opened from the top-bar search on one record (App's openRecord → editRequest).
+  useEffect(() => {
+    if (editRequest?.kind !== "salesOrder") return;
+    const rec = db.salesOrders.find(x => x.id === editRequest.id);
+    if (rec && !readOnly) setEdit({ ...rec, lineItems: (rec.lineItems || []).map(li => ({ ...li })) });
+    clearEditRequest?.();
+  }, [editRequest]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   const customers = db.contacts.filter(c => c.type === "customer");
 
   const del = async (id) => {

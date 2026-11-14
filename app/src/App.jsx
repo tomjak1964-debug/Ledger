@@ -159,6 +159,14 @@ export default function App({ session }) {
   // opts.autoPrint goes straight to the print dialog and closes after it;
   // opts.onPrinted runs when the document is printed.
   const openDoc = (kind, d, opts) => setDoc({ kind, doc: d, ...(opts || {}) });
+  // A record picked in the top-bar search: a document with a viewer opens in it;
+  // anything else opens where its own row would open it, on its page.
+  const RECORD_VIEW = { bill: "payables", salesOrder: "salesOrders", proposal: "proposals" };
+  const openRecord = (kind, rec) => {
+    if (["invoice", "quote", "po"].includes(kind)) return openDoc(kind, rec);
+    setEditRequest({ kind, id: rec.id });
+    go(kind === "contact" ? (rec.type === "vendor" ? "vendors" : "customers") : RECORD_VIEW[kind]);
+  };
   // "contacts" was the combined page before Customers and Vendors split; a stale link lands on Customers.
   // The page area scrolls on its own (the sidebar stays put), so a new page
   // starts at its top by scrolling .main, not the window.
@@ -244,7 +252,7 @@ export default function App({ session }) {
         <button className="btn ghost icon menu-btn" onClick={() => setNavOpen(o => !o)}><Ico d={ICONS.menu} size={20} /></button>
         <div><h1>{t}</h1><div className="sub">{sub}</div></div>
         <div className="topbar-actions">
-          <GlobalSearch db={db} member={member} go={go} />
+          <GlobalSearch db={db} member={member} go={go} openRecord={openRecord} />
           <button className="btn ghost icon" title="Refresh from server" onClick={() => actions.reload()}><Ico d={ICONS.refresh} size={17} /></button>
         </div>
       </div>

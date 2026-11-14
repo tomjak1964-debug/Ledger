@@ -1294,6 +1294,11 @@ jobs ready to invoice) for anyone with the Tasks page.
 on the date cells) never break across lines, so a long number like INV-VG261018 can't push the columns after it about;
 names and descriptions wrap instead.
 
+**The top-bar search opens the record** (`components/GlobalSearch.jsx` → `openRecord(kind, rec)` in `App.jsx`, Rev 1.95):
+an invoice or credit memo, quote or PO opens in its document viewer; a bill, sales order or customer / vendor opens its
+editor and a proposal its document, on its own page — through `editRequest` ({ kind: "bill" | "salesOrder" | "proposal" |
+"contact", id }), which each of those views picks up and clears. A read-only user gets the page, not a bill or SO editor.
+
 **Sortable lists:** every list view — Quotes, Sales Orders, Invoices, Receivables, Payables,
 Purchase Orders, Expenses, Customers, Vendors, Catalog, Jobs, Tasks, Proposals, Fixture Rates, Job Costing,
 Time Tracking, the Payments/Receipts register, and the report tables — sorts on any column heading,

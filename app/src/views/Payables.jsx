@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { uid, money, fmtDate, todayISO, addDays, nameOf, sum, pickable } from "../lib/helpers.js";
 import { remitVendor, ccChoices } from "../lib/people.js";
 import { paid, billStatus, agingBuckets, round2, billBalance, applyAgainst } from "../calc/ledger.js";
@@ -47,7 +47,7 @@ export function copyBillDraft(db, b) {
   };
 }
 
-export default function PayablesView({ db, actions, toast, readOnly, go }) {
+export default function PayablesView({ db, actions, toast, readOnly, go, editRequest, clearEditRequest }) {
   const [emailRemit, setEmailRemit] = useState(null); // {bill, payment}
   const [viewRemit, setViewRemit] = useState(null);   // remittance args on screen
   const [payRun, setPayRun] = useState(false);
@@ -81,6 +81,13 @@ export default function PayablesView({ db, actions, toast, readOnly, go }) {
     status: b => billStatus(b), paid: b => paidDate(b), amount: b => Number(b.amount) || 0, balance: b => billBalance(b),
   });
 
+  // Opened from the top-bar search on one record (App's openRecord → editRequest).
+  useEffect(() => {
+    if (editRequest?.kind !== "bill") return;
+    const rec = db.bills.find(x => x.id === editRequest.id);
+    if (rec && !readOnly) setEdit(withLines(rec));
+    clearEditRequest?.();
+  }, [editRequest]);   // eslint-disable-line react-hooks/exhaustive-deps
   const save = async (draft) => {
     const { _copyOf, ...bill } = draft;   // _copyOf only names the original for the toast
     const saved = await actions.saveBill(bill);

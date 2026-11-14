@@ -27,7 +27,7 @@ list, not the conversation.
       accountant's reports, opening balances, lock the year.
 
 ## 4. Everyday polish
-- [ ] **Global search opens the record** (invoice, bill, proposal, SO, contact) instead of just the page.
+- [x] **Global search opens the record** (Rev 1.95) (invoice, bill, proposal, SO, contact) instead of just the page.
 - [ ] **Excel (.xlsx) exports** instead of CSV.
 - [ ] **Back button / DocActions toolbar** consistency on Reports, quotes and purchase orders (standards gaps).
 - [ ] **Recurring invoices and bills.**

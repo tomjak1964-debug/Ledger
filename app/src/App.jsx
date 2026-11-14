@@ -37,6 +37,7 @@ import JournalEntriesView from "./views/JournalEntries.jsx";
 import BankReconciliationView from "./views/BankReconciliation.jsx";
 import CreditCardsView from "./views/CreditCards.jsx";
 import LineOfCreditView from "./views/LineOfCredit.jsx";
+import MonthEndCloseView from "./views/MonthEndClose.jsx";
 import RateSheetDoc from "./components/RateSheetDoc.jsx";
 import BankingSheetDoc from "./components/BankingSheetDoc.jsx";
 
@@ -86,6 +87,7 @@ const NAV = [
       { k: "recon", label: "Bank Reconciliation", icon: ICONS.check },
       { k: "cards", label: "Credit Cards", icon: ICONS.money },
       { k: "loans", label: "Line of Credit", icon: ICONS.money },
+      { k: "close", label: "Month-End Close", icon: ICONS.lock },
       { k: "settings", label: "Settings", icon: ICONS.settings },
     ]
   },
@@ -106,6 +108,7 @@ const TITLES = {
   journal: ["Journal Entries", "What you book to the ledger by hand — payroll, adjustments, depreciation"],
   recon: ["Bank Reconciliation", "Tick what cleared the bank until the statement and the books agree"],
   cards: ["Credit Cards", "Import each card's statement, split business from personal, and post it"],
+  close: ["Month-End Close", "What each month needs before it's locked"],
   loans: ["Line of Credit", "Import each statement — draws, payments, interest and fees go on the books"],
   reports: ["Reports", "P&L, sales tax, customers, and statements"],
   proposals: ["Proposals", "Fixture and system proposals — priced, tracked, and documented"],
@@ -270,6 +273,7 @@ export default function App({ session }) {
         {activeView === "recon" && <BankReconciliationView {...props} />}
         {activeView === "cards" && <CreditCardsView {...props} />}
         {activeView === "loans" && <LineOfCreditView {...props} />}
+        {activeView === "close" && <MonthEndCloseView {...props} />}
         {activeView === "settings" && <SettingsView {...props} />}
       </div>
     </div>

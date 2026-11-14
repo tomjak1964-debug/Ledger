@@ -1031,6 +1031,16 @@ every device, user and data fix — a data fix on a locked period moves the lock
 date. A new payment dated after the lock on an old document is fine. Clear All Data and a backup import are
 refused while anything is locked.
 
+**Month-End Close** (System → Month-End Close, `views/MonthEndClose.jsx`, `calc/close.js`, gated by `settings`): one row
+per month since the first bank reconciliation — **Bank** (a finished reconciliation of the cash account whose statement
+ends in the month; one still open reads *In progress*), each **card** and **line of credit** (a posted statement closing
+in the month; *—* before that account's first statement; *Nothing to post* when marked so — a payment-only or quiet
+month, `settings.accounts.closeSkips` { "YYYY-MM": [account] }), **Payroll** (what was booked to the wage / payroll-tax /
+401K accounts — information only), and the status (*Locked*, *Ready to lock*, *Open*, or *In progress* for the running
+month, whose gaps read *Not yet*). **Lock <next month>** moves `settings.accounts.lockDate` to the oldest finished
+unlocked month's end (it asks first, listing anything still open); **Unlock** moves it back a month. The books were
+locked through 2026-10-31 on 2026-11-14.
+
 **Journal entries by hand** (System → Journal Entries, `views/JournalEntries.jsx`, the `journal_entries`
 table, migration 025): what no document covers — a payroll run (Wages Expense, Payroll Tax Expense, 401K
 Employer against Checking and the payables), depreciation, an adjustment. An entry is a date, an optional

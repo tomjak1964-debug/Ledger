@@ -7,7 +7,7 @@ list, not the conversation.
 ## 1. Protect what's already done
 - [x] **Lock the books through 2026-10-31** (done 2026-11-14, data-fixes/2026-11-14_lock_books_through_oct.sql) (Settings → Accounts → Books locked through). Bank reconciled
       through Oct 31, both cards posted through October. Data change: backup first.
-- [ ] **Month-End Close page** — per month: bank reconciled, each card statement posted, line of credit
+- [x] **Month-End Close page** (Rev 1.92) — per month: bank reconciled, each card statement posted, line of credit
       statement posted, payroll entry made, nothing left ready to invoice → *Lock the month*.
 - [ ] **Automated tests for the money logic** — journal (cash/accrual, credit memo netted into a receipt,
       itemized bills), bank matching (named payee first, groups, receipts under another date), statement

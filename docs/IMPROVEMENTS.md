@@ -9,12 +9,12 @@ list, not the conversation.
       through Oct 31, both cards posted through October. Data change: backup first.
 - [x] **Month-End Close page** (Rev 1.92) — per month: bank reconciled, each card statement posted, line of credit
       statement posted, payroll entry made, nothing left ready to invoice → *Lock the month*.
-- [ ] **Automated tests for the money logic** — journal (cash/accrual, credit memo netted into a receipt,
+- [x] **Automated tests for the money logic** (20 tests, `npm test`) — journal (cash/accrual, credit memo netted into a receipt,
       itemized bills), bank matching (named payee first, groups, receipts under another date), statement
       parsers (PNC checking, PNC line of credit, card), aging. Runs with `npm test`.
 
 ## 2. Save time each month
-- [ ] **Payroll import (ADP)** — blocked: needs a sample ADP payroll report from Tom.
+- [ ] **Payroll import (ADP)** — BLOCKED: needs a sample ADP payroll report from Tom.
 - [ ] **Cash-flow forecast** on the dashboard — next 4–8 weeks: invoices by due date in; bills due,
       payroll, line-of-credit payment, card balances out; the low point.
 - [ ] **PNC Payments API** (instant payments from Ledger + bank feed) — blocked: Tom to ask PNC about the

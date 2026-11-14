@@ -1165,6 +1165,14 @@ payment from the card's account — still Dr expense / Cr card, but the vendor's
 wrote, unless something else has since been paid on that bill. **The 1099 report leaves out card payments**
 (method `Credit Card`, or paid from a card's account): the card company reports those on a 1099-K.
 
+**Tests** (`app/tests/*.test.mjs`, `npm test` in `app/` — Node's built-in runner, no dependencies): the money logic,
+each test a case met in the real books — cash vs settled, part-paid revenue, the credit memo netted into Venture's
+E1136 receipt, credits applied (no cash), itemized bills and their payment shares, the trial balance on both bases;
+bank matching (the $500 Venus vs ATM, closest date, check number, a transfer paying three bills, close matches, the
+netted credit in the register); the line of credit and card statement readers and the loan posting plan; aged
+receivables buckets; month-end close; due dates. Fixtures are made up in the banks' layouts — never paste a real
+statement (account numbers) into a test. Run `npm test` before pushing a change to anything in `calc/` or `lib/`.
+
 **Network failures on a save:** every PostgREST request goes through `ledgerFetch()` in
 `lib/supabaseClient.js` — a request the browser could not send at all ("Failed to fetch", typically
 a PWA window waking from sleep) is sent once more after a short pause, and one the server never

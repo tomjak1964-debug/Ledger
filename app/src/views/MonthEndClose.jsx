@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { money, fmtDate, todayISO } from "../lib/helpers.js";
 import { accountSettings } from "../calc/accounts.js";
-import { closeMonths } from "../calc/close.js";
+import { closeMonths, yearEnd } from "../calc/close.js";
 import { Ico, ICONS, Empty } from "../components/ui.jsx";
 
 // System → Month-End Close. One row per month: the bank reconciled, each card
@@ -14,6 +14,16 @@ export default function MonthEndCloseView({ db, actions, toast, readOnly, go }) 
   const acct = accountSettings(db.settings);
   const months = useMemo(() => closeMonths(db, today), [db, today]);
   const [busy, setBusy] = useState(false);
+  // Year-end: the year that just ended from January on, else this one.
+  const [year, setYear] = useState(() => String(Number(today.slice(0, 4)) - (today.slice(5, 7) <= "03" ? 1 : 0)));
+  const ye = useMemo(() => yearEnd(db, year, { today }), [db, year, today]);
+  const reviewed = async (v) => {
+    setBusy(true);
+    const ok = await actions.saveSettings({ ...db.settings, accounts: { ...(db.settings.accounts || {}), ten99Reviewed: [...new Set([...(acct.ten99Reviewed || []), v.id])] } });
+    setBusy(false);
+    if (ok) toast(`${v.name}: no 1099 needed`);
+  };
+  const report = (key, from, to) => go("reports", { report: key, from, to });
   const readyLines = db.salesOrders.reduce((n, so) => n + (so.lineItems || []).filter(li => li.ready && !li.invoiced && !li.closed).length, 0);
   // The month to close next: the oldest finished month not yet locked.
   const next = [...months].reverse().find(m => !m.locked && m.over);
@@ -74,6 +84,41 @@ export default function MonthEndCloseView({ db, actions, toast, readOnly, go }) 
           {next && <button className="btn primary" disabled={busy} onClick={() => lock(next)}><Ico d={ICONS.lock} size={15} />Lock {next.label}</button>}
           {lastLocked && <button className="btn" disabled={busy} onClick={unlock}>Unlock {lastLocked.label}</button>}
         </div>}
+      </div>
+    </div>
+
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-head"><h3>Year-End {ye.year}</h3>
+        <select className="select" style={{ marginLeft: 12, maxWidth: 110 }} value={year} onChange={e => setYear(e.target.value)}>
+          {[0, 1, 2].map(k => String(Number(today.slice(0, 4)) - k)).map(y => <option key={y} value={y}>{y}</option>)}</select></div>
+      <div className="card-body">
+        <ol style={{ margin: 0, paddingLeft: 20, lineHeight: 1.7 }}>
+          <li><b>Close every month.</b> {ye.allLocked
+            ? <span style={{ color: "var(--pos)" }}>All 12 months are locked.</span>
+            : <span>{ye.lockedMonths} of 12 locked — finish the months above.</span>}</li>
+          <li><b>1099s</b> (due to vendors and the IRS by Jan 31): {ye.ten99Count} vendor{ye.ten99Count === 1 ? "" : "s"} over {money(ye.limit)}
+            {" "}— <a href="#" onClick={e => { e.preventDefault(); report("v1099", `${ye.year}-01-01`, `${ye.year}-12-31`); }}>1099 Vendor Report</a>.
+            {ye.missingTin.length > 0
+              ? <div style={{ color: "var(--neg)" }}>No Tax ID on file — get a W-9: {ye.missingTin.map(v => `${v.name} (${money(v.total)})`).join(", ")}</div>
+              : <div style={{ color: "var(--pos)" }}>Every one has a Tax ID on file.</div>}
+            {ye.unmarked.length > 0 && <div className="subtle" style={{ marginTop: 4 }}>
+              Paid over {money(ye.limit)} but not marked for a 1099 — a corporation, a material supplier or a donation needs none; mark a vendor
+              1099-NEC / MISC under Vendors if it does:
+              <table style={{ marginTop: 4 }}><tbody>{ye.unmarked.map(v => <tr key={v.id}>
+                <td>{v.name}</td><td className="num mono">{money(v.total)}</td>
+                <td style={{ textAlign: "right" }}>{!readOnly && <button className="btn sm" disabled={busy} onClick={() => reviewed(v)}>No 1099 needed</button>}</td>
+              </tr>)}</tbody></table></div>}</li>
+          <li><b>Reports for the accountant</b> ({ye.year}):{" "}
+            {[["is", "Income Statement", `${ye.year}-01-01`, `${ye.year}-12-31`], ["bs", "Balance Sheet", `${ye.year}-01-01`, `${ye.year}-12-31`],
+              ["tb", "Trial Balance", `${ye.year}-01-01`, `${ye.year}-12-31`], ["gl", "General Ledger", `${ye.year}-01-01`, `${ye.year}-12-31`],
+              ["ar", "Aged Receivables", `${ye.year}-01-01`, `${ye.year}-12-31`], ["ap", "Aged Payables", `${ye.year}-01-01`, `${ye.year}-12-31`]]
+              .map(([k, l, f, t], i) => <span key={k}>{i ? " · " : ""}<a href="#" onClick={e => { e.preventDefault(); report(k, f, t); }}>{l}</a></span>)}
+            <div className="subtle">Each opens on the whole year (the balance sheet, trial balance and aging as of Dec 31) — Save PDF or Email from there.</div></li>
+          <li><b>Opening balances</b> for {Number(ye.year) + 1}: nothing to enter. Ledger closes the year itself —
+            {ye.netIncome != null && <> the year's net {ye.netIncome < 0 ? "loss" : "income"} of <b className="mono">{money(Math.abs(ye.netIncome))}</b></>} goes into Retained Earnings on Dec 31
+            (<a href="#" onClick={e => { e.preventDefault(); report("bs", `${Number(ye.year) + 1}-01-01`, `${Number(ye.year) + 1}-01-01`); }}>balance sheet as of Jan 1</a>).</li>
+          <li><b>Lock the year</b> once the accountant is done: lock December above, and the whole year is put away.</li>
+        </ol>
       </div>
     </div>
 

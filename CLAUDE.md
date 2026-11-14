@@ -1047,6 +1047,14 @@ month, whose gaps read *Not yet*). **Lock <next month>** moves `settings.account
 unlocked month's end (it asks first, listing anything still open); **Unlock** moves it back a month. The books were
 locked through 2026-10-31 on 2026-11-14.
 
+**Year-End** (the card under Closing on Month-End Close; `yearEnd()` in `calc/close.js`): for the year picked (the one
+just ended through March, else this one) — every month locked (12 of 12), **1099s** (vendors marked NEC / MISC over
+$600 with no Tax ID → get a W-9; vendors paid over $600 by bill payment, not by card, who aren't marked → review, each
+with **No 1099 needed**, remembered in `settings.accounts.ten99Reviewed`), links to the accountant's reports opening on
+the whole year (Income Statement, Balance Sheet, Trial Balance, General Ledger, Aged Receivables / Payables — `go("reports",
+{ report, from, to })`, which `ReportsView` reads as `reportRequest`), the year's net income or loss carried into
+Retained Earnings by the derived close, and locking December to put the year away.
+
 **Journal entries by hand** (System → Journal Entries, `views/JournalEntries.jsx`, the `journal_entries`
 table, migration 025): what no document covers — a payroll run (Wages Expense, Payroll Tax Expense, 401K
 Employer against Checking and the payables), depreciation, an adjustment. An entry is a date, an optional

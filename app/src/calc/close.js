@@ -14,6 +14,7 @@
 //
 // A month is ready to lock when its bank, card and loan checks pass.
 import { accountSettings, chart } from "./accounts.js";
+import { vendor1099, TEN99_LIMIT, incomeStatement } from "./gl.js";
 
 const pad = n => String(n).padStart(2, "0");
 export const monthEnd = ym => { const [y, m] = ym.split("-").map(Number); return `${ym}-${pad(new Date(y, m, 0).getDate())}`; };
@@ -75,4 +76,31 @@ export function closeMonths(db, today) {
   const [ty, tm] = today.slice(0, 7).split("-").map(Number);
   while (y < ty || (y === ty && m <= tm)) { out.push(`${y}-${pad(m)}`); m++; if (m > 12) { m = 1; y++; } }
   return out.reverse().map(ym => monthClose(db, ym, { today }));
+}
+
+// Year-end: what a year needs before it's put away — every month locked, the
+// 1099 picture (vendors over the $600 limit with no Tax ID on file, and vendors
+// paid over the limit who aren't marked for a 1099 at all, to review — a
+// corporation usually needs none), and the year's net income, which the
+// derived closing entry carries into Retained Earnings on the year-end day.
+export function yearEnd(db, year, { today } = {}) {
+  const y = String(year);
+  const months = Array.from({ length: 12 }, (_, i) => monthClose(db, `${y}-${pad(i + 1)}`, { today }));
+  const t99 = vendor1099(db, y);
+  const missingTin = t99.rows.filter(r => r.limitMet && !String(r.vendor.taxId || "").trim()).map(r => ({ name: r.vendor.name, total: r.total }));
+  const marked = new Set(t99.rows.map(r => r.vendor.id));
+  const cardAccts = new Set((accountSettings(db.settings).cards || []).map(c => String(c.account)));
+  const paidTo = {};
+  (db.bills || []).forEach(b => (b.payments || []).forEach(p => {
+    if (!String(p.date || "").startsWith(y) || p.method === "Credit" || p.method === "Credit Card" || cardAccts.has(String(p.cashAccount || ""))) return;
+    paidTo[b.vendorId] = (paidTo[b.vendorId] || 0) + (Number(p.amount) || 0);
+  }));
+  const unmarked = Object.entries(paidTo).filter(([id, t]) => t >= TEN99_LIMIT && !marked.has(id))
+    .map(([id, t]) => { const v = (db.contacts || []).find(c => c.id === id); return { id, name: v?.name || "—", total: Math.round(t * 100) / 100, ten99: v?.ten99 || "" }; })
+    .filter(v => !(accountSettings(db.settings).ten99Reviewed || []).includes(v.id))   // reviewed: no 1099 needed
+    .sort((a, b) => b.total - a.total);
+  let netIncome = null;
+  try { const is = incomeStatement(db, `${y}-01-01`, `${y}-12-31`); netIncome = typeof is?.net === "object" ? is.net.period : is?.net ?? null; } catch { /* reported as unknown */ }
+  return { year: y, months, lockedMonths: months.filter(m => m.locked).length, allLocked: months.every(m => m.locked),
+    missingTin, unmarked, ten99Count: t99.rows.filter(r => r.limitMet).length, netIncome, limit: TEN99_LIMIT };
 }

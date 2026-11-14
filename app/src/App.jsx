@@ -131,7 +131,9 @@ export default function App({ session }) {
   const [pwOpen, setPwOpen] = useState(false);
   // A document's Edit button asks a list page to open its editor on one record;
   // its Copy button asks for the editor on a new draft copied from it ({ copy: true }).
-  const [editRequest, setEditRequest] = useState(null);   // anyone can change their own password, Settings or not
+  const [editRequest, setEditRequest] = useState(null);
+  // A report to open on arrival at Reports: go("reports", { report: "bs", from, to }).
+  const [reportRequest, setReportRequest] = useState(null);   // anyone can change their own password, Settings or not
   useEffect(() => {
     if (!navOpen) return;
     const onKey = e => { if (e.key === "Escape") setNavOpen(false); };
@@ -160,8 +162,9 @@ export default function App({ session }) {
   // "contacts" was the combined page before Customers and Vendors split; a stale link lands on Customers.
   // The page area scrolls on its own (the sidebar stays put), so a new page
   // starts at its top by scrolling .main, not the window.
-  const go = (v, { fromMenu = false } = {}) => {
+  const go = (v, { fromMenu = false, report = null, from = "", to = "" } = {}) => {
     const next = v === "contacts" ? "customers" : v;
+    setReportRequest(report ? { report, from, to } : null);
     if (next !== view) setHistory(h => [...h.slice(-19), view]);
     setView(next); setNavOpen(false);
     if (fromMenu) setMenuOut(false);
@@ -247,7 +250,7 @@ export default function App({ session }) {
       </div>
       <div className="content">
         {activeView === "dashboard" && <Dashboard {...props} />}
-        {activeView === "reports" && <ReportsView {...props} />}
+        {activeView === "reports" && <ReportsView {...props} reportRequest={reportRequest} />}
         {activeView === "proposals" && <ProposalsView {...props} />}
         {activeView === "rateSheet" && <RateSheetDoc settings={db.settings} timeCategories={db.timeCategories} toast={toast} onClose={back} />}
         {activeView === "bankingSheet" && <BankingSheetDoc settings={db.settings} bankInfo={db.bankInfo} toast={toast} onClose={back} />}

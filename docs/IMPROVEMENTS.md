@@ -23,7 +23,7 @@ list, not the conversation.
 ## 3. Year-end (January)
 - [x] **W-9s:** R&H Witt Inc, Tailored Controls Design LLC, Unlimited Technologies have no Tax ID (none paid
       in 2026, so no 1099 due this year). Told Tom 2026-11-14.
-- [ ] **Year-End checklist page** — close the year, 1099 check (vendors over $600 without a Tax ID),
+- [x] **Year-End checklist** (Rev 1.94, on the Month-End Close page) — close the year, 1099 check (vendors over $600 without a Tax ID),
       accountant's reports, opening balances, lock the year.
 
 ## 4. Everyday polish

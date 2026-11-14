@@ -1,4 +1,4 @@
-import { Fragment, useState, useRef } from "react";
+import { Fragment, useState, useRef, useEffect } from "react";
 import { printOrShare, isIOS } from "../lib/printSupport.js";
 import { saveBlob } from "../lib/saveFile.js";
 import { reportPdf } from "../lib/reportPdf.js";
@@ -65,7 +65,7 @@ const CATEGORIES = [
   { key: "company", label: "Company Reports", icon: ICONS.mail, blurb: "Company-wide lists — every email sent from Ledger, to whom, and what was attached.", reports: ["emails"] },
 ];
 
-export default function ReportsView({ db, toast }) {
+export default function ReportsView({ db, toast, reportRequest }) {
   const [catKey, setCatKey] = useState("ar");
   const reportRef = useRef();   // the report as shown — its PDF (lib/reportPdf.js) is drawn from its tables
   const [pdfView, setPdfView] = useState(null);   // { blob, filename } on screen with Print / Save
@@ -82,6 +82,14 @@ export default function ReportsView({ db, toast }) {
   const [from, to] = rangeFor(preset, custom);
   const pickCat = (k) => { setCatKey(k); setRptKey(""); };
   const openReport = (k) => { setRptKey(k); setPartyId(""); setPreset("ytd"); };
+  // Opened from another page on a given report and dates (Month-End Close's year-end links).
+  useEffect(() => {
+    if (!reportRequest?.report || !REPORTS[reportRequest.report]) return;
+    const c = CATEGORIES.find(x => x.reports.includes(reportRequest.report));
+    if (c) setCatKey(c.key);
+    setRptKey(reportRequest.report); setPartyId("");
+    if (reportRequest.from || reportRequest.to) { setPreset("range"); setCustom({ from: reportRequest.from, to: reportRequest.to }); }
+  }, [reportRequest]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const asOf = rpt?.asOf ? (to || todayISO()) : undefined;
   const label = rpt?.asOf ? "As of " + fmtDate(asOf) : rangeLabel(from, to);

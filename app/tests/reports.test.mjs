@@ -61,3 +61,17 @@ test("cash forecast: overdue invoices stay out unless counted; bills and the car
   assert.equal(end, 2000 + 500 - 300 - 400);
   assert.equal(cashForecast(db, "2026-11-14", { includeOverdue: true }).weeks[0].in, 1000);
 });
+
+test("year-end: 1099 vendors over the limit without a Tax ID, and unmarked vendors over it until reviewed", async () => {
+  const { yearEnd } = await import("../src/calc/close.js");
+  const db = books({
+    contacts: [{ id: "v1", type: "vendor", name: "Contractor A", ten99: "nec", taxId: "" }, { id: "v2", type: "vendor", name: "Supplier B", ten99: "" }],
+    bills: [{ id: "b1", vendorId: "v1", date: "2026-03-01", amount: 900, lines: [], payments: [pay("p1", 900, "2026-03-05")] },
+      { id: "b2", vendorId: "v2", date: "2026-03-01", amount: 5000, lines: [], payments: [pay("p2", 5000, "2026-03-05")] }],
+  });
+  const y = yearEnd(db, 2026, { today: "2026-11-14" });
+  assert.deepEqual(y.missingTin.map(v => v.name), ["Contractor A"]);
+  assert.deepEqual(y.unmarked.map(v => v.name), ["Supplier B"]);
+  db.settings.accounts.ten99Reviewed = ["v2"];
+  assert.equal(yearEnd(db, 2026, { today: "2026-11-14" }).unmarked.length, 0);
+});

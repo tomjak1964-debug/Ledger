@@ -202,6 +202,14 @@ const cardLine = l => ({ id: l.id || crypto.randomUUID(), date: l.date || "", de
   // A charge recorded as a vendor's bill payment (paid by card) instead of an expense.
   ...(l.vendorId ? { vendorId: l.vendorId, billId: l.billId || "", billRef: l.billRef || "" } : {}),
   ...(l.paymentId ? { paymentId: l.paymentId } : {}), ...(l.newBillId ? { newBillId: l.newBillId } : {}) });
+// Recurring invoices and bills (migration 043).
+export const recurringFromRow = r => ({ id: r.id, kind: r.kind, name: r.name || "", partyId: r.party_id || "", every: r.every || "month",
+  nextDate: r.next_date || "", endDate: r.end_date || "", active: r.active !== false, template: r.template || {},
+  lastDocId: r.last_doc_id || "", lastRun: r.last_run || "" });
+export const recurringToRow = r => ({ id: r.id, kind: r.kind, name: r.name ?? "", party_id: idOrNull(r.partyId), every: r.every || "month",
+  next_date: dateOrNull(r.nextDate), end_date: dateOrNull(r.endDate), active: r.active !== false, template: r.template || {},
+  last_doc_id: idOrNull(r.lastDocId), last_run: dateOrNull(r.lastRun) });
+
 // Line of credit statements (migration 042).
 const loanLine = l => ({ id: l.id || crypto.randomUUID(), date: l.date || "", postDate: l.postDate || "", desc: l.desc ?? "", amount: num(l.amount), kind: l.kind || "",
   ...(l.entryId ? { entryId: l.entryId, linked: !!l.linked } : {}) });

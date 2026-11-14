@@ -1,3 +1,4 @@
+import RecurringPanel from "../components/RecurringPanel.jsx";
 import { agedExtras } from "../lib/agedAttachment.jsx";
 import { useState, useEffect } from "react";
 import { uid, money, fmtDate, todayISO, addDays, nameOf, pickable } from "../lib/helpers.js";
@@ -47,6 +48,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
     catch (e) { toast("⚠ Couldn't make the PDF: " + (e.message || e)); }
   };
   const [edit, setEdit] = useState(null);
+  const [recurFrom, setRecurFrom] = useState(null);   // a document to make recurring
   // Edit from an open invoice document lands here.
   useEffect(() => {
     if (editRequest?.kind !== "invoice") return;
@@ -162,6 +164,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
   if (edit) return <InvoiceEditor invoice={edit} customers={customers} catalog={db.catalog} onCancel={() => setEdit(null)} onSave={save} db={db} actions={actions} toast={toast} readOnly={readOnly} />;
 
   return <div>
+    <RecurringPanel kind="invoice" db={db} actions={actions} toast={toast} readOnly={readOnly} start={recurFrom} onStarted={() => setRecurFrom(null)} />
     <div className="toolbar">
       <button className={"btn" + (unprintedOnly ? " primary" : "")} onClick={() => setUnprintedOnly(v => !v)}
         title="Invoices not sent to the customer yet">
@@ -236,6 +239,7 @@ export default function InvoicesView({ db, actions, toast, openDoc, readOnly, ed
                 {!readOnly && <button className="btn ghost icon" title="Edit" onClick={() => setEdit({ ...inv })}><Ico d={ICONS.edit} size={16} /></button>}
                 {!readOnly && <ActionMenu title="More actions">{close => <>
                   {!isCreditMemo(inv) && <MenuItem onClick={() => { close(); copy(inv); }}>Copy</MenuItem>}
+                  {!isCreditMemo(inv) && <MenuItem onClick={() => { close(); setRecurFrom(inv); }}>Make Recurring</MenuItem>}
                   <MenuItem danger onClick={() => { close(); del(inv.id); }}>Delete</MenuItem>
                 </>}</ActionMenu>}
               </td>

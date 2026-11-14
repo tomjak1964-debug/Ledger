@@ -15,6 +15,7 @@ import { dueDateFor } from "./terms.js";
 import { CREDIT_METHOD } from "./credits.js";
 import { uid, todayISO, addDays, pad4, money, sum } from "./helpers.js";
 import { planLoanStatement } from "./loanStatement.js";
+import { docFromTemplate, advance as advanceDate } from "../calc/recurring.js";
 import { defaultSettings, sampleData } from "./seed.js";
 import { proposalConfig, phaseAmount, billsOnPo } from "../calc/proposals.js";
 import { proposalSpecs, proposalBudget } from "../calc/jobs.js";
@@ -37,7 +38,7 @@ const th = (res) => { if (res.error) throw res.error; return res.data; };
 
 async function fetchAll() {
   const [settings, sequences, contacts, catalog, quotes, qli, sos, soli, invoices, invli, payments, bills, expenses,
-    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments, pos, poli, accounts, journal, recons, cleared, jobCosts, serviceReports, cardStatements, bankInfo, emailLog, loanStatements] = await Promise.all([
+    people, machineTypes, proposals, orgs, members, audit, tasks, timeCats, timeEntries, attachments, pos, poli, accounts, journal, recons, cleared, jobCosts, serviceReports, cardStatements, bankInfo, emailLog, loanStatements, recurring] = await Promise.all([
     supabase.from("settings").select("*").maybeSingle(),
     supabase.from("org_sequences").select("*"),
     supabase.from("contacts").select("*").order("created_at"),
@@ -76,6 +77,7 @@ async function fetchAll() {
     // Every email sent through Ledger (migration 040) — the Correspondence report.
     supabase.from("email_log").select("*").order("sent_at", { ascending: false }).limit(5000),
     supabase.from("loan_statements").select("*").order("closing_date", { ascending: false }),   // migration 042
+    supabase.from("recurring").select("*").order("next_date"),                                    // migration 043
   ]);
   return {
     settingsRow: th(settings), sequences: th(sequences),
@@ -103,7 +105,8 @@ async function fetchAll() {
     cardStatements: cardStatements && !cardStatements.error ? (cardStatements.data || []) : [],   // migration 031
     bankInfo: bankInfo && !bankInfo.error ? (bankInfo.data?.data || null) : null,                 // migration 037
     emailLog: emailLog && !emailLog.error ? (emailLog.data || []) : [],
-    loanStatements: loanStatements && !loanStatements.error ? (loanStatements.data || []) : [],   // migration 042                         // migration 040
+    loanStatements: loanStatements && !loanStatements.error ? (loanStatements.data || []) : [],   // migration 042
+    recurring: recurring && !recurring.error ? (recurring.data || []) : [],                       // migration 043                         // migration 040
   };
 }
 
@@ -149,6 +152,7 @@ function assemble(raw) {
     serviceReports: (raw.serviceReports || []).map(A.serviceReportFromRow),
     cardStatements: (raw.cardStatements || []).map(A.cardStatementFromRow),
     loanStatements: (raw.loanStatements || []).map(A.loanStatementFromRow),
+    recurring: (raw.recurring || []).map(A.recurringFromRow),
   };
 }
 
@@ -1505,6 +1509,37 @@ export function useLedger(session, onError) {
         } catch (_) { /* reported below */ }
         return fail(e);
       }
+    },
+    /* ---- recurring invoices and bills (migration 043, calc/recurring.js) ---- */
+    async saveRecurring(r) {
+      try {
+        if (!r.nextDate) throw new Error("Pick the next date it's due.");
+        if (!r.partyId) throw new Error(r.kind === "bill" ? "A recurring bill needs a vendor." : "A recurring invoice needs a customer.");
+        const rec = { ...r, id: r.id || uid(), name: (r.name || "").trim() || "Recurring" };
+        th(await supabase.from("recurring").upsert(A.recurringToRow(rec)));
+        setDb(d => ({ ...d, recurring: upsertList(d.recurring || [], rec) }));
+        return rec;
+      } catch (e) { return fail(e); }
+    },
+    async deleteRecurring(id) {
+      try {
+        th(await supabase.from("recurring").delete().eq("id", id));
+        setDb(d => ({ ...d, recurring: (d.recurring || []).filter(x => x.id !== id) }));
+        return true;
+      } catch (e) { return fail(e); }
+    },
+    // Make the next document from a template, dated its next date, and move the
+    // template on. The document is an ordinary invoice or bill (numbered as one).
+    async runRecurring(r) {
+      try {
+        const doc = docFromTemplate(dbRef.current, r, r.nextDate);
+        const saved = r.kind === "invoice" ? await actions.saveInvoice(doc) : await actions.saveBill(doc);
+        if (!saved) return null;
+        const next = { ...r, nextDate: advanceDate(r.nextDate, r.every), lastDocId: saved.id, lastRun: todayISO() };
+        th(await supabase.from("recurring").update(A.recurringToRow(next)).eq("id", r.id));
+        setDb(d => ({ ...d, recurring: upsertList(d.recurring || [], next) }));
+        return saved;
+      } catch (e) { return fail(e); }
     },
     // A line of credit statement (System → Line of Credit, migration 042): one
     // entry per payment or draw — or a link to the one already on the books —

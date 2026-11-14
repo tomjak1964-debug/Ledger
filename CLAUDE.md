@@ -1311,13 +1311,22 @@ sender as `"remittance"`, to the party's preferred contact with the CC ticks) ·
 page, so saved, printed and emailed copies match. A report's own toolbar is the same order: Close · Email · Save PDF ·
 **Print**, above its filters.
 
+**Recurring invoices and bills** (migration 043 `recurring`, `calc/recurring.js`, `components/RecurringPanel.jsx`, Rev 1.98):
+**Make Recurring** on an invoice or bill row's ⋯ menu turns it into a template (`templateFrom()` — party, lines, tax, notes,
+accounts, a bill's jobs; never number, dates, payments or source SO / PO) with how often (week / month / quarter / year),
+the next date (one period on) and an optional end date. A **Recurring Invoices / Bills** card heads the Invoices and
+Payables pages once one exists, flagging what's due; **Create** (one) or **Create All Due** makes each as an ordinary
+invoice (auto-numbered, the customer's terms) or bill (vendor invoice # `REC-YYMMDD` — change it when the vendor's own
+arrives) dated its due date, and moves the template on (`advance()`: the 31st falls back to month-end). Nothing is made
+without a click — Ledger has no scheduler. RLS follows the invoices / payables permission by kind.
+
 **Sortable lists:** every list view — Quotes, Sales Orders, Invoices, Receivables, Payables,
 Purchase Orders, Expenses, Customers, Vendors, Catalog, Jobs, Tasks, Proposals, Fixture Rates, Job Costing,
 Time Tracking, the Payments/Receipts register, and the report tables — sorts on any column heading,
 ascending then descending. See §7 for the convention new pages follow.
 
 **Not built (candidates for next work):** refunds (returning cash rather than crediting) · partial invoicing of an SO ·
-recurring invoices · email sending · attachments / receipt photos · quote line-item reordering ·
+email sending · attachments / receipt photos · quote line-item reordering ·
 multi-user roles · a live bank feed (statements are imported by file) · locking a closed year against
 back-dated documents ·
 undo · automated tests ·

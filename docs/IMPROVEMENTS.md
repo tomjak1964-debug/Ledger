@@ -30,7 +30,7 @@ list, not the conversation.
 - [x] **Global search opens the record** (Rev 1.95) (invoice, bill, proposal, SO, contact) instead of just the page.
 - [x] **Excel (.xlsx) exports** instead of CSV (Rev 1.96).
 - [x] **Back button / DocActions toolbar** consistency (Rev 1.97) on Reports, quotes and purchase orders (standards gaps).
-- [ ] **Recurring invoices and bills.**
+- [x] **Recurring invoices and bills** (Rev 1.98, migration 043).
 
 ## 5. Housekeeping
 - [ ] **Trim CLAUDE.md** (1,380 lines) to the skeleton the standards call for; move the feature detail into

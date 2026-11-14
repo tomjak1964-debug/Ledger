@@ -1,3 +1,4 @@
+import RecurringPanel from "../components/RecurringPanel.jsx";
 import { useState, useEffect } from "react";
 import { uid, money, fmtDate, todayISO, addDays, nameOf, sum, pickable } from "../lib/helpers.js";
 import { remitVendor, ccChoices } from "../lib/people.js";
@@ -68,6 +69,7 @@ export default function PayablesView({ db, actions, toast, readOnly, go, editReq
     settings: db.settings,
   });
   const [edit, setEdit] = useState(null);
+  const [recurFrom, setRecurFrom] = useState(null);   // a document to make recurring
   const [pay, setPay] = useState(null);
   const vendors = db.contacts.filter(c => c.type === "vendor");
   const open = db.bills.filter(b => (billBalance(b)) > 0.005);
@@ -105,6 +107,7 @@ export default function PayablesView({ db, actions, toast, readOnly, go, editReq
   };
 
   return <div>
+    <RecurringPanel kind="bill" db={db} actions={actions} toast={toast} readOnly={readOnly} start={recurFrom} onStarted={() => setRecurFrom(null)} />
     <div className="card" style={{ marginBottom: 16 }}>
       <div className="card-head"><h3>A/P Aging</h3><span className="mono" style={{ marginLeft: "auto", fontWeight: 600, fontSize: 16, color: "var(--neg)" }}>{money(totalOpen)}</span>
         {!readOnly && <button className="btn sm" onClick={() => setPayRun(true)} disabled={open.length === 0}><Ico d={ICONS.money} size={14} />Pay Bills…</button>}
@@ -156,6 +159,7 @@ export default function PayablesView({ db, actions, toast, readOnly, go, editReq
                 {!readOnly && <button className="btn ghost icon" onClick={() => setEdit(withLines(b))} title="Edit"><Ico d={ICONS.edit} size={15} /></button>}
                 {!readOnly && <ActionMenu title="More actions">{close => <>
                   <MenuItem onClick={() => { close(); setEdit(withLines(copyBillDraft(db, b))); }}>Copy</MenuItem>
+                  {<MenuItem onClick={() => { close(); setRecurFrom(b); }}>Make Recurring</MenuItem>}
                   <MenuItem danger onClick={() => { close(); del(b.id); }}>Delete</MenuItem>
                 </>}</ActionMenu>}
               </td>

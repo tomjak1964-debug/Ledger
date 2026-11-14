@@ -142,10 +142,18 @@ function drawTest(doc, form) {
   for (let i = 1; i < 34; i++) doc.text(String(i % 4 === 0 ? i / 4 : "·"), i / 4, 0.15);
 }
 
+// Print settings carried inside the PDF: Letter (the page size), actual size —
+// never "fit to page", which shrinks the check off its pre-printed stock — one
+// side, and the paper tray picked by the PDF's size. Chrome, Edge and Acrobat
+// open their print dialog on these. Colour can't be set from a PDF: a check is
+// drawn in pure black, and the printer's own default decides colour vs grey.
+const checkPrintPrefs = doc => doc.viewerPreferences({ PrintScaling: "None", Duplex: "Simplex", PickTrayByPDFSize: true });
+
 // payment: {amount, date, ref}; vendor contact; stubLines: [{ref, date, desc, invoiceAmount, discount, amount}]
 export function printCheck({ payment, vendor, memo, stubLines, settings, form, test }) {
   const L = form || formFor(settings, "check");
   const doc = new jsPDF({ unit: "in", format: "letter" });
+  checkPrintPrefs(doc);
   if (test) drawTest(doc, L);
   else drawCheck(doc, L, { payment, vendor, memo, stubLines });
   return doc;
@@ -155,6 +163,7 @@ export function printCheck({ payment, vendor, memo, stubLines, settings, form, t
 export function checksPdf(list, settings, form) {
   const L = form || formFor(settings, "check");
   const doc = new jsPDF({ unit: "in", format: "letter" });
+  checkPrintPrefs(doc);
   list.forEach((args, i) => { if (i) doc.addPage(); drawCheck(doc, L, args); });
   return doc.output("blob");
 }

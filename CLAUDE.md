@@ -802,7 +802,10 @@ doesn't set them uses the top voucher's. The ¾" Invoice Date column prints at 8
 size beats the default. On the check the payee's name and address print as one block beside PAY TO THE
 ORDER OF, where the envelope window shows them (the separate payee line is off), and the memo sits
 above the MICR clear band.
-*Classic Voucher Check* keeps the old check-on-top layout, and any legacy `settings.check` positions still
+**Check PDFs carry their print settings** (`checkPrintPrefs()` in `lib/checkPrint.js`, since Rev 1.91): Letter page,
+`/PrintScaling /None` (the print dialog opens on actual size, never fit-to-page, so the check lands on its stock),
+single-sided, tray by PDF size. Colour can't be set from a PDF; the check is pure black, so set the check printer's own
+default to grayscale. *Classic Voucher Check* keeps the old check-on-top layout, and any legacy `settings.check` positions still
 drive it. Forms live in the settings jsonb (`settings.forms`, `settings.formFor`) — no migration.
 Invoices and remittances keep their standard renderers; they are listed so every document type names its form.
 

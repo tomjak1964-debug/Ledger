@@ -312,7 +312,13 @@ Four stages — Quotes out (draft/sent), Sales Orders (open), Awaiting Payment (
 overdue), Collected 30d — each showing count + summed value. In `app/` every stage and every KPI card is a link
 to the page behind it (Open Receivables / Collected → Receivables, Payables Due → Payables, Expenses → Expenses,
 the stages → Quotes / Sales Orders / Invoices / Receivables) — `Stat`'s `onClick`, styled `.linked`. Don't reduce this to generic stat cards;
-the pipeline is the app's identity.
+the pipeline is the app's identity. **Cash Forecast** (below the pipeline, for anyone who reads both
+Receivables and Payables — `components/CashForecast.jsx`, `calc/forecast.js`): checking's book balance today, then eight
+weeks of money in (open invoices on their due dates) and out (open bills on theirs, overdue ones this week; each card's
+latest statement ~25 days after it closed, the line of credit's last regular payment monthly, payroll at the six-month
+average — those three marked estimates), the running balance and the **low point**. Overdue invoices are left out unless
+*Count overdue invoices as paid this week* is ticked — counting them makes the outlook rosier than the books can promise.
+A week opens to its items.
 
 ---
 

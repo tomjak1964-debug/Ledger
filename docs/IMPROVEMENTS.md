@@ -15,7 +15,7 @@ list, not the conversation.
 
 ## 2. Save time each month
 - [ ] **Payroll import (ADP)** — BLOCKED: needs a sample ADP payroll report from Tom.
-- [ ] **Cash-flow forecast** on the dashboard — next 4–8 weeks: invoices by due date in; bills due,
+- [x] **Cash-flow forecast** (Rev 1.93) on the dashboard — next 4–8 weeks: invoices by due date in; bills due,
       payroll, line-of-credit payment, card balances out; the low point.
 - [ ] **PNC Payments API** (instant payments from Ledger + bank feed) — blocked: Tom to ask PNC about the
       API channel, cost, approval in PINACLE, limits; then a Developer Portal sandbox app.

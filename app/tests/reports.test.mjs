@@ -44,3 +44,20 @@ test("due date from the party's terms", () => {
   db.contacts[0].terms = 45;
   assert.equal(dueDateFor(db, "c", "2026-10-01"), "2026-11-15");
 });
+
+test("cash forecast: overdue invoices stay out unless counted; bills and the card come out on time", async () => {
+  const { cashForecast } = await import("../src/calc/forecast.js");
+  const db = books({
+    settings: { accounts: { cash: "1020", cards: [{ id: "k", name: "Card", account: "2150" }] } },
+    invoices: [inv("late", { total: 1000, due: "2026-10-01" }), inv("soon", { total: 500, due: "2026-11-20" })],
+    bills: [{ id: "b", number: "B", vendorId: "v", date: "2026-11-01", dueDate: "2026-11-18", amount: 300, lines: [], payments: [] }],
+    journalEntries: [{ id: "o", date: "2026-11-01", lines: [{ account: "1020", debit: 2000, credit: 0 }, { account: "3910", debit: 0, credit: 2000 }] }],
+    cardStatements: [{ cardAccount: "2150", closingDate: "2026-10-28", newBalance: 400 }],
+  });
+  const f = cashForecast(db, "2026-11-14");
+  assert.equal(f.start, 2000);
+  assert.equal(f.overdueIn, 1000);
+  const end = f.weeks[f.weeks.length - 1].balance;
+  assert.equal(end, 2000 + 500 - 300 - 400);
+  assert.equal(cashForecast(db, "2026-11-14", { includeOverdue: true }).weeks[0].in, 1000);
+});

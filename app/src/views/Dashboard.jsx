@@ -3,6 +3,7 @@ import { reviewTarget, isReviewTask } from "../lib/taskKinds.js";
 import { lineTotals, paid, balance, invoiceStatus, billBalance } from "../calc/ledger.js";
 import { canRead } from "../lib/permissions.js";
 import { Ico, ICONS, Badge, Stat, Empty } from "../components/ui.jsx";
+import CashForecast from "../components/CashForecast.jsx";
 
 export default function Dashboard({ db, go, member }) {
   // Only surface the parts of the dashboard the user has access to. Admins and
@@ -90,6 +91,9 @@ export default function Dashboard({ db, go, member }) {
         </div>)}
       </div>
     </div>}
+
+    {/* Cash on the way in and out — needs both sides of the books. */}
+    {canAR && canAP && <CashForecast db={db} go={go} />}
 
     {canInv && overdue.length > 0 &&
       <div className="card" style={{ marginBottom: 16, borderColor: "var(--neg-wash)" }}>

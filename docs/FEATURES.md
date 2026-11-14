@@ -1,0 +1,980 @@
+# Ledger — feature notes
+
+The long notes on how each part of `app/` works, moved out of CLAUDE.md on 2026-11-14 (standards S6.3).
+Read the entry for an area before changing it; keep it current when you do.
+
+## Built / not built
+
+**Built:** Dashboard (KPIs, pipeline, overdue callout, recent activity) · Quotes (dynamic
+line-item form, catalog insert, statuses, search, printable) · Quote→SO conversion with PO ·
+Sales Orders · SO→Invoice generation · Invoices (payments, printable) · Receivables (A/R aging) ·
+Payables (vendor bills, A/P aging, payments) · Expenses (by category) · Customers and Vendors (one page each) ·
+Item Catalog · Settings (company, defaults, numbering, JSON export, clear/seed) · print/PDF for
+quotes and invoices.
+
+**Built in `app/` only (beyond the legacy feature set):** Supabase backend + auth + multi-device ·
+atomic document numbering · JSON backup import · **Reports** (cash-basis P&L, sales tax
+invoiced/collected, sales by customer, expenses by category, printable customer statements, CSV
+export, date-range presets — `src/calc/reports.js` + `src/views/Reports.jsx`) organised into
+**Sage-style report categories** (a category rail; empty categories stay visible so reports can
+slot in later) with **Receipts / Payments registers** in summary or detail form · a shared
+**date-range + customer/vendor filter** (`src/lib/dateRanges.js`, `src/components/FilterBar.jsx`,
+`useFilters()`) on every report and every sortable list view · **extra ad-hoc lines** when
+invoicing from a sales order (billed on that invoice only; the SO keeps its PO and its lines) · **standalone +
+editable invoices** with per-invoice notes (`invoices.notes`, migration 002) · payment
+delete/correction · **check register** (`src/lib/checks.js` — next check number remembered and
+overridable, duplicate numbers refused, voiding a check reopens its bills and frees the number) ·
+**guided payment flow** (record → print → confirm the check printed → email/save → every dialog
+closes; a misprinted check is reversed in one click) · **payments & receipts register**
+(`src/components/PaymentRegister.jsx`, shown as Vendors & Purchases → Payments and Receivables → Receipts:
+search, date range, edit, delete, void a whole check, print a check again from its row; on the payments side each bill line also shows the vendor's invoice number (`bill.ref`), and the search finds it; both sides list one row per
+check/transfer, expandable to the invoices or bills it covered — `receiptGroups()` in
+`src/calc/reports.js` does the grouping) · **whole receipts and payments are editable**
+(`src/components/PaymentGroupModal.jsx` + `updatePaymentGroup()` in `store.js`: open a
+receipt or check, add documents to it, untick to take them off, correct the applied
+amounts; nothing is ticked by default and Select all / Deselect all sit above the list —
+the same modal records a receipt) · **a payment can be moved to another
+document** (the "Applied to" selector in the single-line editor, `updatePayment`'s
+`toParentId`) — money landed on the wrong bill or invoice is re-pointed keeping its
+date, method and reference, and both documents re-settle themselves · vendor **remit-to address** (migration 017 — the mail-to block on printed checks and remittances; who a
+remittance is emailed to is now the contact preferred for remittances, migration 034) · installable PWA (manifest + icons +
+service worker; Supabase never cached).
+
+**Issuing a credit note** (`src/components/CreditNoteModal.jsx`, migration 020): a credit note is an
+A/R document of its own — **New Credit Note** in Receivables writes one, and the pencil on a credit row
+edits it. Amounts are typed **positive** (what you are crediting) and stored negative, so the document
+carries a negative total and lands in Receivables as an open credit; the due date is the credit date,
+because a credit is not owed. Credit notes number from their own series — `settings.creditPrefix`
+(default `CM`) plus `next_doc_number('credit')`, so they never consume an invoice number. What makes a
+document a credit is now `invoices.kind` (`'invoice'` | `'credit'`, migration 020 — the migration
+backfills existing negative invoices); `isCreditMemo()` still falls back to the negative-total rule for
+anything typed before the column existed. Editing refuses to cut a credit below what has already been
+applied to invoices. Printed and PDF'd it reads **CREDIT MEMO** — positive amounts, "Credit Note #",
+"Credit memo" in the terms box, and Total Credit / Applied to invoices / **CREDIT REMAINING**.
+
+**Applying a credit** (`src/lib/credits.js`, `src/components/ApplyCreditModal.jsx`, `applyCredit()` in
+`store.js`): a credit note carries a negative total, so it already sits in Receivables with a
+negative balance. **Apply Credit** — on the credit's own row, or on any open invoice for a customer who
+has one — opens a dialog listing that customer's open invoices oldest first, with **Oldest first** to
+spend the credit down the list in a click. Nothing is applied until an amount is typed, what is left
+stays on the credit, and the dialog refuses to apply more than an invoice owes (the precise complaint)
+or more than the credit holds.
+
+**No cash moves.** Each allocation writes a *pair* of payment rows with method `Credit` and the credit's
+number as the reference: **+amount on the invoice, −amount on the credit**. The invoice settles against
+`settled()` and the credit is consumed by its own negative total, while `paid()` — which is cash (§6) —
+nets to zero across the pair, so the registers and the cash-basis P&L are untouched. The pair shares a
+date, method and reference, so the register groups it as one entry worth nothing, expandable to the two
+documents; voiding that group unwinds both sides at once.
+
+**Invoicing several jobs at once:** Tasks tick-selects the open *create invoice* tasks and bills them
+two ways (`src/views/Tasks.jsx`). **Create N Invoices** shows what each job would bill — lines, approved
+unbilled time (a tick turns time off for the whole run), and what the invoice comes to — then writes them
+sequentially, so each claims its own number; a job the store refuses is reported and its task stays open
+rather than stopping the run. **Review One by One** opens the normal `InvoiceFromSOModal` per job with a
+`queue` prop: it shows *2 of 5*, Cancel reads **Skip**, and **Stop** ends the run. Either way the run ends
+on a list of what was created with **Print** (straight to the print dialog — `openDoc(kind, doc, { autoPrint,
+onPrinted })` opens the document, prints and closes it) and **Save** (downloads `INV-….pdf` from `invoicePdf()`
+without the dialog, and marks the invoice printed) per invoice; each drops off the list once it's printed or
+saved, so what's left is what still needs doing (*Show printed / saved* brings them back). The dialog closes itself after a
+successful generate, so the queue advances in `onClose` and nowhere else — advancing in `onGenerate` too
+skips a job.
+
+**`dbRef.current` is the state, not a copy of it.** `setDb` applies the updater against the ref and
+writes it before calling `setState`, because an action writes state and then reads it back in the same
+tick — `reconcileJobTask()` right after `generateInvoice()`'s write, for one. Assigning the ref inside
+the React updater left it an update behind (React runs the updater when it processes the update, not
+when `setDb` is called), which a single action got away with and a batch did not: a run that billed
+three jobs wrote all three invoices and left two of the three tasks open. Anything that loops over
+documents — billing several jobs, applying credits, a pay run — depends on this. `reload()` also
+reconciles job tasks **both ways** now, so a task stranded open by that bug closes itself on the next
+load.
+
+**Importing a quote chart** (`src/lib/quoteChart.js`, `src/components/ImportProposalsModal.jsx`): the
+shop keeps one row per machine in a quote chart, and **Import Quote Chart** in Proposals turns that
+chart into proposals — an `.xlsx` straight out of Excel, a `.csv`, or rows pasted from a sheet. The
+`.xlsx` reader is the trick `tools/reconcile.mjs` uses (a zip of XML, inflated with
+`DecompressionStream`), so there is no library to add. Columns are matched by heading, so column order
+doesn't matter and the chart's working columns — the weighted point count and its division — are
+ignored, because `ioBlocks()` recomputes them; the chart's I/O block figure only rides along as an
+override when it disagrees with the formula. There is deliberately no bare `quote` heading in the
+column map: a chart with both *QUOTE NUMBER* and an empty *QUOTE* column would otherwise blank the
+number. The preview prices every row, pre-matches the machine type by name (*Sonuc* reads as *Sonic*),
+and gives any row it can't match a dropdown — rates are never invented. Where the chart names a type
+from the TMJ rate card that isn't set up yet, one button adds it: `seedMachineRates()` skips names
+already present, so it both seeds an empty list and tops one up. Proposals are written one at a time so
+each claims its own number; the chart's quote number and end user go in the notes. A row with no job number
+takes the quote number as its job number, and with neither, the proposal date and a sequence for the day
+(`dateJobNumber()` in `calc/proposals.js` — `261008-01`, `261008-02`…, following any already used).
+**A new proposal starts on the customer the last proposal of its kind was for** (`defaultProposalCustomer(db,
+kind)`: the newest fixture or system proposal's customer, so a system proposal for someone else leaves the
+fixture default alone; else Venture Global Engineering), with that customer's contact; the quote-chart import
+uses the same default. Changing the customer replaces the contact with the new customer's own, or blank.
+
+**Every document has the same toolbar** (`components/DocActions.jsx`): Close · Edit · Email · Save · **Print**
+(the printer dialog). Save lists the formats, each under a name of its own (`saveBlob()` in `lib/saveFile.js`):
+an **invoice** saves the PDF its email attaches (`INV-….pdf`, from `invoicePdf()`), and Edit opens the invoice
+editor (`App`'s `editRequest`, picked up by `InvoicesView`); a **proposal** saves **PDF** or **Word**
+(`proposalFileStem()` names both) and Edit opens its editor; the **rate sheet** saves a one-page PDF; a
+**remittance** (`components/RemittanceView.jsx` — the PDF on screen, from Payables' Pay dialog and the eye
+icon on electronic rows in Vendors & Purchases → Payments) saves `<Vendor> Remittance - <Ref>.pdf`, prints the
+PDF itself and Edit opens the payment. Proposal and rate-sheet PDFs are drawn from the on-screen pages
+(`pagesToPdf()` — html2canvas, which ships with jsPDF, one Letter page per `.prop-page` shrunk to fit; a system
+proposal runs on). **A fixture proposal is two pages**: page two starts at *Sales Notes and Clarifications*
+(`.prop-page + .prop-page{break-before:page}` in print). Printing is Letter (`@page{size:letter}`).
+
+**A printable document overlay belongs outside `.main`.** Printing hides the app behind the document
+with `body.doc-open .main{display:none}` (`styles.css`), which needs both halves: the overlay adds
+`doc-open` to the body, and it sits *outside* `.main` so that rule doesn't hide it too. `DocumentView`
+is rendered by `App` as a sibling of `.main`; `ProposalDoc` lives inside `ProposalsView`, so it
+portals itself to `document.body` (`createPortal`) and sets the same flag. Rendered in place it did
+neither, and a printed proposal came out with the proposals list on the sheet ahead of it. The print
+rules also drop `.app`'s `min-height:100vh` while a document is open: with its children hidden and the
+document portalled outside it, that empty container printed as a blank first sheet. While a proposal is open, `document.title` is the file name — Print / Save PDF
+suggests the tab title as the file name, so it matches the Word download; `proposalFileStem()` in
+`src/lib/proposalDocx.js` is the one place that name is built. `DocumentView` does the same with the
+document number, so an invoice, quote or PO prints as `INV-0042.pdf` — the name `invoicePdf()` already
+gives the download.
+
+**Two kinds of proposal** (`proposals.kind`, migration 021) — on screen a **Fixture Proposal** (`machine`) and a
+**System Proposal** (`controls`); the code and the database keep the original kind names. `machine` is the Venture Global proposal
+exactly as it was — content counts priced off Fixture Rates, the quote-chart import, the letter. `controls`
+is the **Controls Estimate**: a job for any customer, built from the standard engineering components as
+hours × rate (`src/calc/estimates.js` — `COMPONENTS`: Hardware Design, Drafting, PLC Program Development,
+HMI Development, Start-Up/Debug, and optional Project Management, Documentation & Training, FAT, Safety
+Validation), with hardware **optional** (a toggle; off, the document has no hardware section at all) and
+the field work — trips × days × people — as Field Services with travel & living. An hour model suggests
+hours from the job's content (I/O, drives, servo axes, stations, steps, screens, alarms, recipes, safety
+system, vision, data collection); the estimator overrides any of them and the override prices. Standard
+control elements (`STANDARD_ELEMENTS`) quick-add hardware lines with a description and a typical qty —
+**never a price**. The editor, the document content and the on-screen body live in
+`src/views/ControlsEstimate.jsx`; the Word export branches on `kind` in `proposalDocx.js`; `Proposals.jsx`
+routes on `kind` everywhere else. The document carries the sections a general quote needs — header block
+with number/rev/valid-through, Scope of Work per component with deliverables, Assumptions & Clarifications,
+Exclusions, Pricing by group, Options priced separately, Schedule, Invoicing Schedule, Terms (payment
+terms from the contact, validity, support rate) and an Acceptance block. **Everything it reads is in
+Settings → Proposals** (`settings.proposal`, read through `proposalConfig()`): the letter fields that used
+to be code-only defaults, the labor rate card, the hour model, the three invoicing splits (machine,
+controls engineering-only, controls with hardware — toggling hardware swaps the split while it is still a
+stock one), and the standard assumptions/exclusions. Hour and rate defaults are trade-standard starting
+points, not the shop's own numbers. **Revisions:** New Revision writes the same number at `rev + 1` as a
+fresh draft and marks the row it replaces `superseded` (a fifth status); the rev prints as *Rev A* on the
+document and in the file name. A won proposal — either kind — lands on the sales order as **one line per
+phase of its invoicing schedule** (`{job} {phase label}`, priced at the phase's share), however many phases it
+has, so the job bills, marks ready and shows in Job Tracking milestone by milestone, like the Sage SOs. Each phase
+keeps its line's id (`phases[].soLineId`), and billing works from either side: Invoice Phases on the proposal
+flags the SO lines invoiced, and invoicing the SO marks the proposal's phases billed, so a milestone can't be
+billed twice. A controls estimate with no schedule still lands as one line per group it priced
+(Engineering / Hardware / Field Services / Contingency).
+
+**System Rates** (Work → System Rates, `views/SystemRates.jsx`, view key `systemRates`, gated by `proposals`;
+saving needs Settings write, since it is `settings.proposal.hourModel`) is the hour model laid out like Fixture
+Rates: one row per item a job can contain (base, discrete / analog I/O, each device, stations, steps, panels,
+screens…, safety relay / PLC, data collection, remote access), grouped, one column per task (Hardware Design,
+Drafting, PLC, HMI, Documentation, FAT, Safety Validation) with that task's rate, and the hours one unit adds to
+each — plus hours / unit and cost / unit. Only cells that differ from `DEFAULT_HOUR_MODEL` are stored, and they're
+shaded with a per-row reset; start-up hours per day and PM % sit below. It used to be a table in Settings →
+Proposals, which now just points here.
+
+**Fixture proposal prices can be overridden** per line (`specs.priceOverrides`, keyed by `FIXTURE_PRICE_LINES` in
+`calc/proposals.js`): the editor's Pricing table lists every line with its Fixture Rates figure and a price box —
+blank uses the figure, a typed amount replaces it (shaded, *Overridden*), 0 leaves the line off, and a line worth 0
+on the rates can be priced in. *Use Fixture Rates for all* clears them. `priceProposal()` returns `lines` (every
+line, both figures) for the editor; the saved snapshot drops it.
+
+**Milestones billed on receipt of the PO raise their invoice task** (`billsOnPo()` / `ON_PO` in `calc/proposals.js`):
+a phase marked **On receipt of PO** (`phases[].onPo` — Contract Award by default; a tick per phase in Fixture Rates →
+Scope Packages), or any line named Contract Award / Initial PO / on receipt of PO / PO received. When a sales order is
+created — won from a proposal (`winProposal`) or new by hand (`saveSalesOrder`) — those lines start out **ready**, and
+`reconcileJobTask()` raises the job's Create Invoice task at once. (TMJ915–917, won before this, were set ready by
+`data-fixes/2026-10-23_contract_award_ready.sql`.) **Software-only schedule:** a fixture proposal that supplies no hardware design and no material
+(no panel, block I/O or field wiring) invoices **PO Receipt** 10% (on receipt of the PO) / **Start-Up Complete** 80% /
+**Final Documentation** 10% (`SOFTWARE_ONLY_PHASES`, the Software & Start-Up package's schedule): a new proposal on
+such a package starts on it, and unticking the last hardware item in Scope of Supply swaps a stock schedule to it
+(`scheduleFor()` — and back when hardware is ticked again); a hand-edited or partly billed schedule is left alone.
+
+**Several proposals on one PO** (a customer PO covering more than one job — Automated Solutions does this): each
+proposal still becomes **its own sales order** (its own job — job number, budget, milestones, costing), all carrying
+the same PO, and invoices go out **one per job**, each showing the PO. Select mode on Proposals has **Mark Won…**
+(`WinOnPoModal`): one PO number for the ticked proposals, listed with the PO total; refused across customers, and
+won / superseded ones are skipped. A won proposal's row menu has **Change PO…** (`setProposalPo()` — the proposal and
+its sales order; issued invoices keep theirs). Sales Orders has a **PO filter** that shows the
+PO's total and what's left to invoice; on Jobs the search box (SO #, job #, description, customer or PO) finds it, closed jobs
+included. **Jobs** also has the customer / date filter bar every list has and **Expand All / Collapse All**.
+
+**Emailing a proposal submits it:** a draft emailed from its row, from the open proposal, or with others from
+Select → Email is marked **Submitted** once the email goes (`markEmailed()` in `views/Proposals.jsx`, from
+`EmailModal`'s `onSent`); a proposal past draft keeps its status.
+
+**Copy Proposal** (the copy icon on the proposal's row, beside Email / Print / Save / Edit, `CopyProposalModal` in `views/Proposals.jsx`): asks for a new job number and
+description, shows the number the copy will take (the customer's next free one for today), and offers a
+**duplicate machine reduction** — dollars or a percentage off — with the original price, the reduction and the new
+price before it saves. The copy is a fresh draft (rev 0, today, no PO / sales order / billed phases), saved at once
+to claim its number and opened in the editor; the original is untouched. The reduction is `specs.reduction`
+(`{ type: "amt" | "pct", value, label }`) on either kind: `reductionOf()` takes it off a fixture proposal as a
+"Duplicate Machine Reduction" base line, `priceEstimate()` off a system proposal after contingency; both editors
+show it beside the total (`components/ReductionRow.jsx`), the documents and Word print it, phases bill the reduced
+total, and job budgets carry it as a negative "other".
+
+**Rates have one home: Settings → Time Categories** (bill rate and cost rate per category). Logged time bills
+at a category's rate; a system proposal prices each task (Hardware Design, Drafting, PLC, HMI, Start-Up, PM,
+Documentation) and its support rate from the category picked for it in Settings → Proposals → *Labor Rate
+Card* (`settings.proposal.roleCategory`, role → category id; until one is picked, a category of the usual name
+stands in — `ROLE_DEFAULT_CATEGORY` / `roleCategory()` in `calc/proposals.js`, and `proposalConfig(settings,
+timeCategories)` derives `laborRates` and `supportRate` from them, falling back to stored rates only where no
+category matches). Pass `db.timeCategories` wherever a proposal is priced.
+
+**Rate sheet** (`lib/rateSheet.js`, `components/RateSheetDoc.jsx`): a one-page, customer-facing sheet listing
+every active Time Category with its standard, overtime and double-time rate (1.5× / 2× by default), the
+premium-time rules (overtime after 10 hours a day, after 50 a week and on Saturdays; double time on Sundays and
+recognized holidays — the holiday list is kept in settings but not printed), and travel terms (none inside the
+local area, Metro Detroit by default; outside it, travel and living at actual cost, vehicles at the current IRS
+mileage rate, meals at the GSA per diem for the location). **Rate Sheet** in the side menu (Customers & Sales) opens it, and Close goes back;
+Settings → Proposals → *Rate Sheet* holds the effective date, thresholds, multipliers, local area, holidays and a
+closing note (`settings.rateSheet`). Print / Save PDF; the file is named `<Company> Rate Sheet <year>`.
+
+**Banking information sheet** (`components/BankingSheetDoc.jsx`, Customers & Sales → **Banking Info**, gated by
+the **Banking** permission area): how customers pay — ACH (bank, account name / type, ACH routing, account number), wire (wire routing,
+SWIFT, only when one is set), check (payable to, mail to), remittance advice (A/R contact and email, EIN, other
+instructions) — on the letterhead, one Letter page like the rate sheet: Print, Save PDF (`<Company> Banking
+Information.pdf`), Email (`docType: "banking"` → `EMAIL_FROM_RECEIVABLES`, receivables@; the dialog's **From** offers "Me" too —
+the same address under the sender's name with `reply_to` their own email, since Resend only sends from the verified
+domain). Filled in at Settings → Company → **Banking Information**. The details are **not** in settings: they live in
+`bank_info` (migration 037, one jsonb row per org) whose RLS returns the row only to an owner/admin or a member with
+`banking` read, and writes need `banking` write (`saveBankInfo()`); everyone else loads `bankInfo: null` and sees
+"hidden". The numbers were entered straight into the database on 2026-10-21 — never put them in a file in git. A
+blank field is left off the sheet, and it always closes with a "we never change banking instructions by email alone —
+call to verify" box.
+
+**Estimating from a lineup** (`src/lib/lineup.js`, `src/components/ImportLineupModal.jsx`): an integrator's
+*Electrical Engineering Line-up* — one document per fixture with a header (job #, end user, fixture, PLC, HMI,
+runoff), the sequence of operations, the components on the machine with `(xN)` quantities, the valve manifold
+and sensors, and an I/O tally — is what a controls estimate is priced from. **Import Lineup** in Proposals
+reads the PDFs (pdf.js, loaded on demand; text can be pasted instead) and `parseLineup()` turns each into the
+counts the hour model reads: the header fields, the I/O totals, and one keyword rule per device
+(`RULES`: cylinders, vacuum zones, sensors, operator stations, HMIs, VFDs, servo/electric actuators, robots,
+torque controllers and P-sets, vision systems, dispensing systems, scanners, remote I/O blocks, networked
+devices, E-stops, light curtains, other safety devices, analog/IO-Link points), plus stations, sequence steps
+and part types. Devices are counted in the component lists only — the per-station tooling detail and the I/O
+drawings that follow repeat them — and a sub-item (`o (x1) VS smart camera – Part #…`) is the item above it
+in more detail, so it is skipped except under a valve or a torque tool. The parser is keyword-driven on
+purpose: `(x31) Part present sensor` is 31 sensors whoever wrote the lineup, so another customer's format
+parses too, and the review panel shows every count with the line it came from so the estimator corrects it
+before anything is written. The customer is guessed from the name on the page; a start-up at a customer in
+the same state as the shop is local, so travel & living is off unless the estimator turns it on.
+
+The estimate's **Job Content** (`calc/estimates.js`) now has the lineup's vocabulary: `DEVICE_FIELDS` each carry
+the discrete I/O they imply (`derivedIo()` — a clamp is two switches and two solenoids), so the I/O field can
+be left blank and derived, and the hour model prices each device *beyond* its points (`perCylinder`,
+`perRobot`, `perTorque`… in Settings → Proposals) with the points still priced per I/O. `reusePct` takes a
+share off Hardware Design / Drafting / PLC / HMI when the lineup names a reference job; `travelIncluded:
+false` drops Travel & Living. `specs.lineup` holds the header (`LINEUP_FIELDS`) and prints on the document
+and in the Word export as **Basis of Estimate**, with `contentSummary()` ("197 discrete I/O · 23 pneumatic
+cylinders · 1 robot…") under it, so the customer sees what the price was built on. Estimates saved before
+this keep working: a missing device count is zero, a `vision: true` tick still prices as one vision system.
+
+**Contacts and who gets what** (`lib/people.js`, migration 034). A customer or vendor no longer has a single
+"contact person" field: its **Contacts** list (the `contact_people` table — Name, Title, Email, Phone) holds the
+people, and each company names who gets its documents — `prefInvoicePersonId` / `prefProposalPersonId` for a
+customer, `prefRemitPersonId` for a vendor (plain uuids, no FK, so a removed person just reads as none). The
+toggles sit on each contact row in the Customers / Vendors editor and save with the company. Every email dialog
+opens on `emailFor(db, companyId, kind, docPersonId)`: the person the document itself names, else the preferred
+person (if they have an email), else (remittances) the old typed remit email, else the company email. New proposals
+start on the preferred proposal person (`proposalAttn()`), and typing a name in Attn links the contact of that name;
+`proposalPerson()` finds the record. Remittance renderers read `remitVendor(db, vendor)`, so the preferred person
+is the remittance's Attn. The vendor's remit-to **address** stays on the vendor. Migration 034 turned each old
+contact name into a person and, for customers, made them preferred for invoices and proposals (who proposals
+already defaulted to); the old `contact` / `remit_*` columns are kept, unread except as fallbacks.
+
+**Prefix and numbering** (migration 036). A customer contact carries a **Prefix** (Mr. / Ms. / Mrs. / none,
+`contact_people.prefix`); `personName()` in `lib/people.js` puts it before the name wherever the customer is
+addressed — the proposal's Attn and greeting (new proposals start on it; typing either form links the contact), the
+invoice PDF's Bill To, quotes, the contact lists. Migration 036 split "Mr. Steve Stojanovski"-style names into the
+two fields. The customer's **Customer Code** (was "Invoice Code", `contacts.code`) names its documents:
+`INV-<code><YYMMDD>-NN` (`claimInvoiceNumber()`) and `PROP-<code><YYMMDD>-NN` (`saveProposal()`, `settings.proposal.propPrefix`
+now defaults to `PROP-`), always with the day's number — `-01`, `-02`… — a proposal takes the **lowest number not on file** for
+that code and day (no counter, so a deleted one's number comes back), and its **number is editable** in both
+proposal editors: renaming carries its revisions (they share the number), and a blank or another proposal's number
+is refused; no code gives `INV-261018-01`. Counters are per code and
+day (`next_doc_number('inv:<code>:<ymd>')`, the key the old scheme used), and a number already on file is skipped.
+**The database enforces the suffix** (migration 039, trigger
+`suffix_doc_number()` on proposals and invoices): a number saved in the `PROP-`/`INV-…YYMMDD` shape without `-NN`
+gets the lowest free one, and an older copy re-saving it with the unsuffixed number keeps the suffixed one; a row
+whose number doesn't change is untouched (three invoices issued unsuffixed before Rev 1.61 stay as issued). A stale
+device saved Barry's first proposal of 2026-10-21 as PROP-VG261021 — hence this, and `updateOnStart()` below.
+Venture Global's code was set to VG on 2026-10-18; most other customers have none yet.
+
+**Aged Receivables / Aged Payables** (`agedReceivables()` / `agedPayables()` → `agedBy()` in `calc/reports.js`, `AgedReport`
+in `views/Reports.jsx`): **Summary** is a line per customer / vendor in Current · 1–30 · 31–60 · 61–90 · 90+; **Detail**
+lists every outstanding document under its party (number, date, due, days overdue, the amount in its bucket, balance)
+with a subtotal per party; CSV exports the view on screen. Headings sit on **two rows** (`table.two-row-head`: a two-word heading such as *Days / Overdue* takes a line
+per word, nothing clamped). **Color / Black & White** (Detail, remembered per device in `localStorage.agedColor`): in
+colour the bucket headings and amounts are shaded — Current green, 1–30 yellow, over 30 red — and the Days Overdue
+figure takes its bucket's colour; the PDF carries the same through `data-pdf-fill` / `data-pdf-text` on a cell, which
+`reportPdf()` reads. Black & White is the report as it was. `SortTh`'s ↕ arrow is `.sort-ind` and stays out of every
+report PDF (the PDF font drew it as junk). Balances as of the report date subtract cash **and
+discounts** (`settledAsOf`), and an unapplied credit note counts as a negative in Current, so the A/R total is what
+Receivables shows open (checked equal, 35 items, 2026-10-24).
+
+**Payment terms live on the contact** (`src/lib/terms.js`, migration 019). Each customer and vendor
+carries `terms` (days), `discountPct` and `discountDays`; `terms` blank means "use the company default"
+in Settings, so nothing changes for a contact nobody has set up. `termsLabel()` renders them the way the
+trade writes them — *2/10 Net 30*, *Net 30*, *Due on receipt* — and that string prints in the invoice's
+Payment Terms box, on screen and in the PDF. **Re-dating a document re-dates it:** changing the date or
+the party on a bill or an invoice recomputes the due date through `dueDateFor()`, and so does every
+place the store creates one (SO → invoice, PO → bill, proposal phases). A due date typed by hand stays
+put until the date or the party changes again.
+
+**Early-payment discounts are offered, never taken automatically.** `discountOffer(db, doc, partyId,
+onDate)` answers what the term is worth *on that payment date* — a percentage of the document total,
+capped at what is still outstanding — and says `expired` once the window has closed. The Pay / Receive
+dialog shows the offer with a **Take $X** button and withdraws it if you move the payment date past the
+window; the Pay Bills run offers **Take N available discounts** plus a per-row button. Taking one fills
+the Discount column, which drops the cash by the same amount — `settled = paid + discounts` still closes
+the document (§6).
+
+**Line-item descriptions are multi-line.** Enter starts a new line in the description field
+(`AutoTextarea` in `src/components/ui.jsx`, used by `LineItemsEditor` and the ad-hoc lines in
+`InvoiceFromSOModal`); the field grows as you type and the breaks print. Displays that show a
+description use `white-space: pre-line`. " — " used to be the way to fake a second line, so it still
+breaks — but only in a description that has no real line break of its own, leaving em dashes alone
+in anything typed since.
+
+**Invoices print as full pages.** `src/lib/invoiceLayout.js` owns pagination — description wrapping
+(52 chars, the Description column at 9pt), how many lines a page holds (13 single-line rows on the
+page carrying the totals, 19 on a "continued" page) and the split into pages. Both renderers read it,
+so the printable invoice (`DocumentView`) and the PDF (`invoicePdf`, emailed and downloaded) break in
+the same places. Each page carries the full frame — company block, Bill To / Ship To, info grid,
+"Page: n of m" — the items box is ruled down to the bottom however few lines it holds, and the totals
+box sits on the last page only. Changing the frame's height means re-measuring `PAGE_LINES` /
+`PAGE_LINES_FULL` against the printable invoice, which is the tighter of the two renderers.
+
+**Public landing page:** `/` is a static page (`app/index.html`) that says whose site this is and what
+the software does; the app itself lives at **`/app`** (`app/app/index.html`, the Vite entry that loads
+`src/main.jsx`). Two reputation services blocked the domain — a bare credential form on a new domain
+with "ledger" in the name reads as wallet phishing — so the root now presents a real business page with
+no login form on it, and the sign-in page sits one click away. The build is a Vite multi-page build
+(`build.rollupOptions.input` in `vite.config.js`); `vercel.json` and `netlify.toml` route `/app` and
+`/app/*` to the app shell and everything else to the landing page. The service worker's
+`navigateFallback` is `/app/index.html` and its denylist covers `/` and `/reset`, so the app shell never
+answers for the landing page. The PWA's `start_url` is `/app`; installs made before this keep
+`start_url: '/'`, so the landing page forwards anything opened in standalone mode (or carrying an auth
+token in the URL) straight to `/app`. The footer carries the shop's real address and phone number, and
+the same details go out as schema.org `Organization` JSON-LD — a contactable business is the single
+strongest signal against a false-positive listing, so keep both in step if they ever change.
+
+**The mark: "Double Entry"** (since Rev 1.71) — two L's locking into one square, like debits and credits that
+balance. `app/public/logo.svg` is the source (navy tile, white and blue L's); `node gen-icons.mjs` (in `app/`) renders
+every icon from it: `pwa-64/192/512`, the maskable and Apple icons (inset on full-bleed navy), `favicon.ico` (a 48px
+PNG in an ICO) and the Capacitor sources. In the navy sidebar and on the sign-in and landing pages the tile is blue
+with a white and a navy L (`BrandMark` in `components/ui.jsx`, inline in `index.html`). Change the mark in all
+three places. **Icon files carry a version in their name** (`pwa-192x192-v2.png`, `favicon-v2.ico`…, since Rev 1.79):
+an installed app (Chrome / Edge on Windows — the taskbar and Start menu) only replaces its icon when the manifest names
+a different file, so a new mark means new file names (`-v3`) in `gen-icons.mjs`, `vite.config.js` and both `index.html`.
+`favicon.ico` stays as a copy for browsers that ask for it by default.
+
+**Revision and updates:** the app carries **Rev X.yy** from `app/version.json` — bump `yy` for each
+shipped change the shop can see, `X` for a big one — and a **build** stamp (`__BUILD__`: build time plus
+the commit sha on Vercel) that vite fills in. `vite.config.js` also writes both to **`/version.json`** in
+the build output and serves it in dev; it is in the service worker's `globIgnores` and routed explicitly
+in `vercel.json` / `netlify.toml`, so a fetch of it always says what the server has right now.
+`src/lib/version.js` — `checkForUpdate()` compares the served build stamp to the running one (a hot-fix
+without a rev bump still counts), `updateNow()` unregisters the worker, clears the caches and reloads,
+and `useUpdateNudge(toast)` runs the check once a few seconds after load and offers **Update now** on
+the toast. **`updateOnStart()`** (`main.jsx`) checks before the app draws and, if the server has a newer build,
+updates at once — nobody has started work yet — trying once per build (sessionStorage) and waiting at most 2.5 s, so a
+device can't keep working on an old copy. While running, the menu foot checks every 10 minutes and when the app comes back into
+view, and **installs a newer build by itself when `safeToUpdate()`** — no `.modal` or `.doc-screen` open, no
+`[data-editing]` element (the invoice, quote, fixture and system proposal editors, Settings, System Rates with
+unsaved changes, and the Field / Time Tracking forms once something is typed), no focused input, and two minutes
+without a key or tap; otherwise it shows the Update button and tries again next check. A new inline editor must
+carry `data-editing` or an update can land under it. **The revision sits at the foot of the menu** (`components/RevisionFoot.jsx`), for every user —
+Settings is admin-only, so it used to be out of reach for the rest. It checks on load, every half hour and when
+the app comes back into view: *Rev 1.26 · ✓ Up to date*, or an **Update to Rev X** button when the server has a
+newer build. Clicking the rev checks again (hover shows the build stamp); *Reload* throws away a copy that seems
+stuck. There is no Settings → Revision tab any more.
+
+**Reports print as real documents** (`lib/reportPdf.js`): a report's Print, **Save PDF** and **Email** (Reports' toolbar)
+make a jsPDF + autotable document from the report's own tables (`reportRef` around `rpt.Render`) — not a picture: text
+you can select, the TMJ logo and letterhead with the report's title, its date / as-of and the customer or vendor it's
+filtered to at the head of **every page**, column headings repeated on each page, and a footer of company · printed
+date · **Page n of m**. Stat tiles become a summary strip; each table keeps the screen's alignment and weight
+(amounts right, totals and shaded subtotals bold / shaded, document numbers in courier); `.no-print` controls, buttons
+and inputs are left out; more than eight columns goes landscape. On a computer Print opens it in PdfView and the
+printer dialog; on an iPad the Share sheet. Email sends it from invoices@, to the filtered customer's invoice contact.
+
+**Reports open on Year to Date** (`ytd` in `lib/dateRanges.js` — Jan 1 through today, a preset every date filter
+now offers); each report opened starts there. **Headings name who the report covers:** a report with a customer /
+vendor filter heads its card, and every page of its PDF, with *Customer: X* / *Vendor: X*, or *All customers* /
+*All vendors* when none is picked (`partyLine` in `ReportsView`, passed into the card's `rangeLabel`).
+
+**Invoice emails can carry the customer's Aged Receivables** (`lib/agedAttachment.jsx`): every invoice email — the
+row's Email, Select → Email, Email on the open invoice, and Receivables' payment reminder — offers a tickbox *Attach Aged
+Receivables (detail) for <customer>*, with what they have open today; ticked, the email also carries that report as a
+PDF (`agedReceivablesPdf()` renders `AgedReport` in Detail, filtered to the customer, as of today, off-screen and runs
+`reportPdf()` on it — the same document Reports makes). Several customers on one email get a tickbox each. It rides on
+`EmailModal`'s `extras` ([{ key, label, hint, build }], off until ticked).
+
+**Printing on an iPad / iPhone** (`lib/printSupport.js`, `components/IOSPrintHost.jsx`): iOS ignores `window.print()`
+in a home-screen app, so every Print goes through `printOrShare(build)` — elsewhere it is the browser's print as before;
+on iOS it makes the document's PDF (`build`: the invoice's `invoicePdf()`, the report / quote / PO / proposal page via
+`pagesToPdf()`, the rate and banking sheets' `pdf()`, a ready blob for PdfView and remittances) and IOSPrintHost (one,
+mounted by App, above open documents) offers **Print…**, which opens the Share sheet with the PDF (Print, Save to
+Files, Mail, AirDrop) — from a tap, since iOS only opens it from one — and Save PDF. A list's print icon on iOS keeps
+the document open while the PDF is made. `pagesToPdf()` leaves out `.no-print` elements, as print does; with `width` (reports 1060, quotes / POs 816) it lays the
+copy it draws out at that width as on a desktop (`windowWidth`), with nothing inside it scrolling or clipped — an iPad
+cut wide report tables off at the screen edge — and a run-on PDF breaks each page on a clean line (a blank band or a row
+rule, found in the bottom sixth of the page, the card's side borders ignored), so no row is cut in two. A new Print
+button must call `printOrShare`, never `window.print()`.
+
+**Unsticking a cached copy:** the app is a PWA, so a browser can keep serving the build it cached.
+The foot of the menu shows the running rev, and its *Reload* / *Update to Rev X*
+unregister the service worker and clear the caches. For a device too stuck to reach that button,
+**`/reset`** (`app/public/reset.html`) does the same from a standalone page and reports what it
+cleared. It is deliberately outside the service worker's reach — `globIgnores` keeps it out of the
+precache and `navigateFallbackDenylist` stops the SPA fallback answering for it (`vite.config.js`) —
+and both `vercel.json` and `netlify.toml` route `/reset` to it ahead of the SPA catch-all. A worker
+installed *before* this change has no such denylist, so on a device still running an older build the
+reset page can itself be intercepted; clearing the site's data in the browser is the fallback.
+
+**Print forms:** Settings → Forms holds the named layouts Ledger prints from (`src/lib/forms.js`,
+`src/components/FormsEditor.jsx`). Each document type — checks, remittances, invoices — names the form
+that prints it. A check form is a field catalogue with per-field *print on/off*, X/Y in inches, and
+alignment, plus a page-wide calibration offset for a printer that drifts; the editor shows the sheet to
+scale with draggable field chips beside the numeric inputs. **TMJ 3Part Check** is the built-in form for
+the shop's LAP98 stock (voucher / check / voucher), measured off a scan of the blank stock laid over a
+Ledger test print, so the positions already allow for the printer's drift. The stub columns are the ones
+the stock prints — Reference No. · Description · Invoice Date · Invoice Amount · Discount Taken · Amount
+Paid — and a totals line of Check Date · Check No. · Payee · Discounts Taken · Check Amount. The two
+vouchers' rules don't line up (the bottom Invoice Date column sits 0.14" right of the top one), so the
+bottom voucher has its own columns (`colB.*`, "Bottom voucher columns" in the editor); a form that
+doesn't set them uses the top voucher's. The ¾" Invoice Date column prints at 8 pt, and a field's own
+size beats the default. On the check the payee's name and address print as one block beside PAY TO THE
+ORDER OF, where the envelope window shows them (the separate payee line is off), and the memo sits
+above the MICR clear band.
+**Check PDFs carry their print settings** (`checkPrintPrefs()` in `lib/checkPrint.js`, since Rev 1.91): Letter page,
+`/PrintScaling /None` (the print dialog opens on actual size, never fit-to-page, so the check lands on its stock),
+single-sided, tray by PDF size. Colour can't be set from a PDF; the check is pure black, so set the check printer's own
+default to grayscale. *Classic Voucher Check* keeps the old check-on-top layout, and any legacy `settings.check` positions still
+drive it. Forms live in the settings jsonb (`settings.forms`, `settings.formFor`) — no migration.
+Invoices and remittances keep their standard renderers; they are listed so every document type names its form.
+
+**The bill editor always works in lines** (since Rev 1.88): a new bill opens on one line (qty × unit price), and the
+bill's Amount is the read-only total of its lines; a bill entered as a single amount opens as one line carrying its
+amount, account, job and category (`withLines()` in `views/Payables.jsx`) and saves itemized — the same bill. The last
+line can't be removed. **Itemized vendor bills** (migration 041, `bills.lines` jsonb — `[{ id, desc, qty, unitPrice, amount, account,
+salesOrderId, costCategory }]`): **Enter Line Items** in the bill editor turns a bill into the vendor's invoice line by
+line, each line with its own expense account (blank = the bill's / vendor's default) and its own **job and cost
+category**, so one invoice can carry material or services for several jobs; a new line starts on the job above it, and
+the editor totals by job. The bill's `amount` is the sum of its lines (`saveBill()` recomputes it and refuses lines that
+come to less than is already paid), so payments, aging and the registers are unchanged; with lines, the bill's own job
+and category are cleared. `billLines(db, bill)` (`calc/accounts.js`) is the one reader — a bill without lines is one line
+of the bill's account, job and category — used by `journal()` (accrual: Dr each line's account; cash basis: each payment
+shared across the lines in proportion, `shareByLines()`, last line takes the cents) and `jobCostItems()` (a cost row per
+line on that job). A Close match in Bank Reconciliation adds the difference to an itemized bill as a line. The lock
+trigger counts `lines` as money.
+
+**Partial payments** (`applyAgainst()` / `applyOldestFirst()` in `calc/ledger.js`): any invoice or bill can be
+part-paid and stays open (status *partial*) for the rest. The single Pay / Receive dialog says *Part payment —
+leaves $X open* with a **Pay in full** button; the whole-receipt/payment dialog takes an optional **Amount
+received / paid** that spreads oldest due first — each item in full until the money runs out, the last one taking
+what's left (credits are never spent this way) — and every line shows **Left open**; the Pay Bills run has the
+same Left open column. Nothing can be applied for more than a document owes: the dialogs refuse it, and
+`guardOverpay()` in `store.js` refuses it again in `recordPayment` / `recordReceipt`.
+
+**Discounts taken:** enterable wherever a payment is created or corrected — the single Pay /
+Receive dialog, the Pay Bills run (a Discount column; typing one drops the cash by the same
+amount and ticks the row), the whole-receipt/payment editor, and the register's line editor.
+A discount-only line is legitimate and settles its document with no cash.
+
+**Emailing a remittance:** from the pay-run confirmation (one Email per electronic group,
+vendor by vendor) and from any non-check row in Vendors & Purchases → Payments, as well as the single-bill
+Pay dialog it was already in. The advice covers the whole payment — every bill the transfer
+settled — and goes to the vendor's A/P remittance contact. Checks are excluded: they carry
+their own printed stub.
+
+**Pay Bills references:** a pay run groups one payment document per vendor + method
+(`groupSel()` in `Payables.jsx`, shared by the dialog and the write). Check groups take
+consecutive numbers from the Starting Check #; each electronic group gets its own optional
+Reference # field, listed with its vendor, method and subtotal before you record. The reference
+prints on the remittance advice and identifies the payment in the register — without one,
+two electronic runs to the same vendor on the same day collapse into a single register row. **Methods:** each row starts on the method that vendor was paid by last (Check only for a vendor never
+paid); changing one row moves that vendor's other ticked rows that were on the same method; *Pay ticked by Check /
+ACH* sets them all; a vendor paid two ways in one run is flagged before recording, and a *This run:* line says how
+many checks will print. (A row left on the old Check default turned one of four ACH payments into check #4869 on
+2026-10-16 — `data-fixes/2026-10-16_barnum_check_4869_to_ach.sql`.)
+
+**Copy an invoice or bill (Rev 1.87, standards S2.10 — Ledger is the reference):** **Copy** sits after Edit on an open
+invoice (`DocActions` `onCopy`, wired in `App.jsx` as an `editRequest` with `copy: true`) and in each invoice and bill
+row's ⋯ menu (with Delete), for people who can write Invoices / Payables; credit memos have no Copy. It opens the normal
+editor on a new draft built by `copyInvoiceDraft()` (`views/Invoices.jsx`) or `copyBillDraft()` (`views/Payables.jsx`):
+same party, lines (fresh ids), tax, notes, PO / income or expense account (a bill keeps its job and cost category while
+the job is still open), **today's date**, due date from the party's terms, and a new number — invoices `(auto)`, bills the
+next `BILL-` — claimed by `saveInvoice` / `saveBill` on Save. Nothing is written before Save, so Cancel leaves nothing.
+Never copied: payments and applied credits, the Sent flag, attachments, the source sales order / quote / proposal (or a
+bill's purchase order), and a bill's vendor Ref (unique per vendor, so the copy's is typed in). Save toasts
+"Copied INV-… to INV-…" / "Copied BILL-0042 to BILL-0057". `_copyOf` is a transient field, stripped before the store sees it.
+
+**The actions are on the list row too.** Invoices, Proposals and the electronic rows of Vendors & Purchases →
+Payments each carry View · Email · Print · Save · Edit right on the row, so nothing needs opening first: Print
+opens the document and goes straight to the printer dialog (`openDoc(…, { autoPrint })`, `ProposalDoc`'s
+`auto`, `RemittanceView`'s `autoPrint`), Save writes the PDF under its usual name (a proposal's Save is a
+menu, PDF or Word), Email opens the email dialog.
+
+**Select several at once** (Proposals and Invoices): **Select** at the top of the list adds a tick column
+(a row click ticks it too, the heading ticks all shown) and a bar of actions for what's ticked. **Email** sends
+one email with every selected document attached (`EmailModal`'s `buildAttachment` may return a list),
+addressed to the customer's contact when they're all for one customer; **Save** downloads one file each
+(a proposal's PDF opens, saves and closes each in turn; Word and invoice PDFs need no viewer). Proposals
+add **Mark Submitted** / **Mark Lost** — each only where the row menu would offer it, the rest skipped and
+counted, so a won or superseded proposal never changes. Invoices add **Print** — the selection as one PDF (`invoicesPdf()` in `lib/invoicePdf.js`, each invoice
+starting on its own page, drawn by the same `drawInvoice()` as a single one) shown in `components/PdfView.jsx`,
+which opens the printer dialog straight away, so the lot goes to the printer as one job and is marked printed —
+then **Mark Printed** / **Mark Unprinted**,
+and their bulk **Delete skips any invoice with a payment on it** (the receipts would go with it; the row's
+own Delete still asks about it one by one).
+
+**The menu folds away.** Picking a page from the sidebar folds the sidebar (`menuOut` in `App.jsx`, the
+`.app.menu-in` grid) so the page runs full width; the tab at the top left brings it back. **Back** sits in the top bar after Search and Refresh (standards S1.2) whenever there is a page to go back to;
+`go()` keeps a history of the pages visited, so Back — and closing the Rate Sheet — returns to the page before. Reports does the same with its category rail: the rail folds while a report is open and the
+report's own Back restores it. On a phone the sidebar is already a slide-in, so the fold changes nothing there.
+
+**Navigation groups:** the sidebar reads Overview · **Customers & Sales** (Customers, Proposals, Rate Sheet,
+Quotes, Sales Orders, Invoices, Receivables) · **Vendors & Purchases** (Vendors, Purchase Orders, Payables,
+Payments, Expenses) · **Work** (Jobs, Tasks, Field, Time Tracking, Item Catalog, Fixture Rates) ·
+**System** (Chart of Accounts, Journal Entries, Bank Reconciliation, Settings). The group names are labels in `NAV` (`App.jsx`) only, so moving or renaming a
+page is a one-line edit there. **Customers and Vendors** are the two halves of the old Contacts page
+(`views/Contacts.jsx` with a `type` prop; view keys `customers` / `vendors`, both gated by the
+`contacts` permission area, and `go("contacts")` still lands on Customers). A vendor carries a
+**Tax ID** (`contacts.tax_id`, migration 022) for the 1099 vendor report to come. A customer or vendor can be marked
+**Inactive** (`contacts.active`, migration 033) instead of deleted: it keeps its history and still reports, the
+list hides it unless *Show inactive* is ticked (the **Inactive** tick is a column on the list row, saved as you tick it — not in the editor), and every pick list leaves it out — `pickable(list, keepId)` in
+`lib/helpers.js` keeps the one a document already names, so an older document still shows who it's for. New
+documents and the proposal default never start on an inactive contact.
+
+**Fixture proposal scope packages** (`calc/fixtureScope.js`, `settings.fixturePackages`; until one is saved
+`DEFAULT_PACKAGES` stand in). A package is what a fixture proposal provides: **Turnkey Controls** (Venture Global —
+hardware design, PLC, HMI, panel, block I/O, field wiring, start-up, run-off, docs; Award 15 / Engineering 25 / Panel 25
+/ Wiring 25 / Docs 10) and **Software & Start-Up** (Automated Solutions — PLC, HMI only when the proposal has HMIs,
+start-up, final programs; Software Support 10 / Start-Up Complete 80 / Final Programs/Documentation 10). Each carries
+an opening line ("…for Controls Software and Start-Up Support for (1) Assembly Machine"), a standards template
+(`ASI and {end} Standards` — `{end}` is the proposal's **End customer**, suggested from the package's list: Adient,
+Bridgewater Interiors, Performance Seats, JAC Products, Henniges / Mayco, JVIS, Nova; the quote chart's End User
+column fills it), default PLC / HMI, a start-up location (Venture Global, Imlay City, MI / Automated Solutions, Shelby Twp, MI — start-up
+at the end customer's plant is a sales note: not included, engineering rate plus expenses) and its customers
+(`customerIds`, or a name `match` for the built-in two). A proposal carries `specs.packageId`, `specs.scope` (the
+ticks — the **Scope of Supply** card), `specs.plcType` / `hmiType` / `endCustomer`. The ticks gate the price lines in
+`priceProposal()` (hardware design and per-HMI in Engineering, panel + remote panels, block I/O, field wiring, run-off)
+and drive the bullets, the sales notes (hardware by the customer; run-off not included at the engineering rate; field
+wiring not included) and, through the package, the schedule; the closing terms read the customer's payment terms and
+the validity days. **A proposal with no `packageId` (everything before this) takes the old path untouched** — the
+same bullets, notes and terms, verified identical. Packages are edited under Fixture Rates → *Scope Packages*
+(Settings write); naming a customer on one takes it off the others. **MES:** the tick is *Fixture reports to MES* (still `specs.dataNational`);
+the MES is named per proposal (`specs.mesName` — the package's `mesName`, or `mesFor[endCustomer]`: Data National at
+VG, MIRA for Adient / Bridgewater, Mach6 for Performance Seats; Turnkey starts ticked, Software & Start-Up not). Fixture
+Rates' Data National fields read **MES Support** / **MES Material** (same `dnCheckout` / `dnMaterial` columns); priced
+lines read "Mach6 MES Support"; the scope says "{MES} MES integration and checkout" when support is priced (else "PLC
+software interface to {MES} MES"), and the router is a hardware bullet only when MES material is priced.
+**Premium Pricing is chosen** (`specs.premium`, keys; the package's `premium` sets it — Turnkey: MES support, MES
+material, run-off; Software & Start-Up: none): a Premium tick per line in the editor's pricing table, and a scoped
+proposal with nothing under Premium prints one *Pricing* list ending in the total, no sub-totals, on screen and in
+Word. Job budgets read a priced line's `key` before its label (`proposalBudget`).
+
+**Fixture Rates** (`views/MachineRates.jsx`, the `machine_types` table — the code and the database keep the
+old name) is the costing table behind a fixture proposal, one row per fixture type. The editor is in three sections (`SECTIONS`):
+**Engineering** — base, **Hardware Design** (`hardware_design`, migration 035), **per HMI** (`hmi_rate`, × the
+proposal's `specs.hmis`, which a new proposal starts at 1), per camera / torque tool / IO-Link — all summed into the
+one Engineering/Start-Up line (`priceProposal()`'s `engParts` shows the build-up under it in the editor);
+**Hardware** — control panel, block I/O, remote HMI, remote sonic panel, Data National material — a line each;
+**Field & Support** — field wiring, run off, Data National checkout. A $0 line is left off, and the scope bullets
+follow the price: a hardware bullet (and the "Provide the following hardware" heading) and the field-wiring bullet
+appear only for a line priced on that proposal; the HMI bullet counts the HMIs. Per-unit adders —
+`camera_rate`, `torque_rate`, `io_link_rate` (migration 023) — multiply by the count on the proposal
+(`specs.cameras` / `torque` / `ioLink`) and roll into the Engineering/Start-Up line; `remote_hmi` and
+`remote_sonic` (migration 023) are base-pricing lines of their own with a scope bullet each. The copy button on a row opens a new type with every rate
+carried over, named "… (copy)"; a blank or repeated name is refused. **A rate of 0
+is left off the proposal**: `priceProposal()` drops any line worth nothing (a 0 rate, an unchecked Data
+National, a fixture with no I/O blocks), `buildProposalContent()` drops them again from a pricing snapshot
+saved before that rule, and both the printable and the Word export skip the Premium Pricing section when
+nothing is in it.
+
+**The phone menu closes on a tap outside it.** Below 900px the sidebar slides over the page; while it's open a
+`.nav-scrim` backdrop covers the rest, and tapping it (or Escape) closes the menu without navigating.
+
+**The page area scrolls on its own.** `.app` is one viewport tall and never scrolls; the sidebar stays put
+and `.main` is the scroll box, so `go()` scrolls `.main` (and the window, for good measure) to the top.
+Printing undoes that (`height:auto; overflow:visible`) or a report would print as one screen. **A wide
+table scrolls sideways inside its card** (`.card{overflow-x:auto}`) rather than running off the white,
+which is why a row's "⋯" menu is `ActionMenu` (`components/ui.jsx`): the panel is portalled to the body
+and pinned from the button's rectangle, because a panel absolutely positioned inside a scrolling card is
+clipped by it. **Column headings wrap** (to three lines, `.th-label`) when a table is squeezed, so a long
+heading never sets the width of a narrow column; `SortTh` no longer forces `nowrap`.
+
+**General ledger** (`calc/accounts.js`, `calc/gl.js`, migration 024). The chart of accounts is the
+`accounts` table (System → Chart of Accounts, `views/Accounts.jsx`; **Load TMJ Chart of Accounts** seeds
+the Sage chart from `DEFAULT_ACCOUNTS`). Documents carry the account **number** as text, never a row
+id: an invoice its `incomeAccount`, a bill its `expenseAccount`, an expense its `account` and
+`cashAccount`, a payment its `cashAccount`. Blank means "use the default", resolved in one place —
+`incomeAccountOf()` / `expenseAccountOfBill()` / `expenseAccountOfExpense()` / `cashAccountOf()`: the
+document's own account, else the customer's `salesAccount` or the vendor's `expenseAccount`, else
+Settings → Accounts (`settings.accounts`: A/R 1100, A/P 2000, cash 1020, sales tax 2310, sales
+discounts 4900, purchase discounts 6900, default income 4000, default expense 6750). The store stamps
+the resolved income / expense account onto an invoice or bill when it is written, so a later change
+to a contact's default leaves issued documents alone. `AccountSelect` (`components/AccountSelect.jsx`)
+is the picker every editor uses, filtered by type or balance-sheet group. **Until a chart is loaded the
+built-in TMJ chart stands in** (`chart(db)` in `calc/accounts.js`): pickers, labels and every ledger
+report name accounts from the first day, and loading the chart only makes it editable.
+
+**The books are kept on a cash basis.** `settings.accounts.basis` is `cash` by default (Settings →
+Accounts; `accrual` is the alternative) because the shop's books and tax returns are cash basis.
+`journal(db)` posts every document on file by fixed rules so the ledger is in step with the books by
+construction. On the **cash basis** nothing posts when an invoice is issued or a bill is entered, and
+there is no A/R or A/P on the ledger: a receipt is Dr cash (+ Dr sales discounts) / Cr income for its
+share of the invoice subtotal and Cr sales tax for its share of the tax — a partly paid invoice
+recognizes revenue as the cash comes in, running totals rounded so the last cent lands on the last
+receipt; a bill payment is Dr expense (amount + discount) / Cr cash (+ Cr purchase discounts); an
+expense entry Dr expense / Cr cash; a credit note recognizes nothing until cash moves and a credit
+applied to an invoice (method `Credit`) is not cash. So the Income Statement's revenue equals the
+receipts net of tax, and the Balance Sheet carries no A/R or A/P (Aged Receivables / Payables show
+what is open). On the **accrual basis** the documents post when issued — invoice Dr A/R / Cr income +
+sales tax; credit note the reverse; receipt Dr cash (+ Dr sales discounts) / Cr A/R; bill Dr expense /
+Cr A/P; bill payment Dr A/P / Cr cash (+ Cr purchase discounts). Switching the basis re-derives the
+whole ledger; nothing stored changes. `generalLedger()` (per-account activity with opening and
+running balances), `trialBalance()`, `incomeStatement()` (the Sage layout: Revenues · Cost of Sales ·
+Gross Profit · Expenses · Net Income, for the range and the year to date at its end, with % of
+revenue; an account with nothing in either column is left off, so the statement is only as long as
+the accounts in use) and `vendor1099()` (each 1099-NEC /
+1099-MISC vendor's cash payments in the year — bill payments plus expense entries payable to the
+vendor's name — with the $600 limit; a 1099 vendor paid nothing in the year is left off, since no
+1099 goes to them) are the four reports under General Ledger / Financial Statements
+/ Accounts Payable in Reports. The old cash-basis P&L stays alongside. A number a document names that
+the chart lacks still reports, as "(not in chart)". `tools/sage-lists-sql.py` turns the Sage Vendor and
+Customer lists into the data fix that fills each contact's account, 1099 type and tax id.
+
+**Year-end close and the balance sheet** (`calc/gl.js`). `journal(db)` ends with one **closing entry per
+fiscal year-end that has passed** (`closingEntries()`): every income, cost of sales, expense and
+*Equity-gets closed* (Distributions) balance is brought to zero and the difference — net income less
+distributions — lands in Retained Earnings (`settings.accounts.retainedEarnings`, default 3910; the
+year-end month is `settings.accounts.fiscalYearEndMonth`, default December, both in Settings → Accounts).
+The close is derived like everything else, so a bill back-dated into a closed year simply re-closes.
+**A closing entry counts from the day after its date**: `throughDate()` gives a Trial Balance or Balance
+Sheet dated *on* the year-end the year's income, like Sage's period 12, and one dated the next day shows it
+rolled into Retained Earnings; the General Ledger lists the closing lines on the year-end day. The Income
+Statement reads `journal(db, { close: false })`, because the close would zero the year it reports.
+`balanceSheet(db, asOf)` is the Sage layout — Current Assets · Property and Equipment · Total Assets ·
+Current Liabilities · Long-Term Liabilities · Total Liabilities · Capital (the equity accounts, Retained
+Earnings as closed, and the income not yet closed as one **Net Income** line) · Total Liabilities & Capital
+— zero accounts left off, with an In balance badge (`views/Reports.jsx`, Financial Statements). The books
+started in Ledger part-way through the shop's life, so the Sage balances at the cutover (cash, equipment,
+loans, Retained Earnings… — on the cash basis no A/R or A/P) belong in one journal entry dated the day
+before the first Ledger transaction.
+
+**Locking the books** (migration 030, Settings → Accounts → *Books locked through*, `settings.accounts.lockDate`).
+With a lock date set, **the database** refuses to add, delete or change the money on anything dated on or before
+it — invoices and their lines, bills, payments/receipts, expenses and journal entries — so a reconciled month or
+a filed year can't move. Triggers `lock_*` call `guard_locked_period(<money columns>)`: an update to a locked row
+that changes none of the listed columns goes through (marking an invoice printed, notes, due date, PO, number, a
+payment's reference); invoice lines are locked with their invoice (`guard_locked_invoice_lines`). It holds for
+every device, user and data fix — a data fix on a locked period moves the lock back first. The refusal reads
+"The books are locked through Sep 30, 2026…" and `fail()` shows it with a 🔒. *End of Last Month* sets the usual
+date. A new payment dated after the lock on an old document is fine. Clear All Data and a backup import are
+refused while anything is locked.
+
+**Month-End Close** (System → Month-End Close, `views/MonthEndClose.jsx`, `calc/close.js`, gated by `settings`): one row
+per month since the first bank reconciliation — **Bank** (a finished reconciliation of the cash account whose statement
+ends in the month; one still open reads *In progress*), each **card** and **line of credit** (a posted statement closing
+in the month; *—* before that account's first statement; *Nothing to post* when marked so — a payment-only or quiet
+month, `settings.accounts.closeSkips` { "YYYY-MM": [account] }), **Payroll** (what was booked to the wage / payroll-tax /
+401K accounts — information only), and the status (*Locked*, *Ready to lock*, *Open*, or *In progress* for the running
+month, whose gaps read *Not yet*). **Lock <next month>** moves `settings.accounts.lockDate` to the oldest finished
+unlocked month's end (it asks first, listing anything still open); **Unlock** moves it back a month. The books were
+locked through 2026-10-31 on 2026-11-14.
+
+**Year-End** (the card under Closing on Month-End Close; `yearEnd()` in `calc/close.js`): for the year picked (the one
+just ended through March, else this one) — every month locked (12 of 12), **1099s** (vendors marked NEC / MISC over
+$600 with no Tax ID → get a W-9; vendors paid over $600 by bill payment, not by card, who aren't marked → review, each
+with **No 1099 needed**, remembered in `settings.accounts.ten99Reviewed`), links to the accountant's reports opening on
+the whole year (Income Statement, Balance Sheet, Trial Balance, General Ledger, Aged Receivables / Payables — `go("reports",
+{ report, from, to })`, which `ReportsView` reads as `reportRequest`), the year's net income or loss carried into
+Retained Earnings by the derived close, and locking December to put the year away.
+
+**Journal entries by hand** (System → Journal Entries, `views/JournalEntries.jsx`, the `journal_entries`
+table, migration 025): what no document covers — a payroll run (Wages Expense, Payroll Tax Expense, 401K
+Employer against Checking and the payables), depreciation, an adjustment. An entry is a date, an optional
+reference, a memo and any number of lines, each an account with a debit *or* a credit (typing on one side
+clears the other; `=` in an amount box, or **Balance on last line**, puts the difference there). It saves
+only in balance — `saveJournalEntry()` in `store.js` refuses an unbalanced, one-line, negative or
+account-less entry with the precise complaint, and migration 026 puts the same rule on the table as a
+trigger, so a row written any other way is refused too — and a new one claims `JE-nnnn` from
+`next_doc_number('journal')`. Lines are jsonb on the row (`[{ id, account, desc, debit, credit }]`), the
+account as a chart number like every other document. `journal(db)` posts them as written, with a line's
+own description shown after the entry memo in the General Ledger, so they land in the GL, the trial
+balance and the income statement beside the derived entries. **Copy to new entry** on a row prefills next
+month's payroll. Entries wipe with the documents and travel in the JSON backup as `journalEntries`.
+
+**Bank reconciliation** (System → Bank Reconciliation, `views/BankReconciliation.jsx`, `calc/bankRecon.js`,
+`lib/bankStatement.js`, migration 027). The register is not a table: `cashRegister(db, account)` is every
+ledger line on the cash account, each with a stable key (`receipt:<payment id>`, `payment:<payment id>`,
+`expense:<id>`, `journal:<entry id>:<line index>`), so a receipt, a check, an expense entry, a journal line
+and the opening-balance entry are all there to tick, and a correction in the books corrects the register.
+A reconciliation (`bank_reconciliations`: account, statement ending date and balance, open/done) shows the
+items dated on or before the statement that have not cleared on an earlier one; ticking writes the key to
+`bank_cleared_items` with the reconciliation it cleared in (a key clears once — unique per org). The
+arithmetic carries no "last reconciled balance": **difference = statement balance − Σ the items cleared on
+this statement and the ones before it** (never a later one — otherwise February's clearing moved January's
+difference off zero), and Finish needs it at zero. **Book the Difference** prefills a journal entry between the
+bank account and Other Income / Service Charge for what is left, and clears it. **Import Statement** reads
+the bank's PDF (pdf.js, the lineup reader), a `.csv` export (columns by heading: date, description, amount
+or debit/credit, balance, check number) or pasted rows; `parseStatementText()` is keyword-driven — a line
+is a transaction when it starts with a date (or a check number and a date) and ends in an amount, the
+section heading ("Deposits and additions", "Checks paid"…) sets the sign, a running-balance column
+overrides it, and Chase-style check tables with several checks per line are read one check each. **PNC** (business
+checking) prints the amount straight after the date (`01/20 38,320.00 Corporate ACH …`), its checks as *date check#
+[*] amount reference* up to three to a line, a *Daily Balance* table (skipped — balances, not transactions), the
+beginning and ending balances as a row of amounts under a *Beginning … Ending balance* heading, and a payee
+reference on a second line (joined to the description, so *Citi Autopay* reaches the card-payment match); all
+read, checked against the January 2026 statement (35 items, in/out to the cent).
+`matchStatement()` pairs each line with an outstanding item by amount and side — the same check number
+first, else the nearest date within ten days, else a check number on its own for a slow check — each item
+used once. Same-amount pairs within the window are chosen across the whole statement — a line naming the payee first, then the
+closest date — not in the order the lines were read: read in order, a $500 ATM withdrawal on 9/08 took the $500 Venus
+payment of 9/09 and left the bank's own Venus line unmatched (September 2026). Matched lines are ticked; the rest are **Not in Ledger** with a *Post to* account: money out to
+an expense-type account becomes an expense entry (payee guessed from the description), anything else — a
+distribution, a loan payment, interest, a transfer — a two-line journal entry, and the new item is ticked
+as cleared. A customer receipt the bank has but the books don't is left alone on purpose: it belongs in
+Receivables against its invoice. A payment to a **vendor** the books don't have can be posted as a **Vendor bill payment**
+instead of a bare expense, so the vendor's account and 1099 stay right: it pays an open bill of theirs, or writes
+the bill it should have been (vendor's invoice # defaults to the line's YYMMDD, the vendor's usual expense
+account unless one is picked) and pays it — by check when the line has a check number, else ACH / Wire — then
+ticks the payment cleared. `suggestVendorPayment()` (`calc/bankRecon.js`) pre-selects it: an open bill for exactly
+the amount (narrowed to the vendor the line names), else a vendor whose name's first two words appear in the line.
+Apply waits while a vendor row is missing its vendor or invoice #, would overpay its bill, or repeats an invoice #.
+Money **in** from a customer the books don't have is the mirror image — **Customer receipt**: it pays one open
+invoice (part payment allowed), spreads over the customer's open invoices oldest first, or writes a one-line
+invoice for it (auto-numbered, no tax, the customer's sales account unless one is picked) and receives it, then
+ticks every receipt row cleared. `suggestCustomerReceipt()` pre-selects it: an open invoice for exactly the amount
+(narrowed to the customer the line names), else the named customer — oldest first when they owe at least that
+much, else a new invoice. **Starting one:** the New Reconciliation dialog has **Import Statement** at the top — the file's period end
+and ending balance fill the date and balance, and *Start & Match Statement* opens the reconciliation straight
+into the matching review (`initialImport` → `ImportStatementModal`'s `preParsed`). Applying it also ticks the
+account's **opening-balance** journal entry if still outstanding (no statement line ever matches it). A line the
+books don't have can be **Written before Ledger** (a December 2025 check clearing in January, or a deposit in
+transit): a journal entry on the account's opening date (its earliest journal entry, else Dec 31 of the year
+before) between the bank and Retained Earnings — its expense or income is already in last year's books — ticked
+cleared, so the opening balance becomes the true book balance. A reconciliation started and backed out of with nothing cleared is
+discarded (`freshId` in the view). **Matching** also pairs one bank line with several rows that share a
+reference and date and add up to it (a transfer that paid several bills, or netted a vendor credit — `group`), and
+offers a **Close match** — a payment, receipt or expense within $25, or 2% when the payee's name is on the line,
+paired across the whole statement — as **Fix the books**: the row takes the bank's amount (a bill can be raised or
+lowered with it; unticked, the difference stays as a vendor credit or still owing) and is ticked cleared.
+**A credit memo netted into a receipt posts its cash** (`journal()`, cash basis): a credit note still recognizes nothing
+on its own, and a credit *applied* (method `Credit`) never moves cash — but a payment row on a credit note with any other
+method (the customer took the credit off what they sent, or it was refunded) posts as a receipt with the sign turned,
+Dr income / Cr cash. Before 2026-11-03 it posted nothing, so Venture's 7/10 receipt E1136 ($51,369.50 on six invoices,
+−$2,516.00 on VG260521-CR) read $2,516 more than the bank's $48,853.50 and the group match missed it (and July's income and
+checking were $2,516 high). `post()` now turns any negative amount to the other side. **Already in Ledger, dated
+otherwise:** a bank line nothing matched is offered *A receipt / payment already in Ledger, dated otherwise* — uncleared
+register rows (one receipt's rows grouped by reference and date) that add up to the line, dated within 90 days either
+side, after the statement too; picked, it is moved to the bank's date (a tick, on by default — each payment row, the
+expense or the entry) and cleared. It is the default when one exists.
+**Recurring lines are remembered** (`settings.bankRules`, keyed by `bankKey()` — the description's words without
+reference numbers, a masked account kept): each post, vendor or customer choice is saved on Apply and fills the
+same line next month ("filled in from last time"); checks are never remembered. Accounts 2600 Line of Credit and
+7150 Interest Expense were added 2026-10-17 (draws and payments post to 2600; interest Dr 7150 / Cr 2600 or the card). Reports → Account Reconciliation → **Reconciliation Summary** lists each
+statement with its cleared balance, outstanding items and book balance. Cleared keys are not carried by a
+JSON backup import, because the import gives payments new ids.
+
+**Company credit cards** (System → Credit Cards, `views/CreditCards.jsx`, `lib/cardStatement.js`, migration 031
+`card_statements`). The owner's two cards carry business and personal charges and are paid from checking. Cards
+are set up in **Set Up Cards** (`settings.accounts.cards`: `{ id, name, account, match }` — the liability
+account, added to the chart as Other Current Liabilities from 2150 up, and the words that name the card's payment
+on a bank statement) with the owner-draws account (`settings.accounts.draws`, default 3940 Distributions). Each
+month **Import Statement** reads the card's .csv download (one signed Amount column, or Debit/Credit — a file
+whose purchases are negative is flipped), a statement PDF, or pasted rows (`parseCardText()`: a line that starts
+with one or two dates and carries an amount — the **first** `$` amount after the description (`splitRow()`), because
+a two-column page (Citi's page 3, the Costco rewards panel beside the transactions) comes out of the PDF with both
+columns on one row; without a `$` on the line, the last amount, as before; Chase's *Opening/Closing Date A - B*
+takes B as the closing date; a page's margin control number (Citi's `276700`) printed ahead of a row's date is
+dropped (`MARGIN_CODE`, spaced or run together — `27670003/19` cost March a $6.03 line, `276700 02/20`
+February's Netflix); a row with nothing between its dates and its amount takes its description from
+the text lines around it (Citi wraps a long merchant name — *POWERHOUSE GENERATOR* above, *01/27 01/28 $275.00*,
+*POWERHOUSEGENMI* below); a charge in another currency is a dated line with no amount and *300.00 CANADIAN
+DOLLAR $211.97* under it — the US-dollar figure is the charge, the foreign amount goes in the description (`FX`);
+a merchant named *Total* (Amex's *TOTAL WINE AND MORE*) is a charge — only *Total fees / new charges / …* is noise.
+All 2026 Citi (Jan–Sep) and Amex statements balance to the cent through the importer; a minus sign or a "Payments / Credits" section makes it a credit;
+a closing date, previous and new balance are read off the page, and a year is wound back for a January statement
+listing December charges). Payments are skipped (they're the bank side); every other line is marked **Business**
+(with an expense account) or **Personal**, pre-filled from how that merchant went on earlier statements
+(`merchantKey()` / `learnedChoices()`). The review checks previous balance + every line = new balance. **Post**
+(`postCardStatement()`) writes an expense per business line paid from the card's account (Dr expense / Cr card;
+a credit is a negative expense), one journal entry for the personal total (Dr Distributions / Cr card, dated the
+closing date) and — on a card's first statement, when ticked — the balance it carried from before Ledger
+(Dr Retained Earnings / Cr card, Dec 31 2025); a part refused takes the rest back. **Unpost** deletes them all.
+In **Bank Reconciliation** a money-out line naming a card (its match words) or equal to a posted statement's
+balance defaults to *Post to* the card's account as a journal entry (Dr card / Cr checking) with a note of that
+statement's business and personal totals — the charges are already on the books. What a card owes per the books
+is its account's balance, shown on the Credit Cards page. Expenses' *Paid From* lists the card accounts too
+(`AccountSelect`'s `extra`). A business charge can instead be given a **vendor** (pre-picked when the merchant
+names a vendor on file, and remembered per merchant): posting then pays an open bill of theirs, or writes the bill
+(invoice # defaults to the charge's YYMMDD; the line's account, else the vendor's usual one), with a `Credit Card`
+payment from the card's account — still Dr expense / Cr card, but the vendor's account is right. The line keeps
+`vendorId` / `billId` / `paymentId` / `newBillId` (jsonb, no migration); Unpost deletes the payment and the bill it
+wrote, unless something else has since been paid on that bill. **The 1099 report leaves out card payments**
+(method `Credit Card`, or paid from a card's account): the card company reports those on a 1099-K.
+
+**Tests** (`app/tests/*.test.mjs`, `npm test` in `app/` — Node's built-in runner, no dependencies): the money logic,
+each test a case met in the real books — cash vs settled, part-paid revenue, the credit memo netted into Venture's
+E1136 receipt, credits applied (no cash), itemized bills and their payment shares, the trial balance on both bases;
+bank matching (the $500 Venus vs ATM, closest date, check number, a transfer paying three bills, close matches, the
+netted credit in the register); the line of credit and card statement readers and the loan posting plan; aged
+receivables buckets; month-end close; due dates. Fixtures are made up in the banks' layouts — never paste a real
+statement (account numbers) into a test. Run `npm test` before pushing a change to anything in `calc/` or `lib/`.
+
+**Network failures on a save:** every PostgREST request goes through `ledgerFetch()` in
+`lib/supabaseClient.js` — a request the browser could not send at all ("Failed to fetch", typically
+a PWA window waking from sleep) is sent once more after a short pause, and one the server never
+answers is abandoned after 30 seconds with a message that says so. `fail()` in `store.js` turns
+either into a plain sentence and keeps the toast up long enough to read. If one record keeps timing
+out while everything else saves, something is holding its row: `supabase/data-fixes/stuck_locks.sql`
+lists the blocking sessions and how to end them.
+
+**Remittance PDFs are named** `<Vendor> Remittance - <Reference #>` (`remittanceFileStem()` in
+`src/lib/remittance.js`; the payment date stands in when the transfer has no reference). That is the
+attachment name when one is emailed, and it is also written into the PDF's Title metadata, which is
+what Chrome's viewer offers in the Save / Print dialog for a PDF opened from a blob URL — the URL itself
+has no name to suggest. A pay-run's combined file is named the same way for one vendor and
+`Remittances - <date>` for several.
+
+**Invoices: Sent, not printed (since Rev 1.69).** The `invoices.printed` flag now means **sent to the customer** —
+the list's column, filter ("Not sent"), bulk actions (Mark Sent / Mark Not Sent) and "Mark all as sent" say so.
+**Emailing** an invoice ticks it (the row's Email, Select → Email, and Email on the open invoice — `onSent` /
+`onEmailed`); **printing or saving no longer does** (`App`'s DocumentView, the bulk print PdfView, the Tasks run's
+Save). A mailed or hand-delivered invoice is ticked by hand. The Tasks run's "Show printed / saved" list still tracks
+what was printed or saved in that run, locally. The notes below on "printed" describe the old meaning.
+
+**Marking an invoice printed by hand:** the Invoices list has a **Printed** column — a tick per row
+that is the control, not just the status. Ticking marks an invoice printed without printing it (one that
+went out by email, or was printed before the flag existed); unticking undoes a slip. With the *Unprinted*
+filter on, **Mark all N as printed** does the lot in one write. `markInvoicePrinted(ids, printed)` takes
+one id or a list and either value; printing still calls it with the one it printed. Invoices are the only
+document with a printed flag.
+
+**Show/hide settled documents:** Payables → Vendor Bills and Receivables → Customer Invoices each
+carry a "Show paid" tick with a count, and a Paid column giving the settlement date. Receivables
+judges settled on the balance rather than the status, so an unapplied credit — which reads as
+"paid" against its own negative total — stays in the open list. **Invoice numbers are editable**
+after issue (imports and typos happen); blanks and duplicates are refused in the editor and again
+in `saveInvoice`, and only a new invoice can be auto-numbered.
+
+**Tooling:** `tools/reconcile.mjs` checks a JSON backup against a Sage journal export
+(Cash Disbursements or Cash Receipts, `.xlsx` or `.csv`, no dependencies) and reports
+anything that doesn't match on party, amount, date or reference — including one payment
+applied twice to the same document, which is how the original import mis-filed five
+payments. `tools/so-report-sql.py` turns a Sage Sales Order Report PDF into a SQL data fix
+(kept in `app/supabase/data-fixes/`) that fills blank PO numbers and brings each SO line's
+invoiced / closed state into line with Sage's shipped / remaining quantities. See `tools/README.md`.
+
+**The Jobs page counts lines, not percentages:** Progress reads *N invoiced · N ready · N not ready yet* — ready
+is marked ready, not yet billed or closed — over a bar that fills orange as lines are invoiced and blue for what's
+ready. Two count columns: **Ready**, and **Left to Invoice** (*left / total* — every line not invoiced or closed,
+ready or not), because "0 available" on its own read as "nothing left". Sales Orders only offers **Invoice…**
+while a line is left; an order still `open` with every line invoiced or closed says *Nothing left to invoice*, and
+`reload()` marks it `invoiced` (an import or data fix that set the lines but not the order — TMJ885, fixed by
+`data-fixes/2026-10-16_tmj885_lines_invoiced.sql`).
+
+**Jobs: tracking and costing** (`src/calc/jobs.js`, `views/JobReports.jsx`, migration 028). A job is a sales
+order, and it now carries what the shop's job-tracking sheet did: `jobNumber` (the job and fixture, `4724-F3`),
+`description`, `specs` (the counts it was priced from — fixture type, sonic gen, horns, I/O blocks, cameras,
+Data National…) and `budget` (the proposal's price lines as sold, `[{ key, label, amount }]`, keyed by
+`BUDGET_LINES` — the sheet's AE–AM). A won proposal stamps all four onto its SO (`winProposal`); an SO with
+no proposal has them typed in on the SO editor or brought in from the sheet (`tools/job-sheet-sql.py`). Where
+the SO's own copy is empty, `budgetOf()` / `specsOf()` read the linked proposal. **Three reports:** Accounts
+Receivable → **Sales Orders** (each SO's amount, **extras invoiced** — start-up or extra work billed beyond the
+order's lines — Open/Closed, left to invoice, outstanding invoices and paid; paid is settled, so Amount + Extras
+= Left + Outstanding + Paid, less any line closed unbilled — and a closed line counts as unbilled only as far as
+the invoices fall short of the order, since Sage carried some invoiced lines over as closed; detail lists each invoice with the SO lines it billed, then what's left;
+left to invoice never exceeds the order less what's been invoiced, which covers a one-line Sage SO invoiced
+without its line flagged), Job Reports → **Job Tracking** (every SO — jobs only, with each
+billing milestone coloured like the sheet: plain not invoiced, blue ready, orange invoiced — `--billed` in
+`styles.css`), **Proposals** (the proposals still out — draft or submitted — with the Proposals page's
+columns; `proposalsReport()`) and **Job Costing** (budget against actual, summary or all columns, a row opens to specs,
+budget, actual by category and every cost line). **Actual cost** is read wherever it was booked
+(`jobCostItems()`): vendor bills and expenses tagged to the job, by their `costCategory`
+(`COST_CATEGORIES` — panel, HMI/bingo, base cables, I/O blocks, Data National material are *material*, the
+sheet's L–Q; then field wiring, labor, travel, other); time logged to the job at its snapshot cost rate;
+journal-entry lines that name a job (`salesOrderId` + `costCategory` on the jsonb line); and `job_costs` —
+costs entered by hand on the Jobs page ($ button), or imported from the sheet (`source: 'sheet'`).
+Eng / Profit is revenue less material, as the sheet worked it; Profit is revenue less every cost, where revenue
+is the PO plus extras invoiced, less lines closed unbilled.
+
+**Service reports** (Work → Time Tracking, `components/ServiceReports.jsx`, migration 029, `service_reports`): a
+visit written up — job, date, technician, problem reported, work performed, follow-up, parts used and hours.
+Numbered `SR-0001…` from `next_doc_number('service')`. The hours are ordinary **time entries** carrying
+`serviceReportId`, so they're approved and billed like any time; an edit rewrites the report's un-invoiced
+entries and keeps their approval unless the hours or category changed, and an invoiced entry is locked. A part
+ticked **Bill** with a price is added to the job's sales order as a **ready** line (`{desc} (SR-…)`), once —
+`parts[].soLineId` remembers it — which raises the job's invoice task. Picking **+ New job…** opens a sales
+order on save (customer, job #, description, optional PO; a job # already in use is refused) so the visit
+bills like any job. Anyone who can log time can write one (`timeTracking` / `field` / `jobs`); members see
+their own, admins see all. Deleting a report deletes its hours unless any are invoiced; billed parts stay on
+the job. Hours logged to a job and not yet invoiced keep it open in the Sales Order and Job Tracking reports
+(`soSummary()`), since a service job can be nothing but time. Internal only — no printed report.
+
+**Sales order numbers** run on from the Sage series: `nextSoNumber()` in `store.js` is the SO prefix plus the
+next number with no dash or padding (`TMJ915`), used by every place an SO is created (new SO, won proposal,
+service-report job). The `so` sequence was set to 915 on 2026-10-08 (`data-fixes/2026-10-08_so_counter_915.sql`).
+
+**Team activity becomes tasks.** `noteActivity()` in `store.js` raises a `type: "review"` task whenever someone
+other than the org owner logs time, writes or updates a service report, creates or edits a sales order, marks a
+job line ready / not ready, closes or reopens one, adds, changes or deletes a job cost, or creates a quote or a
+proposal. One open task per subject and person (the title, `"Job updated TMJ915 · 4810 — tech@…"`): a second
+change updates that task's detail rather than adding another. It never fails the action that raised it. Tasks
+shows them as **Team Activity** (Open → the page it's about, `reviewTarget()` in `lib/taskKinds.js`; Done; Mark
+All Done) above **Ready to Invoice**, and the dashboard leads with an **Open Tasks** card (team activity plus
+jobs ready to invoice) for anyone with the Tasks page.
+
+**List tables don't reflow:** document numbers (`td.doc-id`), amounts (`td.num`), status badges and dates (`.nowrap`
+on the date cells) never break across lines, so a long number like INV-VG261018 can't push the columns after it about;
+names and descriptions wrap instead.
+
+**The top-bar search opens the record** (`components/GlobalSearch.jsx` → `openRecord(kind, rec)` in `App.jsx`, Rev 1.95):
+an invoice or credit memo, quote or PO opens in its document viewer; a bill, sales order or customer / vendor opens its
+editor and a proposal its document, on its own page — through `editRequest` ({ kind: "bill" | "salesOrder" | "proposal" |
+"contact", id }), which each of those views picks up and clears. A read-only user gets the page, not a bill or SO editor.
+
+**Exports are Excel** (`lib/excel.js`, standards S3.11, Rev 1.96): every report and list export button (*Export Excel*)
+writes a `.xlsx` with ExcelJS, loaded only on export — the rows on screen as sorted and filtered, a title line naming the
+list and its filters (the report's range / customer or vendor), a navy heading row frozen with autofilter, money as
+numbers to two places, whole numbers as numbers, ISO dates as dates, everything else (INV-…, 0042) as text; named
+`<List> YYYY-MM-DD.xlsx`. `downloadCSV(name, header, rows, title)` in `components/reportKit.jsx` keeps its name for its
+callers and now makes the workbook.
+
+**One document toolbar everywhere** (Rev 1.97): quotes and purchase orders open with `DocActions` — Close · Edit (the
+quote / PO editor, through `editRequest`) · Email (a quote from sales@ as `docType "proposal"`, a PO from the A/P
+sender as `"remittance"`, to the party's preferred contact with the CC ticks) · Save PDF · Print — the PDF drawn from the
+page, so saved, printed and emailed copies match. A report's own toolbar is the same order: Close · Email · Save PDF ·
+**Print**, above its filters.
+
+**Recurring invoices and bills** (migration 043 `recurring`, `calc/recurring.js`, `components/RecurringPanel.jsx`, Rev 1.98):
+**Make Recurring** on an invoice or bill row's ⋯ menu turns it into a template (`templateFrom()` — party, lines, tax, notes,
+accounts, a bill's jobs; never number, dates, payments or source SO / PO) with how often (week / month / quarter / year),
+the next date (one period on) and an optional end date. A **Recurring Invoices / Bills** card heads the Invoices and
+Payables pages once one exists, flagging what's due; **Create** (one) or **Create All Due** makes each as an ordinary
+invoice (auto-numbered, the customer's terms) or bill (vendor invoice # `REC-YYMMDD` — change it when the vendor's own
+arrives) dated its due date, and moves the template on (`advance()`: the 31st falls back to month-end). Nothing is made
+without a click — Ledger has no scheduler. RLS follows the invoices / payables permission by kind.
+
+**Sortable lists:** every list view — Quotes, Sales Orders, Invoices, Receivables, Payables,
+Purchase Orders, Expenses, Customers, Vendors, Catalog, Jobs, Tasks, Proposals, Fixture Rates, Job Costing,
+Time Tracking, the Payments/Receipts register, and the report tables — sorts on any column heading,
+ascending then descending. See §7 for the convention new pages follow.
+
+**Not built (candidates for next work):** refunds (returning cash rather than crediting) · partial invoicing of an SO ·
+email sending · attachments / receipt photos · quote line-item reordering ·
+multi-user roles · a live bank feed (statements are imported by file) · locking a closed year against
+back-dated documents ·
+undo · automated tests ·
+Capacitor store apps (PWA covers home-screen install today).
+
+---
+

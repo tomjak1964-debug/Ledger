@@ -1,12 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { uid, money, fmtDate, todayISO, addDays, nameOf, pickable } from "../lib/helpers.js";
 import { lineTotals } from "../calc/ledger.js";
 import { useFilters } from "../components/useFilters.jsx";
 import { Ico, ICONS, Badge, Empty, Field, MenuItem, ActionMenu, SortTh, useTableSort } from "../components/ui.jsx";
 import LineItemsEditor from "../components/LineItemsEditor.jsx";
 
-export default function QuotesView({ db, actions, toast, openDoc, readOnly }) {
+export default function QuotesView({ db, actions, toast, openDoc, readOnly, editRequest, clearEditRequest }) {
   const [edit, setEdit] = useState(null); // quote object being edited/created
+  // Opened from a document's Edit (App's editRequest).
+  useEffect(() => {
+    if (editRequest?.kind !== "quote") return;
+    const rec = db.quotes.find(x => x.id === editRequest.id);
+    if (rec && !readOnly) setEdit({ ...rec });
+    clearEditRequest?.();
+  }, [editRequest]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [search, setSearch] = useState("");
   const customers = db.contacts.filter(c => c.type === "customer");
   const f = useFilters({ partyKind: "customer", contacts: db.contacts });

@@ -43,11 +43,26 @@ export default function DocumentView({ kind, doc, contact, settings, onClose, on
   const isQuote = kind === "quote";
   const isPO = kind === "po";
   const title = isQuote ? "Quote" : isPO ? "Purchase Order" : "Document";
+  return <QuotePoDoc {...{ kind, doc, contact, settings, onClose, onEdit, db, toast, build, print, isQuote, isPO, title, t }} />;
+}
+
+// A quote or purchase order: the standard toolbar (S2.2) — Close · Edit · Email ·
+// Save PDF · Print — over the page. Its PDF is drawn from the page (pagesToPdf),
+// so the saved, printed and emailed copies match. A quote emails from sales@
+// (docType "proposal"); a PO from the A/P sender (docType "remittance").
+function QuotePoDoc({ kind, doc, contact, settings, onClose, onEdit, db, toast, build, print, isQuote, isPO, title, t }) {
+  const [email, setEmail] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const savePdf = async () => { setBusy(true); try { const r = await build(); saveBlob(r.blob, r.filename); } finally { setBusy(false); } };
+  const party = contact?.id;
   return <div className="doc-screen">
-    <div className="doc-bar">
-      <button className="btn" onClick={onClose}><Ico d={ICONS.back} size={16} />Close</button>
-      <button className="btn primary" onClick={print}><Ico d={ICONS.print} size={16} />Print / Save PDF</button>
-    </div>
+    <DocActions onClose={onClose} onEdit={onEdit} onEmail={db && party ? () => setEmail(true) : undefined} onPrint={print} busy={busy}
+      saves={[{ label: "Save PDF", hint: (doc.number || kind) + ".pdf", run: savePdf }]} />
+    {email && <EmailModal docType={isPO ? "remittance" : "proposal"} title={"Email · " + doc.number}
+      defaultTo={emailFor(db, party, isPO ? "remittance" : "proposal")} ccChoices={ccChoices(db, [party])}
+      defaultSubject={`${title} ${doc.number} — ${settings.company}`}
+      defaultBody={`Please find attached ${title.toLowerCase()} ${doc.number}.\n\n${settings.company}\n${settings.companyPhone || ""}`}
+      buildAttachment={build} onClose={() => setEmail(false)} toast={toast || (() => {})} />}
     <div className="printable">
       <div className="doc-top">
         <div className="doc-co">

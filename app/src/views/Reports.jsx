@@ -139,18 +139,20 @@ export default function ReportsView({ db, toast, reportRequest }) {
             </tbody></table>}
         </div>
         : <>
-          <div className="toolbar no-print" style={{ marginBottom: 12 }}>
-            <button className="btn sm" onClick={() => setRptKey("")}><Ico d={ICONS.back} size={14} />Back</button>
+          {/* The document toolbar's order (standards S2.2): Close · Email · Save · Print. */}
+          <div className="toolbar no-print" style={{ marginBottom: 12, flexWrap: "wrap" }}>
+            <button className="btn" onClick={() => setRptKey("")}><Ico d={ICONS.back} size={15} />Close</button>
             <span className="subtle">{cat.label} / <strong style={{ color: "var(--ink)" }}>{rpt.label}</strong></span>
+            <span style={{ marginLeft: "auto", display: "inline-flex", gap: 8, flexWrap: "wrap" }}>
+              <button className="btn" disabled={making} onClick={() => setEmailing(true)}><Ico d={ICONS.mail} size={15} />Email</button>
+              <button className="btn" disabled={making} onClick={savePdf}><Ico d={ICONS.download} size={15} />Save PDF</button>
+              <button className="btn primary" disabled={making} onClick={printReport}><Ico d={ICONS.print} size={15} />{making ? "Preparing…" : "Print"}</button>
+            </span>
           </div>
           <FilterBar
             preset={preset} onPreset={setPreset} custom={custom} onCustom={setCustom}
             partyKind={rpt.party} partyId={partyId} onParty={setPartyId} contacts={db.contacts}
-            right={<span style={{ display: "inline-flex", gap: 8, flexWrap: "wrap" }}>
-              <button className="btn" disabled={making} onClick={() => setEmailing(true)}><Ico d={ICONS.mail} size={15} />Email</button>
-              <button className="btn" disabled={making} onClick={savePdf}><Ico d={ICONS.download} size={15} />Save PDF</button>
-              <button className="btn" disabled={making} onClick={printReport}><Ico d={ICONS.print} size={15} />{making ? "Preparing…" : "Print"}</button>
-            </span>} />
+            />
           {rpt.asOf && <p className="subtle no-print" style={{ margin: "-6px 0 14px" }}>
             Aging is calculated as of the end of the selected range ({fmtDate(asOf)}).
           </p>}

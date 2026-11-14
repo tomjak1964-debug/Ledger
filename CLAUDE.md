@@ -891,9 +891,8 @@ and their bulk **Delete skips any invoice with a payment on it** (the receipts w
 own Delete still asks about it one by one).
 
 **The menu folds away.** Picking a page from the sidebar folds the sidebar (`menuOut` in `App.jsx`, the
-`.app.menu-in` grid) so the page runs full width; the tab at the top left brings it back. There is no Back in the top bar (the tab is the
-way back to the menu); `go()` keeps a history of the pages visited so closing the Rate Sheet returns to
-the page it was opened from. Reports does the same with its category rail: the rail folds while a report is open and the
+`.app.menu-in` grid) so the page runs full width; the tab at the top left brings it back. **Back** sits in the top bar after Search and Refresh (standards S1.2) whenever there is a page to go back to;
+`go()` keeps a history of the pages visited, so Back — and closing the Rate Sheet — returns to the page before. Reports does the same with its category rail: the rail folds while a report is open and the
 report's own Back restores it. On a phone the sidebar is already a slide-in, so the fold changes nothing there.
 
 **Navigation groups:** the sidebar reads Overview · **Customers & Sales** (Customers, Proposals, Rate Sheet,
@@ -1305,6 +1304,12 @@ list and its filters (the report's range / customer or vendor), a navy heading r
 numbers to two places, whole numbers as numbers, ISO dates as dates, everything else (INV-…, 0042) as text; named
 `<List> YYYY-MM-DD.xlsx`. `downloadCSV(name, header, rows, title)` in `components/reportKit.jsx` keeps its name for its
 callers and now makes the workbook.
+
+**One document toolbar everywhere** (Rev 1.97): quotes and purchase orders open with `DocActions` — Close · Edit (the
+quote / PO editor, through `editRequest`) · Email (a quote from sales@ as `docType "proposal"`, a PO from the A/P
+sender as `"remittance"`, to the party's preferred contact with the CC ticks) · Save PDF · Print — the PDF drawn from the
+page, so saved, printed and emailed copies match. A report's own toolbar is the same order: Close · Email · Save PDF ·
+**Print**, above its filters.
 
 **Sortable lists:** every list view — Quotes, Sales Orders, Invoices, Receivables, Payables,
 Purchase Orders, Expenses, Customers, Vendors, Catalog, Jobs, Tasks, Proposals, Fixture Rates, Job Costing,

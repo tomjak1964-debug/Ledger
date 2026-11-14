@@ -254,6 +254,7 @@ export default function App({ session }) {
         <div className="topbar-actions">
           <GlobalSearch db={db} member={member} go={go} openRecord={openRecord} />
           <button className="btn ghost icon" title="Refresh from server" onClick={() => actions.reload()}><Ico d={ICONS.refresh} size={17} /></button>
+          {history.length > 0 && <button className="btn ghost" title="Back to the page before" onClick={back}><Ico d={ICONS.back} size={16} />Back</button>}
         </div>
       </div>
       <div className="content">
@@ -298,7 +299,10 @@ export default function App({ session }) {
       onPrinted={doc.onPrinted}
       onEmailed={doc.kind === "invoice" ? () => actions.markInvoicePrinted(doc.doc.id, true) : undefined}
       autoPrint={doc.autoPrint} onClose={() => setDoc(null)} db={db} toast={toast}
-      onEdit={doc.kind === "invoice" && canWrite(member, "invoices") ? () => { setEditRequest({ kind: "invoice", id: doc.doc.id }); setDoc(null); go("invoices"); } : undefined}
+      onEdit={doc.kind === "invoice" && canWrite(member, "invoices") ? () => { setEditRequest({ kind: "invoice", id: doc.doc.id }); setDoc(null); go("invoices"); }
+        : doc.kind === "quote" && canWrite(member, "quotes") ? () => { setEditRequest({ kind: "quote", id: doc.doc.id }); setDoc(null); go("quotes"); }
+        : doc.kind === "po" && canWrite(member, "payables") ? () => { setEditRequest({ kind: "po", id: doc.doc.id }); setDoc(null); go("purchaseOrders"); }
+        : undefined}
       onCopy={doc.kind === "invoice" && canWrite(member, "invoices") && !isCreditMemo(doc.doc) ? () => { setEditRequest({ kind: "invoice", id: doc.doc.id, copy: true }); setDoc(null); go("invoices"); } : undefined} />}
     <IOSPrintHost toast={toast} />
     {toastMsg && <div className={cls("toast", toastMsg.error && "error")} role="status"><Ico d={toastMsg.error ? ICONS.x : ICONS.check} size={16} />{toastMsg.text}

@@ -1,12 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { uid, money, fmtDate, todayISO, nameOf, pickable } from "../lib/helpers.js";
 import { lineTotals } from "../calc/ledger.js";
 import { useFilters } from "../components/useFilters.jsx";
 import { Ico, ICONS, Badge, Empty, Field, SortTh, useTableSort } from "../components/ui.jsx";
 import LineItemsEditor from "../components/LineItemsEditor.jsx";
 
-export default function PurchaseOrdersView({ db, actions, toast, openDoc, readOnly }) {
+export default function PurchaseOrdersView({ db, actions, toast, openDoc, readOnly, editRequest, clearEditRequest }) {
   const [edit, setEdit] = useState(null);
+  // Opened from a document's Edit (App's editRequest).
+  useEffect(() => {
+    if (editRequest?.kind !== "po") return;
+    const rec = (db.purchaseOrders || []).find(x => x.id === editRequest.id);
+    if (rec && !readOnly) setEdit({ ...rec, lineItems: (rec.lineItems || []).map(li => ({ ...li })) });
+    clearEditRequest?.();
+  }, [editRequest]);   // eslint-disable-line react-hooks/exhaustive-deps
   const vendors = db.contacts.filter(c => c.type === "vendor");
   const openSOs = db.salesOrders.filter(s => s.status === "open");
 

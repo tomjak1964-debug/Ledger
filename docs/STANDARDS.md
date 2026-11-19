@@ -1,10 +1,10 @@
-# App development standards (v1.2, 2026-11-12)
+# App development standards (v1.3, 2026-11-19)
 
 How every app in `~/src` is built, so menus, documents, lists, forms and actions look and behave the same
 everywhere. Written from a read-only survey of Ledger, Golf League, MMMO, HOA Manager, Resale Shop, GateA and
 Wedding Planner plus the HomeServer app template (`App Standards Survey.md` has the evidence, file by file).
 
-**Status:** v1.2 (2026-11-12). v1.0 agreed by Tom on 2026-11-05 (all eight decisions below as proposed); v1.1 adds decision 9, v1.2 decision 10. It is to live in HomeServer
+**Status:** v1.3 (2026-11-19). v1.0 agreed by Tom on 2026-11-05 (all eight decisions below as proposed); v1.1 adds decision 9, v1.2 decision 10, v1.3 decision 11. It is to live in HomeServer
 `templates/app/STANDARDS.md`, be copied into each app as `docs/STANDARDS.md`, and the reference code it names is to be
 copied into `templates/app` (HomeServer session).
 
@@ -20,6 +20,7 @@ copied into `templates/app` (HomeServer session).
 9. **Password fields** (2026-11-08): show/hide with an **eye icon**, not the words Show/Hide (S1.4).
 10. **Copy** (2026-11-12): invoices, bills and other transactional documents have a **Copy** action with the `copy`
     icon, in the document toolbar after Edit and in the row ⋯ menu (S2.2, S2.10).
+11. **Menu brand header** (2026-11-19): the top of the menu is the app's logo, name and a short tagline (S1.1).
 
 ## How to use this (for Claude sessions)
 
@@ -47,6 +48,12 @@ Remember the current page in `sessionStorage` so a reload or self-update returns
 menu button, `aria-current="page"` on the active item. Every menu item has its **own** icon.
 *Reference:* Wedding `App.jsx` + shell CSS; page memory from Resale `App.jsx`.
 *Variant:* Golf/MMMO tab strip (`role="tab"`, `aria-selected`).
+
+**Menu brand header** (decision 11). The top of the menu (`.brand`, never scrolls) is the app's `BrandMark` logo
+(S1.5), then the app name (`.brand-name`) with a short tagline under it (`.brand-sub`), as in Ledger ("Ledger" /
+"Quote → Cash") and Resale Shop ("Leap of Faith" / "Inventory · Sales · Books"). Anything app-specific (e.g. HOA
+Manager's association picker) goes under it, never in place of it. *Reference:* template `App.jsx` `.brand` +
+`ui.jsx BrandMark` + `.brand*` CSS (same as Ledger `App.jsx`).
 
 **S1.2 Page header.** `.topbar`: menu button, `<h1>` title + `.sub` subtitle from `TITLES` (fallback
 `TITLES[k] || [k, ""]`, never crash), then `.topbar-actions` in this order: **Search → Refresh → Back**.
@@ -339,6 +346,7 @@ copies. Apps adopt it when that area is next touched.
 ---
 
 ## Changelog
+- v1.3 (2026-11-19): **Menu brand header** (decision 11, S1.1): `BrandMark` logo, app name (`.brand-name`) and tagline (`.brand-sub`) at the top of the menu; app-specific controls under it. Reference: template and Ledger `App.jsx`. HOA Manager adopts it with its new logo; Resale swaps its "LoF" text mark for `BrandMark` when that area is next touched.
 - v1.2 (2026-11-12): **Copy** for invoices, bills and similar documents (decision 10, new S2.10): `copy` icon, toolbar after Edit and in the row ⋯ menu, a new draft with today's date and a new number, never payments/status/attachments; `copy` added to the S1.7 icon table and S2.2. Reference: Ledger invoices and bills; HOA Manager adopts it for its invoices and bills.
 - v1.1 (2026-11-08): password fields show/hide with an eye icon, not words (decision 9, S1.4); `eye`/`eyeOff` added to the S1.7 icon table. Reference: Wedding Rev 1.33. Ledger, Resale and HOA switch from Show/Hide words when that area is next touched.
 - v1.0 (2026-11-05): Tom agreed the eight decisions as proposed.

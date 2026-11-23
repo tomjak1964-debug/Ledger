@@ -361,11 +361,18 @@ export function useLedger(session, onError) {
         const isNew = !!q._new;
         const quote = { ...q }; delete quote._new;
         // QUO-<YYMMDD>-NN — "QUO-261123-01", -02… that day: the lowest one not
-        // on file, as proposals are numbered.
-        if (isNew) {
+        // on file, as proposals are numbered. A number typed in (new or edited
+        // later) is kept as typed, but it can't be another quote's; an edited
+        // one can't be blank.
+        const taken = num => dbRef.current.quotes.some(x => x.id !== quote.id && (x.number || "").trim().toLowerCase() === num.toLowerCase());
+        const typed = String(quote.number || "").trim();
+        if (isNew && !typed) {
           const head = `${String(dbRef.current.settings.quotePrefix || "QUO").toUpperCase()}-${(quote.date || todayISO()).slice(2).replace(/-/g, "")}`;
-          const taken = num => dbRef.current.quotes.some(x => (x.number || "").trim().toLowerCase() === num.toLowerCase());
           for (let n = 1; ; n++) { const num = head + daySuffix(n); if (!taken(num)) { quote.number = num; break; } }
+        } else {
+          if (!typed) throw new Error("A quote number is required.");
+          if (taken(typed)) throw new Error(`Quote number "${typed}" is already used.`);
+          quote.number = typed;
         }
         th(await supabase.from("quotes").upsert(A.quoteToRow(quote)));
         await replaceLineItems("quote_line_items", "quote_id", quote.id, quote.lineItems);

@@ -31,7 +31,7 @@ export default function QuotesView({ db, actions, toast, readOnly, editRequest, 
 
   const startNew = () => {
     setEdit({
-      id: uid(), number: "(assigned at save)", _new: true, customerId: pickable(customers)[0]?.id || "", date: todayISO(),
+      id: uid(), number: "", _new: true, customerId: pickable(customers)[0]?.id || "", date: todayISO(),
       expiryDate: addDays(todayISO(), 30), status: "draft", poNumber: "", jobNumber: "", description: "",
       lineItems: [{ id: uid(), desc: "", qty: 1, unit: "", unitPrice: 0 }], taxRate: db.settings.taxRate, notes: ""
     });
@@ -154,7 +154,7 @@ function QuoteEditor({ quote, customers, catalog, onCancel, onSave }) {
   return <div data-editing="1">
     <div className="toolbar">
       <button className="btn ghost" onClick={onCancel}><Ico d={ICONS.back} size={16} />Back</button>
-      <h2 style={{ fontSize: 18, marginLeft: 4 }}>{q._new ? "New Quote" : "Edit " + q.number}{q._new && <span className="mono subtle" style={{ fontSize: 14, marginLeft: 6 }}>{q.number}</span>}</h2>
+      <h2 style={{ fontSize: 18, marginLeft: 4 }}>{q._new ? "New Quote" : "Edit " + (quote.number || "")}</h2>
       <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
         <button className="btn" onClick={onCancel}>Cancel</button>
         <button className="btn primary" disabled={saving} onClick={save}><Ico d={ICONS.check} size={15} />{saving ? "Saving…" : "Save Quote"}</button>
@@ -162,6 +162,8 @@ function QuoteEditor({ quote, customers, catalog, onCancel, onSave }) {
     </div>
     <div className="card"><div className="card-body">
       <div className="row">
+        <Field label="Quote #" hint={q._new ? "Blank takes the next QUO-YYMMDD-NN" : "Editable"}>
+          <input className="input mono" value={q.number || ""} onChange={e => set("number", e.target.value)} placeholder="Assigned at save" /></Field>
         <Field label="Customer"><select className="select" value={q.customerId} onChange={e => set("customerId", e.target.value)}>
           <option value="">Select customer…</option>{pickable(customers, q.customerId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select></Field>

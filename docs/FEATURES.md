@@ -957,7 +957,9 @@ page, so saved, printed and emailed copies match. A report's own toolbar is the 
 
 **Quotes read like proposals** (`components/QuoteDoc.jsx`, migration 044, Rev 1.99). A quote is numbered
 **QUO-YYMMDD-NN** (`QUO-261123-01`, -02… that day; the lowest free, as proposals are — `saveQuote`; quotes made
-before Rev 1.99 keep their old QUO-0002 numbers) and carries a **Job Number** and **Description** (migration 044),
+before Rev 1.99 keep their old QUO-0002 numbers). The number can be overridden, as a proposal's can (Rev 2.00): the
+editor's **Quote #** takes a number typed on a new quote (blank takes the next one) and is editable after; it can't
+be blank or another quote's. It carries a **Job Number** and **Description** (migration 044),
 which go onto the sales order when it's won. Its document is the fixture-proposal letter: logo, date, the customer's
 proposal contact, *Quote / Re:*, salutation, **Scope** (one bullet per line item; a multi-line description's further
 lines sit under it), then on page two **Sales Notes and Clarifications** (the quote's notes, one numbered note per

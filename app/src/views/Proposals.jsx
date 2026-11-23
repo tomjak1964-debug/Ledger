@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { printOrShare, isIOS } from "../lib/printSupport.js";
+import { printPdf, isIOS } from "../lib/printSupport.js";
 import { createPortal } from "react-dom";
 import DocActions from "../components/DocActions.jsx";
 import { pagesToPdf, saveBlob } from "../lib/saveFile.js";
@@ -148,6 +148,9 @@ export function buildProposalContent(p, db) {
   return { ...legacy, bullets: sBullets, salesNotes: sNotes, intro: pkg?.intro || "Turnkey Controls", pkg, scope: sc,
     terms: `This offer is firm for ${validity} days from the date of this proposal. Terms shall be ${termsLabelFor(db, p.customerId)}. Any invoice more than 30 days past due will be assessed interest at the rate of 12% APR accruing monthly.` };
 }
+
+// The line at the foot of every page of a proposal or quote.
+export const docFooter = s => [s.companyAddress?.replace(/\n/g, ", "), s.companyPhone].filter(Boolean).join(" - ");
 
 const emptySpecs = () => Object.fromEntries(SPEC_FIELDS.map(([k]) => [k, 0]));
 
@@ -762,10 +765,11 @@ function ProposalDoc({ p, db, onClose, toast, onEdit, auto, onEmailed }) {
   // The PDF is the document as it prints: a fixture proposal's two pages each
   // shrunk to fit a page; a system proposal runs on.
   const docRef = useRef();
+  // Every page carries the company's address and "Page n of m" at its foot.
   const buildPdf = () => {
     const pages = [...docRef.current.querySelectorAll(".prop-page")];
     return pagesToPdf(pages.length ? pages : [docRef.current],
-      { filename: proposalFileStem(p) + ".pdf", title: proposalFileStem(p), fit: pages.length > 0 });
+      { filename: proposalFileStem(p) + ".pdf", title: proposalFileStem(p), fit: pages.length > 0, footer: docFooter(s) });
   };
   const savePdf = async () => {
     setBusy(true);
@@ -773,14 +777,20 @@ function ProposalDoc({ p, db, onClose, toast, onEdit, auto, onEmailed }) {
     catch (e) { toast("⚠ Couldn't make the PDF: " + (e.message || e)); }
     setBusy(false);
   };
-  // On an iPad, Print hands that same PDF to the Share sheet (lib/printSupport.js).
-  const print = () => printOrShare(buildPdf);
+  // Print prints that same PDF, so the paper has the footer on every page too
+  // (on an iPad it goes to the Share sheet — lib/printSupport.js).
+  const print = async () => {
+    setBusy(true);
+    try { await printPdf(buildPdf); }
+    catch (e) { toast("⚠ Couldn't make the PDF: " + (e.message || e)); }
+    setBusy(false);
+  };
   // Opened from a list's Print or Save PDF: once the pages have laid out, do
   // that one thing and close again.
   useEffect(() => {
     if (auto !== "print" && auto !== "pdf") return;
     const t = setTimeout(async () => {
-      if (auto === "print") { print(); if (isIOS()) return; } else await savePdf();
+      if (auto === "print") { await print(); if (isIOS()) return; } else await savePdf();
       onClose();
     }, 400);
     return () => clearTimeout(t);
@@ -846,7 +856,7 @@ function ProposalDoc({ p, db, onClose, toast, onEdit, auto, onEmailed }) {
       <p>I hope you find this offering favorable. If you have any questions, or require additional information, please feel free to contact me.</p>
       <p style={{ marginBottom: 34 }}>Regards,</p>
       <p>{c.cfg.signer || s.company}</p>
-      <div className="doc-foot">{[s.companyAddress?.replace(/\n/g, ", "), s.companyPhone].filter(Boolean).join(" - ")}</div>
+      <div className="doc-foot">{docFooter(s)}</div>
     </div></>}
     </div>
   </div>, document.body);

@@ -163,7 +163,9 @@ export default function App({ session }) {
   // anything else opens where its own row would open it, on its page.
   const RECORD_VIEW = { bill: "payables", salesOrder: "salesOrders", proposal: "proposals" };
   const openRecord = (kind, rec) => {
-    if (["invoice", "quote", "po"].includes(kind)) return openDoc(kind, rec);
+    if (["invoice", "po"].includes(kind)) return openDoc(kind, rec);
+    // A quote opens in its own view on the Quotes page, laid out as a proposal.
+    if (kind === "quote") { setEditRequest({ kind, id: rec.id, view: true }); return go("quotes"); }
     setEditRequest({ kind, id: rec.id });
     go(kind === "contact" ? (rec.type === "vendor" ? "vendors" : "customers") : RECORD_VIEW[kind]);
   };

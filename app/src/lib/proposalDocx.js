@@ -2,7 +2,7 @@
 // the docx package entirely in the browser.
 import {
   Document, Packer, Paragraph, TextRun, ImageRun, Table, TableRow, TableCell,
-  WidthType, AlignmentType, LevelFormat, BorderStyle, Footer, UnderlineType,
+  WidthType, AlignmentType, LevelFormat, BorderStyle, Footer, UnderlineType, PageNumber,
 } from "docx";
 import { money, fmtDate } from "./helpers.js";
 import { buildProposalContent } from "../views/Proposals.jsx";
@@ -16,6 +16,12 @@ const P = (text, opts = {}) => new Paragraph({
   alignment: opts.align,
   children: [new TextRun({ text, bold: opts.bold, underline: opts.ul ? { type: UnderlineType.SINGLE } : undefined })],
 });
+
+// Every page: the company's address, then "Page n of m".
+const docFooter = s => new Footer({ children: [
+  P([s.companyAddress?.replace(/\n/g, ", "), s.companyPhone].filter(Boolean).join(" - "), { align: AlignmentType.CENTER, after: 0 }),
+  new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ size: 16, color: "777777", children: ["Page ", PageNumber.CURRENT, " of ", PageNumber.TOTAL_PAGES] })] }),
+] });
 
 const priceRow = (label, amount, { bold = false } = {}) => new TableRow({
   children: [
@@ -66,7 +72,7 @@ export async function proposalDocxBlob(p, db) {
     },
     sections: [{
       properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 1080, bottom: 1080, left: 1440, right: 1440 } } },
-      footers: { default: new Footer({ children: [P([s.companyAddress?.replace(/\n/g, ", "), s.companyPhone].filter(Boolean).join(" - "), { align: AlignmentType.CENTER, after: 0 })] }) },
+      footers: { default: docFooter(s) },
       children: [
         ...(logo ? [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 240 }, children: [new ImageRun({ type: "png", data: logo, transformation: { width: 170, height: 112 } })] })] : []),
         P(fmtDate(p.date)),
@@ -215,7 +221,7 @@ async function controlsDocxBlob(p, db) {
     ] },
     sections: [{
       properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 1080, bottom: 1080, left: 1440, right: 1440 } } },
-      footers: { default: new Footer({ children: [P([s.companyAddress?.replace(/\n/g, ", "), s.companyPhone].filter(Boolean).join(" - "), { align: AlignmentType.CENTER, after: 0 })] }) },
+      footers: { default: docFooter(s) },
       children,
     }],
   });

@@ -360,7 +360,13 @@ export function useLedger(session, onError) {
       try {
         const isNew = !!q._new;
         const quote = { ...q }; delete quote._new;
-        if (isNew) quote.number = dbRef.current.settings.quotePrefix + "-" + pad4(await claimNumber("quote"));
+        // QUO-<YYMMDD>-NN — "QUO-261123-01", -02… that day: the lowest one not
+        // on file, as proposals are numbered.
+        if (isNew) {
+          const head = `${String(dbRef.current.settings.quotePrefix || "QUO").toUpperCase()}-${(quote.date || todayISO()).slice(2).replace(/-/g, "")}`;
+          const taken = num => dbRef.current.quotes.some(x => (x.number || "").trim().toLowerCase() === num.toLowerCase());
+          for (let n = 1; ; n++) { const num = head + daySuffix(n); if (!taken(num)) { quote.number = num; break; } }
+        }
         th(await supabase.from("quotes").upsert(A.quoteToRow(quote)));
         await replaceLineItems("quote_line_items", "quote_id", quote.id, quote.lineItems);
         setDb(d => ({ ...d, quotes: upsertList(d.quotes, quote) }));
@@ -393,6 +399,7 @@ export function useLedger(session, onError) {
           id: uid(), number: await nextSoNumber(),
           quoteId: q.id, customerId: q.customerId, poNumber: po, date: todayISO(),
           status: "open", lineItems: q.lineItems.map(li => ({ ...li, id: uid() })), taxRate: q.taxRate,
+          jobNumber: q.jobNumber || "", description: q.description || "",
         };
         th(await supabase.from("sales_orders").insert(A.soToRow(so)));
         await replaceLineItems("sales_order_line_items", "sales_order_id", so.id, so.lineItems, A.soLineItemsToRows);
@@ -403,6 +410,19 @@ export function useLedger(session, onError) {
           quotes: d.quotes.map(x => x.id === q.id ? { ...x, status: "accepted", salesOrderId: so.id, poNumber: po } : x),
         }));
         return so;
+      } catch (e) { return fail(e); }
+    },
+
+    // A won quote's PO changes on its sales order with it (as setProposalPo).
+    async setQuotePo(q, po) {
+      try {
+        const num = String(po || "").trim();
+        th(await supabase.from("quotes").update({ po_number: num }).eq("id", q.id));
+        if (q.salesOrderId) th(await supabase.from("sales_orders").update({ po_number: num }).eq("id", q.salesOrderId));
+        setDb(d => ({ ...d,
+          quotes: d.quotes.map(x => x.id === q.id ? { ...x, poNumber: num } : x),
+          salesOrders: d.salesOrders.map(s => s.id === q.salesOrderId ? { ...s, poNumber: num } : s) }));
+        return true;
       } catch (e) { return fail(e); }
     },
 

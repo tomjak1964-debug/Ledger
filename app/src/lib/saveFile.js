@@ -20,14 +20,18 @@ export function saveBlob(blob, filename) {
 // card, so drawn as shown the right-hand columns were cut off. The copy drawn is
 // laid out as on a desktop (windowWidth), with nothing inside it scrolling or
 // clipped; the page on screen isn't touched.
-export async function pagesToPdf(elements, { filename, title, fit = true, margin = 0.5, width } = {}) {
+// footer: a line (the company's address) printed at the foot of every page
+// with "Page n of m" beside it; the page's own .doc-foot is left out of the
+// picture so it isn't there twice.
+export async function pagesToPdf(elements, { filename, title, fit = true, margin = 0.5, width, footer } = {}) {
   const [{ jsPDF }, html2canvas] = await Promise.all([import("jspdf"), import("html2canvas").then(m => m.default)]);
   const pdf = new jsPDF({ unit: "in", format: "letter" });
-  const W = 8.5 - 2 * margin, H = 11 - 2 * margin;
+  const FOOT = footer != null ? 0.35 : 0;
+  const W = 8.5 - 2 * margin, H = 11 - 2 * margin - FOOT;
   let first = true;
   for (const el of elements) {
     const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false,
-      ignoreElements: n => !!n.classList?.contains("no-print"),
+      ignoreElements: n => !!n.classList?.contains("no-print") || (footer != null && !!n.classList?.contains("doc-foot")),
       windowWidth: Math.max(1280, (width || 0) + 160),
       onclone: (_doc, copy) => {
         if (width) { copy.style.width = width + "px"; copy.style.maxWidth = "none"; }
@@ -74,6 +78,15 @@ export async function pagesToPdf(elements, { filename, title, fit = true, margin
         pdf.addImage(part.toDataURL("image/jpeg", 0.92), "JPEG", margin, margin, W, W * part.height / canvas.width);
         first = false;
       }
+    }
+  }
+  if (footer != null) {
+    const n = pdf.getNumberOfPages(), y = 11 - margin + 0.05;
+    for (let i = 1; i <= n; i++) {
+      pdf.setPage(i);
+      pdf.setFont("helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(120);
+      if (footer) pdf.text(footer, 4.25, y, { align: "center" });
+      pdf.text(`Page ${i} of ${n}`, 8.5 - margin, y, { align: "right" });
     }
   }
   if (title) pdf.setProperties({ title });

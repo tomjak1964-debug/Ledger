@@ -65,11 +65,13 @@ export const quoteToRow = q => ({
   id: q.id, number: q.number, customer_id: idOrNull(q.customerId), date: dateOrNull(q.date),
   expiry_date: dateOrNull(q.expiryDate), status: q.status, po_number: q.poNumber ?? "",
   tax_rate: num(q.taxRate), notes: q.notes ?? "", sales_order_id: idOrNull(q.salesOrderId),
+  job_number: q.jobNumber ?? "", description: q.description ?? "",   // migration 044
 });
 export const quoteFromRow = (r, items) => ({
   id: r.id, number: r.number, customerId: r.customer_id || "", date: r.date || "",
   expiryDate: r.expiry_date || "", status: r.status, poNumber: r.po_number,
   taxRate: num(r.tax_rate), notes: r.notes, ...(r.sales_order_id ? { salesOrderId: r.sales_order_id } : {}),
+  jobNumber: r.job_number || "", description: r.description || "",
   lineItems: items || [],
 });
 

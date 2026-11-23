@@ -955,6 +955,25 @@ sender as `"remittance"`, to the party's preferred contact with the CC ticks) ·
 page, so saved, printed and emailed copies match. A report's own toolbar is the same order: Close · Email · Save PDF ·
 **Print**, above its filters.
 
+**Quotes read like proposals** (`components/QuoteDoc.jsx`, migration 044, Rev 1.99). A quote is numbered
+**QUO-YYMMDD-NN** (`QUO-261123-01`, -02… that day; the lowest free, as proposals are — `saveQuote`; quotes made
+before Rev 1.99 keep their old QUO-0002 numbers) and carries a **Job Number** and **Description** (migration 044),
+which go onto the sales order when it's won. Its document is the fixture-proposal letter: logo, date, the customer's
+proposal contact, *Quote / Re:*, salutation, **Scope** (one bullet per line item; a multi-line description's further
+lines sit under it), then on page two **Sales Notes and Clarifications** (the quote's notes, one numbered note per
+line, else Settings' quote notes), **Pricing** (each line's amount, tax, total), the validity (*firm until* the
+Valid Until date) and terms, and the signer. The Quotes list matches Proposals: Quote · Job # · Customer ·
+Description · Date · Valid Until · Status · Total, then View · Email · Print · Save (PDF) · Copy · Edit · ⋯. The ⋯
+menu changes once a quote is won (has its sales order): before — Mark as Sent, **Won — PO received →** (the
+quote → SO conversion), Mark as Declined, Delete; after — **Change PO…** (the SO's PO changes with it,
+`setQuotePo`), Delete. Emailing a draft marks it Sent (from sales@, `docType: "proposal"`). Copy makes a new
+draft dated today with the next number and opens it. The top-bar search opens a quote in this view.
+
+**Every page of a proposal or quote has its footer:** the company's address and phone, and *Page n of m*. The PDF
+stamps them on each page (`pagesToPdf`'s `footer` option, `docFooter()` in `Proposals.jsx`), and Print prints that
+same PDF (`printPdf()` in `lib/printSupport.js`: a hidden frame on a computer, the Share sheet on an iPad), so paper
+matches the saved copy. The Word version of a proposal has the same footer, with Word's own page fields.
+
 **Recurring invoices and bills** (migration 043 `recurring`, `calc/recurring.js`, `components/RecurringPanel.jsx`, Rev 1.98):
 **Make Recurring** on an invoice or bill row's ⋯ menu turns it into a template (`templateFrom()` — party, lines, tax, notes,
 accounts, a bill's jobs; never number, dates, payments or source SO / PO) with how often (week / month / quarter / year),

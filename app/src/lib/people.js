@@ -13,6 +13,14 @@ export const PREF_KINDS = { customer: ["invoice", "proposal"], vendor: ["remitta
 export const PREFIXES = ["", "Mr.", "Ms.", "Mrs."];
 export const personName = p => (p ? [p.prefix, p.name].map(x => (x || "").trim()).filter(Boolean).join(" ") : "");
 
+// The letter's greeting: "Mr. Murphy:" when the name carries a title,
+// otherwise the name as given ("Bevin Lu:"), or the company's team with no name.
+export function salutationFor(name, custName) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return (custName || "Customer") + " Team:";
+  const title = /^(Mr|Ms|Mrs|Dr)\.?$/i.test(parts[0]);
+  return (title && parts.length > 1 ? parts[0] + " " + parts[parts.length - 1] : parts.join(" ")) + ":";
+}
 export const peopleOf = (db, contactId) => (db.contactPeople || []).filter(p => p.contactId === contactId);
 
 export function preferredPerson(db, contactOrId, kind) {

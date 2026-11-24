@@ -7,7 +7,7 @@ import { uid, money, fmtDate, todayISO, nameOf, cls, pickable } from "../lib/hel
 import { packageById, packageForCustomer, packageDefaults, packagesOf, standardsLine, mesFor, SCOPE_ITEMS, scheduleFor, softwareOnly, SOFTWARE_ONLY_PHASES } from "../calc/fixtureScope.js";
 import { termsLabelFor } from "../lib/terms.js";
 import ReductionRow from "../components/ReductionRow.jsx";
-import { personName, emailFor, proposalAttn, proposalPerson, contactNameFor, remitVendor, peopleOf, ccChoices } from "../lib/people.js";
+import { personName, emailFor, proposalAttn, proposalPerson, contactNameFor, remitVendor, peopleOf, ccChoices, salutationFor } from "../lib/people.js";
 import { proposalConfig, priceProposal, ioBlocks, phaseAmount, SPEC_FIELDS, DEFAULT_PHASES, defaultProposalCustomer } from "../calc/proposals.js";
 import { Ico, ICONS, Badge, Empty, Field, MenuItem, ActionMenu, Modal, SortTh, useTableSort, blankZero } from "../components/ui.jsx";
 import { downloadProposalDocx, proposalDocxBlob, proposalFileStem } from "../lib/proposalDocx.js";
@@ -43,12 +43,7 @@ export function buildProposalContent(p, db) {
     ? { ...p.pricing, baseLines: drop0(p.pricing.baseLines), premiumLines: drop0(p.pricing.premiumLines) }
     : priceProposal(mt, s, cfg);
 
-  const salutation = (() => {
-    if (!person?.name) return custName + " Team:";
-    const parts = person.name.trim().split(/\s+/);
-    const title = /^(Mr|Ms|Mrs|Dr)\.?$/i.test(parts[0]) ? parts[0] + " " : "";
-    return (title ? title + parts[parts.length - 1] : parts[parts.length - 1]) + ":";
-  })();
+  const salutation = salutationFor(person?.name, custName);
 
   // The scope follows the price: a hardware item is promised only when it is a
   // line on this proposal (Fixture Rates above $0, or an override), so a $0

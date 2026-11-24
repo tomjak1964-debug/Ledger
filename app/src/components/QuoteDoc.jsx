@@ -5,7 +5,7 @@ import { pagesToPdf, saveBlob } from "../lib/saveFile.js";
 import { money, fmtDate } from "../lib/helpers.js";
 import { lineTotals } from "../calc/ledger.js";
 import { termsLabelFor } from "../lib/terms.js";
-import { personName, emailFor, proposalPerson, ccChoices } from "../lib/people.js";
+import { personName, emailFor, proposalPerson, ccChoices, salutationFor } from "../lib/people.js";
 import { proposalConfig } from "../calc/proposals.js";
 import { docFooter } from "../views/Proposals.jsx";
 import DocActions from "./DocActions.jsx";
@@ -26,12 +26,7 @@ export function buildQuoteContent(q, db) {
   const personRec = proposalPerson(db, q, customer);
   const name = (q.contactName || personName(personRec) || customer?.contact || "").trim();
   const custName = customer?.name || "Customer";
-  const salutation = (() => {
-    if (!name) return custName + " Team:";
-    const parts = name.split(/\s+/);
-    const title = /^(Mr|Ms|Mrs|Dr)\.?$/i.test(parts[0]) ? parts[0] + " " : "";
-    return (title ? title + parts[parts.length - 1] : parts[parts.length - 1]) + ":";
-  })();
+  const salutation = salutationFor(name, custName);
   const items = (q.lineItems || []).filter(li => (li.desc || "").trim() || Number(li.unitPrice));
   const qtyOf = li => Number(li.qty) || 0;
   // A line's description can run to several lines: the first is the bullet, the rest sit under it.

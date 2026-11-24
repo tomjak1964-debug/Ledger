@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { uid, money, fmtDate, addDays, cls, pickable } from "../lib/helpers.js";
-import { personName, emailFor, proposalAttn, proposalPerson } from "../lib/people.js";
+import { personName, emailFor, proposalAttn, proposalPerson, salutationFor } from "../lib/people.js";
 import ReductionRow from "../components/ReductionRow.jsx";
 import { termsLabelFor } from "../lib/terms.js";
 import { proposalConfig } from "../calc/proposals.js";
@@ -26,12 +26,7 @@ export function buildControlsContent(p, db) {
   const contactName = (p.contactName || personName(personRec) || customer?.contact || "").trim();
   const person = contactName ? { name: contactName, email: (personRec?.email || "").trim() || emailFor(db, p.customerId, "proposal") } : null;
   const custName = customer?.name || "Customer";
-  const salutation = (() => {
-    if (!person?.name) return custName + " Team:";
-    const parts = person.name.trim().split(/\s+/);
-    const title = /^(Mr|Ms|Mrs|Dr)\.?$/i.test(parts[0]) ? parts[0] + " " : "";
-    return (title ? title + parts[parts.length - 1] : parts[parts.length - 1]) + ":";
-  })();
+  const salutation = salutationFor(person?.name, custName);
   const s = p.specs || {};
   const pricing = p.pricing?.total != null && p.pricing.components ? p.pricing : priceEstimate(s, cfg);
   const included = new Set(pricing.components.filter(c => c.include).map(c => c.key));

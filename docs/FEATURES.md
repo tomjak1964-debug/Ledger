@@ -964,7 +964,9 @@ which go onto the sales order when it's won. It has a **Contact / Attn** box, as
 the customer's proposals contact (and changes with the customer), any name can be typed, and a name matching one of
 the customer's people links that person, whose email the Email dialog opens on. Its document is the fixture-proposal
 letter: logo, date, the Attn name (else the proposals contact) over the customer's name and address, *Quote:* and —
-when there's a job number or description — *Re: job – description*, the salutation from that name, salutation, **Scope** (one bullet per line item; a multi-line description's further
+when there's a job number or description — *Re: job – description*, the salutation from that name (`salutationFor()`
+in `lib/people.js`, shared with proposals: "Mr. Murphy:" when the name has a title, else the name as typed, "Bevin
+Lu:", Rev 2.02), salutation, **Scope** (one bullet per line item; a multi-line description's further
 lines sit under it), then on page two **Sales Notes and Clarifications** (the quote's notes, one numbered note per
 line, else Settings' quote notes), **Pricing** (each line's amount, tax, total), the validity (*firm until* the
 Valid Until date) and terms, and the signer. The Quotes list matches Proposals: Quote · Job # · Customer ·
@@ -973,6 +975,9 @@ menu changes once a quote is won (has its sales order): before — Mark as Sent,
 quote → SO conversion), Mark as Declined, Delete; after — **Change PO…** (the SO's PO changes with it,
 `setQuotePo`), Delete. Emailing a draft marks it Sent (from sales@, `docType: "proposal"`). Copy makes a new
 draft dated today with the next number and opens it. The top-bar search opens a quote in this view.
+
+**The document toolbar wraps on a phone** (Rev 2.02): Close · Edit · Copy · Email · Save · Print is one right-aligned
+row on a computer; on a phone held upright it wraps to two, so Close can't spill off the left edge of the screen.
 
 **Every page of a proposal or quote has its footer:** the company's address and phone, and *Page n of m*. The PDF
 stamps them on each page (`pagesToPdf`'s `footer` option, `docFooter()` in `Proposals.jsx`), and Print prints that

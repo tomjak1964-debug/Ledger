@@ -21,8 +21,10 @@ export function buildQuoteContent(q, db) {
   const s = db.settings;
   const cfg = proposalConfig(s, db.timeCategories);
   const customer = db.contacts.find(c => c.id === q.customerId);
-  const personRec = proposalPerson(db, {}, customer);
-  const name = (personName(personRec) || customer?.contact || "").trim();
+  // Addressed as a proposal is: whatever the Contact / Attn box says, else the
+  // customer's proposals contact (lib/people.js).
+  const personRec = proposalPerson(db, q, customer);
+  const name = (q.contactName || personName(personRec) || customer?.contact || "").trim();
   const custName = customer?.name || "Customer";
   const salutation = (() => {
     if (!name) return custName + " Team:";

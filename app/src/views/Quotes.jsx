@@ -5,6 +5,7 @@ import { useFilters } from "../components/useFilters.jsx";
 import { Ico, ICONS, Badge, Empty, Field, MenuItem, ActionMenu, SortTh, useTableSort } from "../components/ui.jsx";
 import LineItemsEditor from "../components/LineItemsEditor.jsx";
 import QuoteDoc from "../components/QuoteDoc.jsx";
+import { proposalAttn, peopleOf, personName } from "../lib/people.js";
 
 export default function QuotesView({ db, actions, toast, readOnly, editRequest, clearEditRequest }) {
   const [edit, setEdit] = useState(null); // quote object being edited/created
@@ -30,8 +31,9 @@ export default function QuotesView({ db, actions, toast, readOnly, editRequest, 
   });
 
   const startNew = () => {
+    const first = pickable(customers)[0];
     setEdit({
-      id: uid(), number: "", _new: true, customerId: pickable(customers)[0]?.id || "", date: todayISO(),
+      id: uid(), number: "", _new: true, customerId: first?.id || "", ...proposalAttn(db, first), date: todayISO(),
       expiryDate: addDays(todayISO(), 30), status: "draft", poNumber: "", jobNumber: "", description: "",
       lineItems: [{ id: uid(), desc: "", qty: 1, unit: "", unitPrice: 0 }], taxRate: db.settings.taxRate, notes: ""
     });
@@ -76,7 +78,7 @@ export default function QuotesView({ db, actions, toast, readOnly, editRequest, 
     if (await actions.setQuotePo(q, po)) toast(`${q.number} is now on PO ${po.trim() || "—"}`);
   };
 
-  if (edit) return <QuoteEditor quote={edit} customers={customers} catalog={db.catalog} onCancel={() => setEdit(null)} onSave={save} />;
+  if (edit) return <QuoteEditor quote={edit} db={db} customers={customers} catalog={db.catalog} onCancel={() => setEdit(null)} onSave={save} />;
 
   return <div>
     <div className="toolbar">
@@ -146,8 +148,10 @@ function QuoteMenu({ q, setStatus, convert, changePo, del }) {
   }}</ActionMenu>;
 }
 
-function QuoteEditor({ quote, customers, catalog, onCancel, onSave }) {
-  const [q, setQ] = useState(quote);
+function QuoteEditor({ quote, db, customers, catalog, onCancel, onSave }) {
+  // A quote saved before it had a Contact / Attn opens on the customer's proposals contact.
+  const [q, setQ] = useState(() => quote.contactName ? quote : { ...quote, ...proposalAttn(db, db.contacts.find(c => c.id === quote.customerId)) });
+  const people = peopleOf(db, q.customerId);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setQ(p => ({ ...p, [k]: v }));
   const save = async () => { setSaving(true); await onSave(q); setSaving(false); };
@@ -164,9 +168,21 @@ function QuoteEditor({ quote, customers, catalog, onCancel, onSave }) {
       <div className="row">
         <Field label="Quote #" hint={q._new ? "Blank takes the next QUO-YYMMDD-NN" : "Editable"}>
           <input className="input mono" value={q.number || ""} onChange={e => set("number", e.target.value)} placeholder="Assigned at save" /></Field>
-        <Field label="Customer"><select className="select" value={q.customerId} onChange={e => set("customerId", e.target.value)}>
+        <Field label="Customer"><select className="select" value={q.customerId} onChange={e => {
+          // A new customer brings its own proposals contact, never the one picked before.
+          const cid = e.target.value;
+          setQ(p => ({ ...p, customerId: cid, ...proposalAttn(db, db.contacts.find(c => c.id === cid)) }));
+        }}>
           <option value="">Select customer…</option>{pickable(customers, q.customerId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select></Field>
+        <Field label="Contact / Attn" hint="Type any name, or pick a suggestion">
+          <input className="input" list={"qattn-" + q.customerId} value={q.contactName || ""} placeholder="e.g. Mr. John Murphy"
+            onChange={e => { const v = e.target.value, hit = people.find(cp => [cp.name, personName(cp)].some(n => (n || "").trim().toLowerCase() === v.trim().toLowerCase()));
+              setQ(p => ({ ...p, contactName: v, contactPersonId: hit?.id || "" })); }} />
+          <datalist id={"qattn-" + q.customerId}>
+            {[...new Set(people.map(cp => personName(cp)).filter(Boolean))].map((n, i) => <option key={i} value={n} />)}
+          </datalist>
+        </Field>
         <Field label="Quote Date"><input className="input" type="date" value={q.date} onChange={e => set("date", e.target.value)} /></Field>
         <Field label="Valid Until"><input className="input" type="date" value={q.expiryDate} onChange={e => set("expiryDate", e.target.value)} /></Field>
         <Field label="Job Number"><input className="input mono" value={q.jobNumber || ""} onChange={e => set("jobNumber", e.target.value)} placeholder="e.g. 4769" /></Field>

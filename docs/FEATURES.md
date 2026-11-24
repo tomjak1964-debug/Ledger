@@ -960,8 +960,11 @@ page, so saved, printed and emailed copies match. A report's own toolbar is the 
 before Rev 1.99 keep their old QUO-0002 numbers). The number can be overridden, as a proposal's can (Rev 2.00): the
 editor's **Quote #** takes a number typed on a new quote (blank takes the next one) and is editable after; it can't
 be blank or another quote's. It carries a **Job Number** and **Description** (migration 044),
-which go onto the sales order when it's won. Its document is the fixture-proposal letter: logo, date, the customer's
-proposal contact, *Quote / Re:*, salutation, **Scope** (one bullet per line item; a multi-line description's further
+which go onto the sales order when it's won. It has a **Contact / Attn** box, as a proposal does (migration 045, Rev 2.01): it opens on
+the customer's proposals contact (and changes with the customer), any name can be typed, and a name matching one of
+the customer's people links that person, whose email the Email dialog opens on. Its document is the fixture-proposal
+letter: logo, date, the Attn name (else the proposals contact) over the customer's name and address, *Quote:* and —
+when there's a job number or description — *Re: job – description*, the salutation from that name, salutation, **Scope** (one bullet per line item; a multi-line description's further
 lines sit under it), then on page two **Sales Notes and Clarifications** (the quote's notes, one numbered note per
 line, else Settings' quote notes), **Pricing** (each line's amount, tax, total), the validity (*firm until* the
 Valid Until date) and terms, and the signer. The Quotes list matches Proposals: Quote · Job # · Customer ·
